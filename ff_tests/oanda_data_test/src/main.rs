@@ -35,7 +35,7 @@ async fn main() {
     let strategy = FundForgeStrategy::initialize(
         StrategyMode::Backtest, // Backtest, Live, LivePaper
         dec!(100000),
-        Currency::AUD,
+        Currency::EUR,
         NaiveDate::from_ymd_opt(2024, 10, 8).unwrap().and_hms_opt(0, 0, 0).unwrap(), // Starting date of the backtest is a NaiveDateTime not NaiveDate
         NaiveDate::from_ymd_opt(2024, 10, 9).unwrap().and_hms_opt(0, 0, 0).unwrap(), // Ending date of the backtest is a NaiveDateTime not NaiveDate
         Australia::Sydney,                      // the strategy time zone

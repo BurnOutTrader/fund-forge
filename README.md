@@ -25,6 +25,7 @@ If you use the second option before launching the on_data_received function, you
 - 06-11-2024: Don't use sync_accounts == true for any strategy, It is not finished.
 - 09-11-2024: Historical currency conversion is now working but is untested, open and booked pnl will always be estimated in account currency even in live (live rates will be implemented soon) None of this is tested properly but it is relatively straight forward, we get the last know convertion rate and multiply it by the open or booked pnl, the server will do this as accurately as possible depending on the resolution of your fx data, if no rate is found it will fall back to 1 to 1 conversion.
 - 09-11-2024: Oanda lot sizes should be fixed but are not fully tested, I got an Ai to create the hard coded symbol info map from a table provided by Oanda, but I have not tested it yet.
+- 10-11-2024: (Untested due to weekend) Added the ability to subscribe to live quotebars with Oanda, bars will be delayed by about 10ms, since we have to manually request bars on a 5-second loop. This allows us to directly use quote bars in live strategies and therefore use strategy warm up. if speed is an issue we should subscribe quotes and use strategy.subscribe_override() for quote bar subscriptions. 
 
 ### Initial Setup
 1. Install [rust](https://www.rust-lang.org/tools/install).

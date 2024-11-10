@@ -69,7 +69,9 @@ pub async fn establish_stream(
     Ok(response.bytes_stream())
 }
 
-pub async fn handle_price_stream(
+
+
+pub fn handle_price_stream(
     client: Arc<Client>,
     instrument_symbol_map: Arc<DashMap<String, Symbol>>,
     instruments_map: Arc<DashMap<SymbolName, OandaInstrument>>,

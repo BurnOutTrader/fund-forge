@@ -3,11 +3,12 @@ use std::time::Duration;
 use tokio::sync::{broadcast, OnceCell, Semaphore};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
+use chrono::{DateTime, Timelike, Utc};
 use crate::oanda_api::settings::{OandaApiMode, OandaSettings};
 use crate::rate_limiter::RateLimiter;
 use dashmap::DashMap;
 use lazy_static::lazy_static;
-use tokio::sync::mpsc::Sender;
+use tokio::sync::mpsc::{Sender};
 use ff_standard_lib::messages::data_server_messaging::FundForgeError;
 use ff_standard_lib::standardized_types::accounts::{Account, AccountId, AccountInfo};
 use ff_standard_lib::standardized_types::base_data::base_data_enum::BaseDataEnum;
@@ -18,7 +19,7 @@ use ff_standard_lib::standardized_types::datavendor_enum::DataVendor;
 use ff_standard_lib::standardized_types::orders::{OrderId};
 use ff_standard_lib::standardized_types::position::Position;
 use ff_standard_lib::standardized_types::resolution::Resolution;
-use ff_standard_lib::standardized_types::subscriptions::{Symbol, SymbolName};
+use ff_standard_lib::standardized_types::subscriptions::{DataSubscription, Symbol, SymbolName};
 use crate::oanda_api::base_data_converters::{candle_from_candle, oanda_quotebar_from_candle};
 use crate::oanda_api::get_requests::{oanda_account_summary, oanda_accounts_list, oanda_clean_instrument, oanda_instruments_download};
 use crate::oanda_api::instruments::OandaInstrument;
@@ -62,11 +63,12 @@ pub struct OandaClient {
     pub positions: DashMap<AccountId, DashMap<SymbolName, Position>>,
     pub instrument_symbol_map: Arc<DashMap<String, Symbol>>,
     pub quote_feed_broadcasters: Arc<DashMap<SymbolName, broadcast::Sender<BaseDataEnum>>>,
-    pub subscription_sender: Sender<Vec<SymbolName>>,
+    pub quote_subscription_sender: Sender<Vec<SymbolName>>,
     pub oanda_id_map: DashMap<String, OrderId>,
     pub open_orders: DashMap<OrderId, ff_standard_lib::standardized_types::orders::Order>,
     pub id_stream_name_map: DashMap<OrderId , u16>,
     pub last_transaction_id: DashMap<AccountId, String>,
+    pub quotebar_broadcasters: Arc<DashMap<DataSubscription, broadcast::Sender<BaseDataEnum>>>
 }
 
 pub(crate) async fn oanda_init(options: ServerLaunchOptions) {
@@ -167,7 +169,8 @@ pub(crate) async fn oanda_init(options: ServerLaunchOptions) {
         positions: Default::default(),
         instrument_symbol_map: Default::default(),
         quote_feed_broadcasters: Arc::new(Default::default()),
-        subscription_sender: sender,
+        quotebar_broadcasters: Arc::new(Default::default()),
+        quote_subscription_sender: sender,
         oanda_id_map: Default::default(),
         open_orders: Default::default(),
         id_stream_name_map: Default::default(),
@@ -214,10 +217,12 @@ pub(crate) async fn oanda_init(options: ServerLaunchOptions) {
     }
     let stream_limit = Arc::new(Semaphore::new(20));
     if let Some(account) = oanda_client.accounts.get(0) {
-        stream::handle_price_stream(oanda_client.streaming_client.clone(), oanda_client.instrument_symbol_map.clone(), oanda_client.instruments_map.clone(), oanda_client.quote_feed_broadcasters.clone(), receiver, account.clone(), stream_limit.clone(), oanda_client.stream_endpoint.clone(), oanda_client.api_key.clone()).await;
+        stream::handle_price_stream(oanda_client.streaming_client.clone(), oanda_client.instrument_symbol_map.clone(), oanda_client.instruments_map.clone(), oanda_client.quote_feed_broadcasters.clone(), receiver, account.clone(), stream_limit.clone(), oanda_client.stream_endpoint.clone(), oanda_client.api_key.clone());
     }
+    let client =Arc::new(oanda_client);
+    OandaClient::handle_quotebar_subscribers(client.clone(), client.accounts.get(0).unwrap().account_id.clone());
     eprintln!("Oanda client initialized");
-    let _ = OANDA_CLIENT.set(Arc::new(oanda_client));
+    let _ = OANDA_CLIENT.set(client);
 }
 
 impl OandaClient {
@@ -236,6 +241,69 @@ impl OandaClient {
                 Err(e)
             }
         }
+    }
+
+    // allows us to subscribe to quote bars by manually requesting bar updates every 5 seconds
+    pub fn handle_quotebar_subscribers(
+        self: Arc<Self>,
+        account_id: AccountId,
+    ) {
+        tokio::spawn(async move {
+            let last_closed_time: DashMap<DataSubscription, DateTime<Utc>> = DashMap::new();
+            let quotebar_broadcasters: Arc<DashMap<DataSubscription, broadcast::Sender<BaseDataEnum>>> = self.quotebar_broadcasters.clone();
+
+            loop {
+                // Calculate delay until next 5-second boundary + 10ms
+                let now = Utc::now();
+                let next_five_seconds = now
+                    .with_nanosecond(0).unwrap()
+                    .checked_add_signed(chrono::Duration::seconds((5 - (now.second() % 5)) as i64))
+                    .unwrap();
+                let target_time = next_five_seconds + chrono::Duration::milliseconds(10);
+                let delay = target_time.signed_duration_since(now);
+
+                // Sleep until the next tick
+                if delay.num_milliseconds() > 0 {
+                    tokio::time::sleep(Duration::from_millis(delay.num_milliseconds() as u64)).await;
+                }
+
+                let mut to_remove = Vec::new();
+                for broadcaster in quotebar_broadcasters.iter() {
+                    let bars = match self.get_latest_bars(
+                        &broadcaster.key().symbol,
+                        broadcaster.key().base_data_type,
+                        broadcaster.key().resolution,
+                        &account_id,
+                        2
+                    ).await {
+                        Ok(bars) => bars,
+                        Err(e) => {
+                            eprintln!("Failed to get latest bars for quotebar subscriber: {}", e);
+                            continue
+                        }
+                    };
+
+                    for bar in bars {
+                        if let Some(last_time) = last_closed_time.get(&broadcaster.key()) {
+                            if bar.time_closed_utc() > *last_time.value() || !bar.is_closed() {
+                                match broadcaster.value().send(bar.clone()) {
+                                    Ok(_) => {}
+                                    Err(_) => {
+                                        if broadcaster.receiver_count() == 0 {
+                                            to_remove.push(broadcaster.key().clone())
+                                        }
+                                    }
+                                }
+                                last_closed_time.insert(bar.subscription(), bar.time_closed_utc());
+                            }
+                        }
+                    }
+                }
+                for key in to_remove {
+                    quotebar_broadcasters.remove(&key);
+                }
+            }
+        });
     }
 
     pub async fn send_download_request(&self, endpoint: &str) -> Result<Response, Error> {
@@ -266,10 +334,11 @@ impl OandaClient {
 
     pub async fn get_latest_bars(
         &self,
-        symbol: Symbol,
+        symbol: &Symbol,
         base_data_type: BaseDataType,
         resolution: Resolution,
         account_id: &str,
+        units: i32,
     ) -> Result<Vec<BaseDataEnum>, FundForgeError> {
         let interval = resolution_to_oanda_interval(&resolution)
             .ok_or_else(|| FundForgeError::ClientSideErrorDebug("Invalid resolution".to_string()))?;
@@ -284,9 +353,10 @@ impl OandaClient {
 
         // Use UTC alignment
         let url = format!(
-            "/accounts/{}/candles/latest?candleSpecifications={}&smooth=false&alignmentTimezone=UTC",
+            "/accounts/{}/candles/latest?candleSpecifications={}&smooth=false&alignmentTimezone=UTC&units={}",
             account_id,
-            candle_spec
+            candle_spec,
+            units
         );
 
         let response = match self.send_rest_request(&url).await {
@@ -371,13 +441,11 @@ impl OandaClient {
             return Err(FundForgeError::ClientSideErrorDebug("No account ID found".to_string()));
         };
 
-
-        let bars = self.get_latest_bars(symbol, base_data_type, resolution, &account_id).await?;
+        let bars = self.get_latest_bars(&symbol, base_data_type, resolution, &account_id, 1000).await?;
 
         if bars.is_empty() {
             return Ok(());
         }
-
 
         const MAX_RETRIES: u32 = 3;
         let mut retry_count = 0;

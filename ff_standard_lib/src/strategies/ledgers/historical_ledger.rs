@@ -41,7 +41,7 @@ impl Ledger {
                 }
             }
         };
-       eprintln!("Account Currency: {}, Position Currency: {}, Rate: {}", self.currency, position_currency, rate);
+       //eprintln!("Account Currency: {}, Position Currency: {}, Rate: {}", self.currency, position_currency, rate);
         let margin = self.account.brokerage.intraday_margin_required(symbol_name, quantity, market_price, self.currency, base_currency, position_currency, rate).await?
             .unwrap_or_else(|| quantity * market_price * rate);
 
@@ -325,7 +325,7 @@ impl Ledger {
             );
 
             // Insert the new position into the positions map
-            eprintln!("Symbol Code {}", symbol_code);
+            //eprintln!("Symbol Code {}", symbol_code);
             self.positions.insert(symbol_code.clone(), position);
             if !self.positions_closed.contains_key(&symbol_code) {
                 self.positions_closed.insert(symbol_code.clone(), vec![]);

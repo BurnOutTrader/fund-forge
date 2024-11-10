@@ -362,7 +362,7 @@ impl CandleStickConsolidator {
         })
     }
 
-    pub(crate) fn update(&mut self, base_data: &BaseDataEnum) -> ConsolidatedData {
+    pub fn update(&mut self, base_data: &BaseDataEnum) -> ConsolidatedData {
         match base_data.base_data_type() {
             BaseDataType::Ticks => {
                 self.update_candles(base_data)

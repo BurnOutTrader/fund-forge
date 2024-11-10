@@ -27,8 +27,8 @@ use crate::stream_tasks::{subscribe_stream, unsubscribe_stream};
 
 #[async_trait]
 impl VendorApiResponse for OandaClient {
-    #[allow(unused)]
-    async fn symbols_response(&self, mode: StrategyMode, stream_name: StreamName, market_type: MarketType, time: Option<DateTime<Utc>>, callback_id: u64) -> DataServerResponse {
+
+    async fn symbols_response(&self, _mode: StrategyMode, _stream_name: StreamName, market_type: MarketType, _time: Option<DateTime<Utc>>, callback_id: u64) -> DataServerResponse {
         let mut symbols: Vec<Symbol> = Vec::new();
         for symbol in self.instruments_map.iter() {
             let symbol = Symbol::new(symbol.key().clone(), DataVendor::Oanda, symbol.value().market_type.clone());
@@ -40,11 +40,11 @@ impl VendorApiResponse for OandaClient {
             market_type,
         }
     }
-    #[allow(unused)]
-    async fn resolutions_response(&self, mode: StrategyMode, stream_name: StreamName, market_type: MarketType, callback_id: u64) -> DataServerResponse {
+
+    async fn resolutions_response(&self, mode: StrategyMode, _stream_name: StreamName, market_type: MarketType, callback_id: u64) -> DataServerResponse {
         let subscription_resolutions_types = match mode {
             StrategyMode::Backtest => vec![SubscriptionResolutionType::new(Resolution::Seconds(5), BaseDataType::QuoteBars), SubscriptionResolutionType::new(Resolution::Minutes(1), BaseDataType::QuoteBars),SubscriptionResolutionType::new(Resolution::Hours(1), BaseDataType::QuoteBars)],
-            StrategyMode::LivePaperTrading | StrategyMode::Live => vec![SubscriptionResolutionType::new(Resolution::Instant, BaseDataType::Quotes)],
+            StrategyMode::LivePaperTrading | StrategyMode::Live => vec![SubscriptionResolutionType::new(Resolution::Instant, BaseDataType::Quotes), SubscriptionResolutionType::new(Resolution::Seconds(5), BaseDataType::QuoteBars), SubscriptionResolutionType::new(Resolution::Minutes(1), BaseDataType::QuoteBars),SubscriptionResolutionType::new(Resolution::Hours(1), BaseDataType::QuoteBars)],
         };
 
         DataServerResponse::Resolutions {
@@ -54,16 +54,15 @@ impl VendorApiResponse for OandaClient {
         }
     }
 
-    #[allow(unused)]
-    async fn markets_response(&self, mode: StrategyMode, stream_name: StreamName, callback_id: u64) -> DataServerResponse {
+    async fn markets_response(&self, _mode: StrategyMode, _stream_name: StreamName, callback_id: u64) -> DataServerResponse {
         DataServerResponse::Markets {
             callback_id,
             markets: vec![MarketType::CFD, MarketType::Forex],
         }
     }
 
-    #[allow(unused)]
-    async fn decimal_accuracy_response(&self, mode: StrategyMode, stream_name: StreamName, symbol_name: SymbolName, callback_id: u64) -> DataServerResponse {
+
+    async fn decimal_accuracy_response(&self,_mode: StrategyMode, _stream_name: StreamName, symbol_name: SymbolName, callback_id: u64) -> DataServerResponse {
         if let Some(instrument) = self.instruments_map.get(&symbol_name) {
             DataServerResponse::DecimalAccuracy {
                 callback_id,
@@ -76,8 +75,8 @@ impl VendorApiResponse for OandaClient {
             }
         }
     }
-    #[allow(unused)]
-    async fn tick_size_response(&self, mode: StrategyMode, stream_name: StreamName, symbol_name: SymbolName, callback_id: u64) -> DataServerResponse {
+
+    async fn tick_size_response(&self, _mode: StrategyMode, _stream_name: StreamName, symbol_name: SymbolName, callback_id: u64) -> DataServerResponse {
         let instrument = match self.instruments_map.get(&symbol_name) {
             Some(i) => i,
             None => return DataServerResponse::Error{callback_id, error: FundForgeError::ClientSideErrorDebug(format!("Instrument not found: {}", symbol_name))},
@@ -94,13 +93,37 @@ impl VendorApiResponse for OandaClient {
             tick_size,
         }
     }
-    #[allow(unused)]
+
     async fn data_feed_subscribe(&self, stream_name: StreamName, subscription: DataSubscription) -> DataServerResponse {
+        if subscription.base_data_type == BaseDataType::QuoteBars {
+            if subscription.resolution != Resolution::Seconds(5) && subscription.resolution != Resolution::Minutes(1) && subscription.resolution != Resolution::Hours(1) {
+                return DataServerResponse::UnSubscribeResponse {
+                    success: false,
+                    reason: Some(format!("Live subscription does not support: Resolution {}, Subscribe to lower resolution and use consolidator", subscription.resolution)),
+                    subscription,
+                };
+            }
+            if let Some(broadcaster) = self.quotebar_broadcasters.get(&subscription) {
+                let receiver = broadcaster.value().subscribe();
+                subscribe_stream(&stream_name, subscription.clone(), receiver).await;
+            } else {
+                let (sender, receiver) = broadcast::channel(20);
+                self.quotebar_broadcasters.insert(subscription.clone(), sender);
+                subscribe_stream(&stream_name, subscription.clone(), receiver).await;
+            }
+
+            return DataServerResponse::SubscribeResponse {
+                success: true,
+                subscription,
+                reason: None,
+            }
+        }
+
         if subscription.resolution != Resolution::Instant {
             return DataServerResponse::UnSubscribeResponse {
                 success: false,
+                reason: Some(format!("Oanda subscription error: {:?}, please report bug", subscription)),
                 subscription,
-                reason: Some("Oanda".to_string()),
             };
         }
 
@@ -138,8 +161,8 @@ impl VendorApiResponse for OandaClient {
         }
 
         if !is_subscribed {
-            let mut keys: Vec<SymbolName> = self.quote_feed_broadcasters.iter().map(|entry| entry.key().clone()).collect();
-            self.subscription_sender.send(keys).await;
+            let keys: Vec<SymbolName> = self.quote_feed_broadcasters.iter().map(|entry| entry.key().clone()).collect();
+            let _ = self.quote_subscription_sender.send(keys).await;
         }
         DataServerResponse::SubscribeResponse {
             success: true,
@@ -148,7 +171,7 @@ impl VendorApiResponse for OandaClient {
         }
     }
 
-    #[allow(unused)]
+
     async fn data_feed_unsubscribe(&self, stream_name: StreamName, subscription: DataSubscription) -> DataServerResponse {
         unsubscribe_stream(&stream_name, &subscription).await;
         DataServerResponse::UnSubscribeResponse {
@@ -158,11 +181,20 @@ impl VendorApiResponse for OandaClient {
         }
     }
 
-    #[allow(unused)]
-    async fn base_data_types_response(&self, mode: StrategyMode, stream_name: StreamName, callback_id: u64) -> DataServerResponse {
-        DataServerResponse::BaseDataTypes {
-            callback_id,
-            base_data_types: vec![BaseDataType::QuoteBars],
+    async fn base_data_types_response(&self, mode: StrategyMode, _stream_name: StreamName, callback_id: u64) -> DataServerResponse {
+        match mode {
+            StrategyMode::Backtest => {
+                DataServerResponse::BaseDataTypes {
+                    callback_id,
+                    base_data_types: vec![BaseDataType::QuoteBars],
+                }
+            }
+            StrategyMode::Live | StrategyMode::LivePaperTrading => {
+                DataServerResponse::BaseDataTypes {
+                    callback_id,
+                    base_data_types: vec![BaseDataType::QuoteBars, BaseDataType::Quotes],
+                }
+            }
         }
     }
 
@@ -209,7 +241,7 @@ impl VendorApiResponse for OandaClient {
 
         let mut consecutive_empty_responses = 0;
         const MAX_EMPTY_RESPONSES: u32 = 100;
-        const TIME_NEGATIVE: std::time::Duration = std::time::Duration::from_secs(60 * 40);
+        const TIME_NEGATIVE: std::time::Duration = std::time::Duration::from_secs(60 * 15);
         const REQUEST_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(60);
         let mut last_bar_time = from;
 
