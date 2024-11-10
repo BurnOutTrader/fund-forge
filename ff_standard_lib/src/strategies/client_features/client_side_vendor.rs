@@ -2,6 +2,8 @@ use chrono::{DateTime, Utc};
 use tokio::sync::oneshot;
 use tokio::time::timeout;
 use crate::messages::data_server_messaging::{DataServerRequest, DataServerResponse, FundForgeError};
+use crate::product_maps::oanda::maps::OANDA_SYMBOL_INFO;
+use crate::product_maps::rithmic::maps::get_rithmic_symbol_info;
 use crate::standardized_types::base_data::base_data_type::BaseDataType;
 use crate::standardized_types::datavendor_enum::DataVendor;
 use crate::standardized_types::enums::{MarketType, SubscriptionResolutionType};
@@ -135,6 +137,22 @@ impl DataVendor {
     }
 
     pub async fn decimal_accuracy(&self, symbol_name: SymbolName) -> Result<u32, FundForgeError> {
+        match self {
+            DataVendor::Rithmic => {
+                return match get_rithmic_symbol_info(&symbol_name) {
+                    Ok(info) => Ok(info.decimal_accuracy),
+                    Err(e) => return Err(FundForgeError::ClientSideErrorDebug(format!("Error getting decimal accuracy Symbol not found in rithmic_symbol_info: {}", e)))
+                };
+            }
+            DataVendor::Oanda => {
+                return match OANDA_SYMBOL_INFO.get(&symbol_name) {
+                    Some(info) => Ok(info.decimal_accuracy),
+                    None => Err(FundForgeError::ClientSideErrorDebug("Error getting decimal accuracy Symbol not found in OANDA_SYMBOL_INFO".to_string()))
+                };
+            }
+            _ => {}
+        }
+
         let request = DataServerRequest::DecimalAccuracy {
             callback_id: 0,
             data_vendor: self.clone(),
@@ -159,6 +177,24 @@ impl DataVendor {
     }
 
     pub async fn tick_size(&self, symbol_name: SymbolName) -> Result<Price, FundForgeError> {
+        match self {
+            DataVendor::Test => {}
+            DataVendor::Rithmic => {
+                return match get_rithmic_symbol_info(&symbol_name) {
+                    Ok(info) => Ok(info.tick_size),
+                    Err(e) => return Err(FundForgeError::ClientSideErrorDebug(format!("Error getting tick size: {}", e)))
+                };
+            }
+            DataVendor::Bitget => {}
+            DataVendor::Oanda => {
+                return match OANDA_SYMBOL_INFO.get(&symbol_name) {
+                    Some(info) => Ok(info.tick_size),
+                    None => Err(FundForgeError::ClientSideErrorDebug("Symbol not found in OANDA_SYMBOL_INFO".to_string()))
+                };
+            }
+        }
+
+        //if we don't have local map check with server
         let request = DataServerRequest::TickSize {
             callback_id: 0,
             data_vendor: self.clone(),
