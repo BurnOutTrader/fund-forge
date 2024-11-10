@@ -1,4 +1,4 @@
-use reqwest::Client;
+use reqwest::{Client, Error, Response};
 use std::time::Duration;
 use tokio::sync::{broadcast, OnceCell, Semaphore};
 use std::sync::Arc;
@@ -8,6 +8,7 @@ use crate::rate_limiter::RateLimiter;
 use dashmap::DashMap;
 use lazy_static::lazy_static;
 use tokio::sync::mpsc::Sender;
+use ff_standard_lib::messages::data_server_messaging::FundForgeError;
 use ff_standard_lib::standardized_types::accounts::{Account, AccountId, AccountInfo};
 use ff_standard_lib::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use ff_standard_lib::standardized_types::broker_enum::Brokerage;
@@ -15,10 +16,15 @@ use ff_standard_lib::standardized_types::datavendor_enum::DataVendor;
 use ff_standard_lib::standardized_types::orders::OrderId;
 use ff_standard_lib::standardized_types::position::Position;
 use ff_standard_lib::standardized_types::subscriptions::{DataSubscription, Symbol, SymbolName};
-use crate::oanda_api::get::requests::{get_oanda_account_details, get_oanda_account_summary, get_oanda_accounts_list, oanda_instruments_download};
+use crate::oanda_api::get::accounts::account_details::get_oanda_account_details;
+use crate::oanda_api::get::accounts::account_list::get_oanda_accounts_list;
+use crate::oanda_api::get::accounts::account_summary::get_oanda_account_summary;
+use crate::oanda_api::get::instruments::get_oanda_instruments;
 use crate::oanda_api::handlers::stream::handle_price_stream;
-use crate::oanda_api::instruments::OandaInstrument;
-use crate::oanda_api::models::position::parse_oanda_position;
+use crate::oanda_api::get::instruments::OandaInstrument;
+use crate::oanda_api::get::positions::parse_oanda_position;
+use crate::oanda_api::handlers::quotebar_streams::handle_quotebar_subscribers;
+use crate::oanda_api::models::order::placement::OandaOrderUpdate;
 use crate::ServerLaunchOptions;
 
 lazy_static! {
@@ -62,6 +68,25 @@ pub struct OandaClient {
     pub id_stream_name_map: DashMap<OrderId , u16>,
     pub last_transaction_id: DashMap<AccountId, String>,
     pub quotebar_broadcasters: Arc<DashMap<DataSubscription, broadcast::Sender<BaseDataEnum>>>
+}
+
+impl OandaClient {
+    pub async fn send_rest_request(&self, endpoint: &str) -> Result<Response, Error> {
+        let url = format!("{}{}", self.base_endpoint, endpoint);
+        let _permit = self.rate_limiter.acquire().await;
+        match self.client.get(&url)
+            .header("Authorization", format!("Bearer {}", self.api_key))
+            .send()
+            .await
+        {
+            Ok(response) => {
+                Ok(response)
+            }
+            Err(e) => {
+                Err(e)
+            }
+        }
+    }
 }
 
 pub(crate) async fn oanda_init(options: ServerLaunchOptions) {
@@ -174,7 +199,7 @@ pub(crate) async fn oanda_init(options: ServerLaunchOptions) {
         Err(e) => eprintln!("Error getting accounts: {:?}", e)
     };
     if let Some(account) = oanda_client.accounts.get(0) {
-        let instruments = oanda_instruments_download(&oanda_client, &account.account_id).await.unwrap_or_else(|| vec![]);
+        let instruments = get_oanda_instruments(&oanda_client, &account.account_id).await.unwrap_or_else(|| vec![]);
         for instrument in instruments {
             oanda_client.instrument_symbol_map.insert(instrument.name.clone(), Symbol::new(instrument.symbol_name.clone(), DataVendor::Oanda, instrument.market_type.clone()));
             oanda_client.instruments_map.insert(instrument.symbol_name.clone(), instrument);
@@ -228,10 +253,79 @@ pub(crate) async fn oanda_init(options: ServerLaunchOptions) {
         handle_price_stream(oanda_client.streaming_client.clone(), oanda_client.instrument_symbol_map.clone(), oanda_client.instruments_map.clone(), oanda_client.quote_feed_broadcasters.clone(), receiver, account.clone(), stream_limit.clone(), oanda_client.stream_endpoint.clone(), oanda_client.api_key.clone());
     }
     let client =Arc::new(oanda_client);
-    OandaClient::handle_quotebar_subscribers(client.clone(), client.accounts.get(0).unwrap().account_id.clone());
+    handle_quotebar_subscribers(client.clone(), client.accounts.get(0).unwrap().account_id.clone());
     eprintln!("Oanda client initialized");
     let _ = OANDA_CLIENT.set(client);
 }
 
+impl OandaClient {
 
 
+    pub async fn get_order_by_client_id(
+        &self,
+        account_id: &str,
+        client_order_id: &str,
+    ) -> Result<OandaOrderUpdate, FundForgeError> {
+        let request_uri = format!(
+            "/accounts/{}/orders/@{}",
+            account_id,
+            client_order_id
+        );
+
+        let response = self.send_rest_request(&request_uri).await
+            .map_err(|e| FundForgeError::ServerErrorDebug(
+                format!("Failed to get_requests order: {:?}", e)
+            ))?;
+
+        if !response.status().is_success() {
+            return Err(FundForgeError::ServerErrorDebug(
+                format!("Server returned error status: {}", response.status())
+            ));
+        }
+
+        let content = response.text().await
+            .map_err(|e| FundForgeError::ServerErrorDebug(
+                format!("Failed to read response content: {:?}", e)
+            ))?;
+
+        let json: serde_json::Value = serde_json::from_str(&content)
+            .map_err(|e| FundForgeError::ServerErrorDebug(
+                format!("Failed to parse JSON response: {:?}", e)
+            ))?;
+
+        // Extract the order directly from the "order" field
+        let order: OandaOrderUpdate = serde_json::from_value(json["order"].clone())
+            .map_err(|e| FundForgeError::ServerErrorDebug(
+                format!("Failed to parse order data: {:?}", e)
+            ))?;
+
+        Ok(order)
+    }
+
+    pub async fn send_download_request(&self, endpoint: &str) -> Result<Response, Error> {
+        let url = format!("{}{}", self.base_endpoint, endpoint);
+        // Acquire a permit asynchronously
+        // Use a guard pattern to ensure we release permits properly
+        let _rate_permit = self.rate_limiter.acquire().await;
+        let _download_permit = if !self.quote_feed_broadcasters.is_empty() {
+            Some(self.download_limiter.acquire().await)
+        } else {
+            None
+        };
+
+        match self.client.get(&url)
+            .header("Authorization", format!("Bearer {}", self.api_key))
+            .send()
+            .await
+        {
+            Ok(response) => {
+                OANDA_IS_CONNECTED.store(true, Ordering::SeqCst);
+                Ok(response)
+            }
+            Err(e) => {
+              Err(e)
+            }
+        }
+    }
+
+}

@@ -20,7 +20,7 @@ use ff_standard_lib::StreamName;
 use crate::oanda_api::api_client::{OandaClient, OANDA_IS_CONNECTED};
 use crate::oanda_api::base_data_converters::oanda_quotebar_from_candle;
 use crate::oanda_api::download::{generate_url};
-use crate::oanda_api::get::requests::oanda_clean_instrument;
+use crate::oanda_api::support_and_conversions::oanda_clean_instrument;
 use crate::oanda_api::support_and_conversions::{add_time_to_date, resolution_to_oanda_interval};
 use crate::server_features::database::DATA_STORAGE;
 use crate::stream_tasks::{subscribe_stream, unsubscribe_stream};

@@ -1,6 +1,6 @@
 use serde::Deserialize;
+use crate::oanda_api::get::positions::OandaPosition;
 use crate::oanda_api::models::order::placement::OandaOrder;
-use crate::oanda_api::models::position::OandaPosition;
 use crate::oanda_api::models::trade::TradeSummary;
 use crate::oanda_api::models::transaction::transaction::Transaction;
 

@@ -1,11 +1,51 @@
-use rust_decimal::Decimal;
-use serde::Deserialize;
-use serde::Serialize;
+use ff_standard_lib::messages::data_server_messaging::FundForgeError;
+use serde_derive::{Deserialize, Serialize};
 use ff_standard_lib::standardized_types::accounts::{AccountId, Currency};
+use rust_decimal::Decimal;
+use crate::oanda_api::api_client::OandaClient;
 use crate::oanda_api::models::account::enums::{GuaranteedStopLossOrderMode, GuaranteedStopLossOrderMutability};
 use crate::oanda_api::models::account::guaranteed_stop_loss_parameters::GuaranteedStopLossOrderParameters;
 use crate::oanda_api::models::primitives::DateTime;
 use crate::oanda_api::models::transaction_related::TransactionID;
+
+pub(crate) async fn get_oanda_account_summary(oanda_client: &OandaClient, account_id: &str) -> Result<AccountSummary, FundForgeError> {
+    let request_uri = format!("/accounts/{}/summary", account_id);
+
+    let response = match oanda_client.send_rest_request(&request_uri).await {
+        Ok(response) => response,
+        Err(e) => {
+            return Err(FundForgeError::ServerErrorDebug(
+                format!("Failed to get_requests account summary from server: {:?}", e)
+            ));
+        }
+    };
+
+    let content = match response.text().await {
+        Ok(content) => content,
+        Err(e) => {
+            return Err(FundForgeError::ServerErrorDebug(
+                format!("Failed to read response content: {:?}", e)
+            ));
+        }
+    };
+
+    let json: serde_json::Value = match serde_json::from_str(&content) {
+        Ok(json) => json,
+        Err(e) => {
+            return Err(FundForgeError::ServerErrorDebug(
+                format!("Failed to parse JSON response: {:?}", e)
+            ));
+        }
+    };
+
+    // Assuming AccountSummary implements Deserialize
+    match serde_json::from_value(json["account"].clone()) {
+        Ok(summary) => Ok(summary),
+        Err(e) => Err(FundForgeError::ServerErrorDebug(
+            format!("Failed to deserialize account summary: {:?}", e)
+        ))
+    }
+}
 
 /// A summary representation of a client's Account.
 #[derive(Debug, Serialize, Deserialize)]

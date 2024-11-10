@@ -1,8 +1,10 @@
 use std::fmt;
 use std::str::FromStr;
-use chrono::{Duration};
+use chrono::Duration;
 use structopt::StructOpt;
 use ff_standard_lib::standardized_types::resolution::Resolution;
+use ff_standard_lib::standardized_types::subscriptions::SymbolName;
+
 ///The resolutions supported by Oanda Brokerage oanda
 #[derive(PartialEq, Ord, PartialOrd, Eq, Clone, Debug, StructOpt)]
 pub(crate) enum Interval {
@@ -60,4 +62,14 @@ impl FromStr for Interval {
             _ => Err(format!("{} is not a valid resolution", s)),
         }
     }
+}
+
+pub(crate) async fn oanda_clean_instrument(symbol_name: &SymbolName) -> SymbolName {
+    symbol_name
+        .replace("/", "_")
+        .replace(":", "_")
+        .replace("?", "_")
+        .replace("-", "_")
+        .replace(" ", "_")
+        .to_uppercase()
 }

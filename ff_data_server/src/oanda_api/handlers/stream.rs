@@ -17,7 +17,7 @@ use std::pin::Pin;
 use std::str::FromStr;
 use futures_util::TryStreamExt;
 use crate::oanda_api::api_client::{OANDA_IS_CONNECTED};
-use crate::oanda_api::instruments::OandaInstrument;
+use crate::oanda_api::get::instruments::OandaInstrument;
 use crate::oanda_api::models::pricing_common::PriceStreamResponse;
 use crate::subscribe_server_shutdown;
 

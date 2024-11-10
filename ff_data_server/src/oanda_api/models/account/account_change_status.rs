@@ -1,13 +1,13 @@
 use rust_decimal::Decimal;
 use serde::Deserialize;
-use serde::Serialize;
+use crate::oanda_api::get::positions::CalculatedPositionState;
 use crate::oanda_api::models::order::order_related::DynamicOrderState;
-use crate::oanda_api::models::position::CalculatedPositionState;
 use crate::oanda_api::models::primitives::DateTime;
 use crate::oanda_api::models::trade::CalculatedTradeState;
 
+#[allow(unused)]
 /// Represents the prices-dependent state changes of an Account.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Deserialize)]
 struct AccountChangesState {
     /// The total unrealized profit/loss for all Trades currently open in the Account.
     #[serde(rename = "unrealizedPL")]

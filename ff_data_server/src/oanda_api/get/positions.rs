@@ -2,50 +2,18 @@ use std::str::FromStr;
 use chrono::Utc;
 use rust_decimal::Decimal;
 use rust_decimal_macros::dec;
-use serde::{Serialize, Deserialize, Deserializer};
+use serde::{Deserialize, Deserializer};
 use serde_json::Value;
 use uuid::Uuid;
 use ff_standard_lib::helpers::converters::fund_forge_formatted_symbol_name;
 use ff_standard_lib::product_maps::oanda::maps::OANDA_SYMBOL_INFO;
-use ff_standard_lib::standardized_types::accounts::{Account};
+use ff_standard_lib::standardized_types::accounts::Account;
 use ff_standard_lib::standardized_types::position::Position;
-use crate::oanda_api::models::primitives::{InstrumentName};
-use crate::oanda_api::models::transaction_related::TransactionID;
-
-
-/// A filter that can be used when fetching Transactions.
-#[derive(Serialize, Deserialize, Debug)]
-pub struct TransactionFilter {
-    /// Type of Transactions to filter.
-    #[serde(rename = "type")]
-    pub type_of: String,
-
-    /// The ID of the most recent Transaction created for the Account.
-    #[serde(rename = "lastTransactionID")]
-    pub last_transaction_id: TransactionID,
-
-    /// The date/time when the TransactionHeartbeat was created.
-    pub time: String,
-}
-
-/// A TransactionHeartbeat object is injected into the Transaction stream to ensure that the HTTP connection remains active.
-#[derive(Serialize, Deserialize, Debug)]
-pub struct TransactionHeartbeat {
-    /// The string “HEARTBEAT”.
-    #[serde(rename = "type")]
-    pub type_of: String,
-
-    /// The ID of the most recent Transaction created for the Account.
-    #[serde(rename = "lastTransactionID")]
-    pub last_transaction_id: TransactionID,
-
-    /// The date/time when the TransactionHeartbeat was created.
-    pub time: String,
-}
+use crate::oanda_api::models::primitives::InstrumentName;
 
 #[derive(Debug)]
 #[allow(dead_code)]
-pub(crate) struct PositionSide {
+pub struct PositionSide {
     pub units: Decimal,
     pub pl: Decimal,
     pub resettable_pl: Decimal,
@@ -109,7 +77,7 @@ impl<'de> Deserialize<'de> for PositionSide {
 
 #[derive(Debug, Deserialize)]
 #[allow(dead_code)]
-pub(crate) struct OandaPosition {
+pub struct OandaPosition {
     pub instrument: String,
     #[serde(default)]
     pub pl: Decimal,
@@ -132,7 +100,7 @@ pub(crate) struct OandaPosition {
 }
 
 /// The dynamic (calculated) state of a Position.
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Deserialize, Debug)]
 pub struct CalculatedPositionState {
     /// The Position’s Instrument.
     pub instrument: InstrumentName,
@@ -154,8 +122,7 @@ pub struct CalculatedPositionState {
     pub margin_used: Decimal,
 }
 
-
-pub(crate) fn parse_oanda_position(position: OandaPosition, account: Account) -> Option<Position> {
+pub fn parse_oanda_position(position: OandaPosition, account: Account) -> Option<Position> {
     let symbol_name = fund_forge_formatted_symbol_name(&position.instrument);
     let (side, quantity, average_price, open_pnl) = match position.long.units > dec!(0) {
         true => (

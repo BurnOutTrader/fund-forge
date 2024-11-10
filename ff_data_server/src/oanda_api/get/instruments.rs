@@ -1,12 +1,52 @@
-use serde_json::Value;
-use std::str::FromStr;
-use rust_decimal::Decimal;
 use serde_derive::{Deserialize, Serialize};
-use ff_standard_lib::helpers::converters::fund_forge_formatted_symbol_name;
-use ff_standard_lib::standardized_types::enums::MarketType;
 use ff_standard_lib::standardized_types::subscriptions::SymbolName;
+use rust_decimal::Decimal;
+use ff_standard_lib::standardized_types::enums::MarketType;
+use serde_json::Value;
+use ff_standard_lib::helpers::converters::fund_forge_formatted_symbol_name;
+use std::str::FromStr;
+use crate::oanda_api::api_client::OandaClient;
 use crate::oanda_api::models::account::enums::GuaranteedStopLossOrderMode;
 use crate::oanda_api::models::primitives::{GuaranteedStopLossOrderLevelRestriction, InstrumentCommission, InstrumentFinancing};
+
+pub(crate) async fn get_oanda_instruments(oanda_client: &OandaClient, account: &str) -> Option<Vec<OandaInstrument>>{
+    let url = format!("/accounts/{}/instruments", account);
+
+    let response = oanda_client.send_rest_request(&url).await.unwrap();
+    if !response.status().is_success() {
+        println!("Error getting instruments: {:?}", response)
+    }
+
+    let content = match response.text().await {
+        Ok(content) => content,
+        Err(e) => {
+            println!("Error getting instruments: {:?}", e);
+            return None;
+        }
+    };
+    
+    let json: serde_json::Value = serde_json::from_str(&content).unwrap();
+    let instruments_json = match json["instruments"].as_array() {
+        Some(instruments) => instruments,
+        None => {
+            println!("Error getting oanda instruments: {:?}", json);
+            return None;
+        }
+    };
+
+    if instruments_json.len() == 0 {
+        println!("No instruments found for account: {}", account);
+        return None;
+    }
+
+    let mut instruments: Vec<OandaInstrument> = Vec::new();
+    for instrument in instruments_json {
+        let instrument_enum = OandaInstrument::from_json(instrument).unwrap();
+        instruments.push(instrument_enum);
+    }
+
+    Some(instruments)
+}
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -124,4 +164,3 @@ impl OandaInstrument {
         })
     }
 }
-
