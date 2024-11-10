@@ -36,7 +36,7 @@ async fn main() {
         NaiveDate::from_ymd_opt(2019, 10, 5).unwrap().and_hms_opt(0, 0, 0).unwrap(),
         NaiveDate::from_ymd_opt(2019, 11, 15).unwrap().and_hms_opt(0, 0, 0).unwrap(),
         Australia::Sydney,
-        Duration::hours(8),
+        Duration::hours(1),
         vec![
              DataSubscription::new (
                 symbol_name.clone(),
