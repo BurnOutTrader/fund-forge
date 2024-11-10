@@ -1,4 +1,3 @@
-pub mod account;
 pub mod order;
 pub mod transaction;
 pub mod pricing;
@@ -7,3 +6,4 @@ pub mod primitives;
 pub mod trade;
 pub mod transaction_related;
 pub mod instruments;
+pub mod account;
