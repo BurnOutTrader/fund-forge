@@ -14,7 +14,7 @@ pub trait BrokerApiResponse: Sync + Send {
     ///
     /// `FundForgeError::ServerSideErrorDebug` or `FundForgeError::ClientSideErrorDebug` depending on who caused this problem.
     ///
-    /// You can return a hard coded list here for most brokers, equities we might want to get dynamically from the brokerage.
+    /// You can return a hard coded list here for most brokers, equities we might want to get_requests dynamically from the brokerage.
     async fn symbol_names_response(
         &self,
         mode: StrategyMode,
@@ -42,7 +42,7 @@ pub trait BrokerApiResponse: Sync + Send {
     ///
     /// `FundForgeError::ServerSideErrorDebug` or `FundForgeError::ClientSideErrorDebug` depending on who caused this problem.
     ///
-    /// You can return a hard coded list here for most brokers, equities we might want to get dynamically from the brokerage.
+    /// You can return a hard coded list here for most brokers, equities we might want to get_requests dynamically from the brokerage.
     async fn symbol_info_response(
         &self,
         mode: StrategyMode,

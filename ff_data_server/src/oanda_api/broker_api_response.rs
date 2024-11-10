@@ -427,7 +427,7 @@ impl BrokerApiResponse for OandaClient {
                                 }
 
                                 // If order was immediately filled
-                                // Check if fill transaction exists and get its fields
+                                // Check if fill transaction exists and get_requests its fields
                                 if let Some(fill) = create_response["orderFillTransaction"].as_object() {
                                     let quantity = match fill["units"]
                                         .as_str()

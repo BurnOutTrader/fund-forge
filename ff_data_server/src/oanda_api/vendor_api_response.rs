@@ -20,7 +20,7 @@ use ff_standard_lib::StreamName;
 use crate::oanda_api::api_client::{OandaClient, OANDA_IS_CONNECTED};
 use crate::oanda_api::base_data_converters::oanda_quotebar_from_candle;
 use crate::oanda_api::download::{generate_url};
-use crate::oanda_api::get_requests::oanda_clean_instrument;
+use crate::oanda_api::get::requests::oanda_clean_instrument;
 use crate::oanda_api::support_and_conversions::{add_time_to_date, resolution_to_oanda_interval};
 use crate::server_features::database::DATA_STORAGE;
 use crate::stream_tasks::{subscribe_stream, unsubscribe_stream};
@@ -347,7 +347,7 @@ impl VendorApiResponse for OandaClient {
 
                     last_bar_time = bar.time_utc();
                     new_data.entry(new_bar_time).or_insert(bar);
-                    // Reset counter when we get data
+                    // Reset counter when we get_requests data
                 }
             }
             if start == last_bar_time {
@@ -370,7 +370,14 @@ impl VendorApiResponse for OandaClient {
         }
 
         if !from_back {
-            self.update_latest_bars(symbol.clone(), base_data_type, resolution).await?;
+            let duration_since_last_bar = Utc::now() - last_bar_time;
+            let units = duration_since_last_bar.num_seconds() / resolution.as_seconds();
+            if let Some(account) = self.accounts.get(0) {
+                let bars = self.get_latest_bars(&symbol, base_data_type, resolution, &account.account_id, (units + 3) as i32).await?;
+                if let Err(e) = data_storage.save_data_bulk(bars).await {
+                    progress_bar.set_message(format!("Error saving final data batch: {}", e));
+                }
+            }
         }
 
         progress_bar.finish_and_clear();

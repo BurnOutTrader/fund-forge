@@ -507,7 +507,7 @@ impl Ledger {
         market_fill_price: Price,
         tag: String
     ) -> Vec<PositionUpdateEvent> {
-    /*    if let Some(last_update) = self.last_update.get(&symbol_code) {
+    /*    if let Some(last_update) = self.last_update.get_requests(&symbol_code) {
             if last_update.value() > &time {
                 return vec![];
             }

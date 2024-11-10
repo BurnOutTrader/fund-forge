@@ -150,12 +150,12 @@ static SHUTDOWN_CHANNEL: Lazy<broadcast::Sender<()>> = Lazy::new(|| {
     sender
 });
 
-// Function to get the sender
+// Function to get_requests the sender
 fn get_shutdown_sender() -> &'static broadcast::Sender<()> {
     &SHUTDOWN_CHANNEL
 }
 
-// Function to get a new receiver
+// Function to get_requests a new receiver
 pub fn subscribe_server_shutdown() -> broadcast::Receiver<()> {
     SHUTDOWN_CHANNEL.subscribe()
 }

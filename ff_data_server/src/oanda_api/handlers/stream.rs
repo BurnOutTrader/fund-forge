@@ -53,7 +53,7 @@ pub async fn establish_stream(
     eprintln!("Stream response status: {}", status);
 
     if !status.is_success() {
-        let error_text = response.text().await.unwrap_or_else(|_| "Could not get error text".to_string());
+        let error_text = response.text().await.unwrap_or_else(|_| "Could not get_requests error text".to_string());
         eprintln!("Stream request failed: {}", error_text);
         return Err(FundForgeError::ServerErrorDebug(format!(
             "Stream request failed with status {}: {}",

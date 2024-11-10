@@ -3,7 +3,7 @@ use chrono::{DateTime, Duration, NaiveDateTime, Utc};
 use ff_standard_lib::standardized_types::base_data::base_data_type::BaseDataType;
 use ff_standard_lib::standardized_types::resolution::Resolution;
 use ff_standard_lib::standardized_types::subscriptions::{Symbol};
-use crate::oanda_api::get_requests::oanda_clean_instrument;
+use crate::oanda_api::get::requests::oanda_clean_instrument;
 use crate::oanda_api::support_and_conversions::{add_time_to_date, resolution_to_oanda_interval, Interval};
 
 ///generates urls used for downloading intraday candles, always starts from the last time in the existing data else 2005-01-01 (oanda's earliest date.

@@ -95,7 +95,7 @@ impl ExternalSender {
         prefixed_msg.extend_from_slice(&length);
         prefixed_msg.extend_from_slice(&data);
 
-        // Lock the mutex to get mutable access
+        // Lock the mutex to get_requests mutable access
         let mut sender = self.sender.lock().await;
         match sender
             .write_all(&prefixed_msg)
@@ -126,7 +126,7 @@ impl SecondaryDataSender {
                 .await
                 .map_err(|e| SendError { msg: e.to_string() }),
             SecondaryDataSender::ExternalSender(sender) => {
-                // Lock the mutex to get mutable access
+                // Lock the mutex to get_requests mutable access
                 let mut sender = sender.lock().await;
 
                 // Convert the length of the data to a u64, then to bytes

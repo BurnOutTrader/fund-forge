@@ -58,13 +58,13 @@ pub(crate) async fn oanda_clean_instrument(symbol_name: &SymbolName) -> SymbolNa
 
 /// Functions to manage the Oanda Account
 /// Returns the list of accounts available for the Oanda brokerage
-pub(crate) async fn oanda_accounts_list(oanda_client: &OandaClient) -> Result<Vec<Account>, FundForgeError> {
+pub(crate) async fn get_oanda_accounts_list(oanda_client: &OandaClient) -> Result<Vec<Account>, FundForgeError> {
     let request_uri = "/accounts".to_string();
 
     let response = match oanda_client.send_rest_request(&request_uri).await {
         Ok(response) => response,
         Err(e) => {
-            return Err(FundForgeError::ServerErrorDebug(format!("Failed to get the account list from the server: {:?}", e)));
+            return Err(FundForgeError::ServerErrorDebug(format!("Failed to get_requests the account list from the server: {:?}", e)));
         }
     };
 
@@ -85,15 +85,15 @@ pub(crate) async fn oanda_accounts_list(oanda_client: &OandaClient) -> Result<Ve
     Ok(accounts)
 }
 
-#[allow(dead_code)]
-pub(crate) async fn oanda_account_summary(oanda_client: &OandaClient, account_id: &str) -> Result<AccountSummary, FundForgeError> {
+
+pub(crate) async fn get_oanda_account_summary(oanda_client: &OandaClient, account_id: &str) -> Result<AccountSummary, FundForgeError> {
     let request_uri = format!("/accounts/{}/summary", account_id);
 
     let response = match oanda_client.send_rest_request(&request_uri).await {
         Ok(response) => response,
         Err(e) => {
             return Err(FundForgeError::ServerErrorDebug(
-                format!("Failed to get account summary from server: {:?}", e)
+                format!("Failed to get_requests account summary from server: {:?}", e)
             ));
         }
     };
@@ -124,14 +124,14 @@ pub(crate) async fn oanda_account_summary(oanda_client: &OandaClient, account_id
         ))
     }
 }
-pub(crate) async fn oanda_account_details(oanda_client: &OandaClient, account_id: &str) -> Result<OandaAccount, FundForgeError> {
+pub(crate) async fn get_oanda_account_details(oanda_client: &OandaClient, account_id: &str) -> Result<OandaAccount, FundForgeError> {
     let request_uri = format!("/accounts/{}", account_id);
 
     let response = match oanda_client.send_rest_request(&request_uri).await {
         Ok(response) => response,
         Err(e) => {
             return Err(FundForgeError::ServerErrorDebug(
-                format!("Failed to get account summary from server: {:?}", e)
+                format!("Failed to get_requests account summary from server: {:?}", e)
             ));
         }
     };
@@ -167,50 +167,5 @@ pub(crate) async fn oanda_account_details(oanda_client: &OandaClient, account_id
         Err(e) => Err(FundForgeError::ServerErrorDebug(
             format!("Failed to deserialize account summary: {:?}", e)
         ))
-    }
-}
-
-#[allow(dead_code)]
-pub(crate) async fn get_oanda_account_details(oanda_client: &OandaClient, account_id: &str) -> Result<OandaAccount, FundForgeError> {
-    let request_uri = format!("/accounts/{}", account_id);
-
-    let response = match oanda_client.send_rest_request(&request_uri).await {
-        Ok(response) => response,
-        Err(e) => {
-            return Err(FundForgeError::ServerErrorDebug(
-                format!("Failed to get account details from server: {:?}", e)
-            ));
-        }
-    };
-
-    let content = match response.text().await {
-        Ok(content) => content,
-        Err(e) => {
-            return Err(FundForgeError::ServerErrorDebug(
-                format!("Failed to read response content: {:?}", e)
-            ));
-        }
-    };
-
-    //println!("Raw response: {}", content); // Add this for debugging
-
-    let json: serde_json::Value = match serde_json::from_str(&content) {
-        Ok(json) => json,
-        Err(e) => {
-            return Err(FundForgeError::ServerErrorDebug(
-                format!("Failed to parse JSON response: {:?}", e)
-            ));
-        }
-    };
-
-    match serde_json::from_value(json["account"].clone()) {
-        Ok(account) => Ok(account),
-        Err(e) => {
-            // Print the actual JSON structure for debugging
-            //println!("Account JSON: {}", json["account"]);
-            Err(FundForgeError::ServerErrorDebug(
-                format!("Failed to deserialize account details: {:?}", e)
-            ))
-        }
     }
 }

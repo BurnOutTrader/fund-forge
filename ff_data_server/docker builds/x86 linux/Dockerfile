@@ -20,7 +20,7 @@ RUN cargo build --release --target x86_64-unknown-linux-gnu
 FROM debian:bookworm-slim
 
 # Install runtime dependencies necessary for your application
-RUN apt-get update && apt-get install -y \
+RUN apt-get_requests update && apt-get_requests install -y \
     ca-certificates \
     openssl \
     && rm -rf /var/lib/apt/lists/*

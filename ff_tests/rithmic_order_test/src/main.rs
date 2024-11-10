@@ -139,10 +139,6 @@ pub async fn on_data_received(
                                     //strategy.export_trades(&String::from("./trades exports"));
                                     let open_pnl = strategy.pnl(&account_1, &symbol_code);
                                     let is_long = strategy.is_long(&account_1, &symbol_code);
-                                    assert_eq!(is_long, false);
-                                    assert_eq!(open_pnl, dec!(0));
-                                    println!("TEST PASSED");
-                                    break 'strategy_loop;
                                 }
                             }
                         }

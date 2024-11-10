@@ -105,7 +105,7 @@ pub fn round_to_tick_size(value: Decimal, tick_size: Decimal) -> Decimal {
     // Divide the value by the tick size, then round to the nearest integer
     let ticks = (value / tick_size).round();
 
-    // Multiply the rounded number of ticks by the tick size to get the final rounded value
+    // Multiply the rounded number of ticks by the tick size to get_requests the final rounded value
     ticks * tick_size
 }
 

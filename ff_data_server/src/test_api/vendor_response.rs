@@ -110,7 +110,7 @@ impl VendorApiResponse for TestApiClient {
                 let data = match DATA_STORAGE.get().expect("DATA_STORAGE not initialized").get_data_range(&subscription.symbol, &subscription.resolution, &subscription.base_data_type, from_time, to_time).await {
                     Ok(data) => data,
                     Err(e) => {
-                        eprintln!("Failed to get test data: {}", e);
+                        eprintln!("Failed to get_requests test data: {}", e);
                         return
                     }
                 };

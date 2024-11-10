@@ -108,7 +108,7 @@ impl RithmicApiClient {
             None => return Err(RithmicApiError::ServerErrorDebug(format!("No server domain found, check server.toml for: {:?}", self.credentials.server_name))),
             Some(domain) => domain
         };
-        // establish TCP connection to get the server details
+        // establish TCP connection to get_requests the server details
         let (mut stream, response) = match connect_async(domain).await {
             Ok((stream, response)) => (stream, response),
             Err(e) => return Err(RithmicApiError::ServerErrorDebug(format!("Failed to connect to rithmic: {}", e)))
@@ -251,7 +251,7 @@ impl RithmicApiClient {
     }
 }
 
-/// Dynamically get the template_id field from a generic type T.
+/// Dynamically get_requests the template_id field from a generic type T.
 pub fn extract_template_id(bytes: &[u8]) -> Option<i32> {
     let mut cursor = Cursor::new(bytes);
     while let Ok((field_number, wire_type)) = decode_key(&mut cursor) {

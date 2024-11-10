@@ -440,7 +440,7 @@ pub async fn match_order_plant_id(
                         Ok(notify) => notify
                     };
 
-                    let tag = match ID_TO_TAG.get(&order_id) {
+                    let tag = match ID_TO_TAG.get_requests(&order_id) {
                         None => {
                             eprintln!("Tag not found for order: {}", order_id);
                             return;

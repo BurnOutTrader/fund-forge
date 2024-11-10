@@ -12,7 +12,7 @@ use crate::strategies::client_features::other_requests::get_exchange_rate;
 
 impl Ledger {
     pub(crate) async fn release_margin_used(&self, symbol_name: &SymbolName) {
-        // First get the margin amount without removing it
+        // First get_requests the margin amount without removing it
         if let Some((_,margin_used)) = self.margin_used.remove(symbol_name) {
             let margin_amount = margin_used;
 
