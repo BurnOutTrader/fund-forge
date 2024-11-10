@@ -5,8 +5,7 @@ use ff_standard_lib::standardized_types::base_data::traits::BaseData;
 use ff_standard_lib::standardized_types::resolution::Resolution;
 use ff_standard_lib::standardized_types::subscriptions::Symbol;
 use crate::oanda_api::api_client::OandaClient;
-use crate::oanda_api::base_data_converters::{candle_from_candle, oanda_quotebar_from_candle};
-use crate::oanda_api::support_and_conversions::{oanda_clean_instrument, resolution_to_oanda_interval};
+use crate::oanda_api::support_and_conversions::{candle_from_candle, oanda_clean_instrument, oanda_quotebar_from_candle, resolution_to_oanda_interval};
 
 impl OandaClient {
     pub async fn get_latest_bars(
