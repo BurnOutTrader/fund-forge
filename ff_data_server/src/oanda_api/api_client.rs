@@ -3,30 +3,37 @@ use std::time::Duration;
 use tokio::sync::{broadcast, OnceCell, Semaphore};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
+use ahash::AHashMap;
 use chrono::{DateTime, Timelike, Utc};
 use crate::oanda_api::settings::{OandaApiMode, OandaSettings};
 use crate::rate_limiter::RateLimiter;
 use dashmap::DashMap;
 use lazy_static::lazy_static;
 use tokio::sync::mpsc::{Sender};
-use ff_standard_lib::messages::data_server_messaging::FundForgeError;
+use tokio::time::{interval};
+use ff_standard_lib::messages::data_server_messaging::{DataServerResponse, FundForgeError};
 use ff_standard_lib::standardized_types::accounts::{Account, AccountId, AccountInfo};
 use ff_standard_lib::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use ff_standard_lib::standardized_types::base_data::base_data_type::BaseDataType;
 use ff_standard_lib::standardized_types::base_data::traits::BaseData;
 use ff_standard_lib::standardized_types::broker_enum::Brokerage;
 use ff_standard_lib::standardized_types::datavendor_enum::DataVendor;
-use ff_standard_lib::standardized_types::orders::{OrderId};
+use ff_standard_lib::standardized_types::orders::{OrderId, OrderState, OrderUpdateEvent};
 use ff_standard_lib::standardized_types::position::Position;
 use ff_standard_lib::standardized_types::resolution::Resolution;
 use ff_standard_lib::standardized_types::subscriptions::{DataSubscription, Symbol, SymbolName};
 use crate::oanda_api::base_data_converters::{candle_from_candle, oanda_quotebar_from_candle};
-use crate::oanda_api::get_requests::{oanda_account_summary, oanda_accounts_list, oanda_clean_instrument, oanda_instruments_download};
+use crate::oanda_api::get_requests::{oanda_account_details, oanda_account_summary, oanda_accounts_list, oanda_clean_instrument, oanda_instruments_download};
 use crate::oanda_api::instruments::OandaInstrument;
+use crate::oanda_api::models::account::account::{AccountChangesResponse};
+use crate::oanda_api::models::order::order_related::OandaOrderState;
+use crate::oanda_api::models::order::placement::{OandaOrderUpdate};
+use crate::oanda_api::models::position::{parse_oanda_position};
 use crate::oanda_api::support_and_conversions::resolution_to_oanda_interval;
 use crate::server_features::database::DATA_STORAGE;
 use crate::ServerLaunchOptions;
 use crate::oanda_api::stream;
+use crate::request_handlers::RESPONSE_SENDERS;
 
 lazy_static! {
     pub static ref OANDA_IS_CONNECTED: AtomicBool = AtomicBool::new(false);
@@ -214,6 +221,21 @@ pub(crate) async fn oanda_init(options: ServerLaunchOptions) {
             }
             Err(e) => eprintln!("Error getting oanda account info: {}", e)
         }
+        match oanda_account_details(&oanda_client, &account.account_id).await {
+            Ok(details) => {
+                //eprintln!("Oanda account details: {:?}", details);
+                for position in details.positions {
+                    match parse_oanda_position(position, account.clone()) {
+                        Some(pos) => {
+                            oanda_client.positions.entry(account.account_id.clone()).or_insert(Default::default()).insert(pos.symbol_name.clone(), pos);
+                        }
+                        None => {}
+                    }
+                }
+
+            }
+            Err(e) => eprintln!("Error getting oanda account positions: {}", e)
+        }
     }
     let stream_limit = Arc::new(Semaphore::new(20));
     if let Some(account) = oanda_client.accounts.get(0) {
@@ -224,6 +246,8 @@ pub(crate) async fn oanda_init(options: ServerLaunchOptions) {
     eprintln!("Oanda client initialized");
     let _ = OANDA_CLIENT.set(client);
 }
+
+
 
 impl OandaClient {
     pub async fn send_rest_request(&self, endpoint: &str) -> Result<Response, Error> {
@@ -241,6 +265,268 @@ impl OandaClient {
                 Err(e)
             }
         }
+    }
+
+    pub async fn poll_account_changes(
+        self: &Arc<Self>,
+        account_id: &str,
+        last_transaction_id: &str,
+    ) -> Result<AccountChangesResponse, FundForgeError> {
+        let request_uri = format!(
+            "/accounts/{}/changes?sinceTransactionID={}",
+            account_id,
+            last_transaction_id
+        );
+
+        let response = match self.send_rest_request(&request_uri).await {
+            Ok(r) => r,
+            Err(e) => {
+                return Err(FundForgeError::ServerErrorDebug(
+                    format!("Failed to poll account changes: {:?}", e)
+                ));
+            }
+        };
+
+        if !response.status().is_success() {
+            return Err(FundForgeError::ServerErrorDebug(
+                format!("Server returned error status: {}", response.status())
+            ));
+        }
+
+        let content = response.text().await.map_err(|e| {
+            FundForgeError::ServerErrorDebug(format!("Failed to read response content: {:?}", e))
+        })?;
+
+        let changes: AccountChangesResponse = serde_json::from_str(&content).map_err(|e| {
+            FundForgeError::ServerErrorDebug(format!("Failed to parse JSON response: {:?}", e))
+        })?;
+
+        Ok(changes)
+    }
+
+    pub fn handle_account_updates(self: Arc<Self>) {
+        tokio::spawn(async move {
+            let mut interval = interval(Duration::from_millis(750));
+
+            // Track last transaction ID for each account
+            let mut last_transaction_ids: AHashMap<AccountId, String> = AHashMap::new();
+            let accounts = self.accounts.clone();
+            let account_info = self.account_info.clone();
+            let open_orders = self.open_orders.clone();
+            loop {
+                interval.tick().await;
+
+                for account in &accounts {
+                    let account_id = &account.account_id;
+
+                    // Get the last known transaction ID for this account
+                    let last_transaction_id = last_transaction_ids
+                        .get(account_id)
+                        .cloned()
+                        .unwrap_or_else(|| "1".to_string()); // Start from 1 if no previous ID
+
+                    match OandaClient::poll_account_changes(&self, account_id, &last_transaction_id).await {
+                        Ok(changes) => {
+                            // Update account info if we have it
+                            if let Some(mut account_info) = account_info.get_mut(account_id) {
+                                // Update account state
+                                account_info.cash_available = changes.state.margin_available;
+                                account_info.open_pnl = changes.state.unrealized_pl;
+                                account_info.cash_used = changes.state.margin_used;
+
+                                // Process position changes
+                                if !changes.changes.positions.is_empty() {
+                                    // Clear existing positions for this account
+                                    if let Some(positions) = self.positions.get_mut(account_id) {
+                                        positions.clear();
+                                    }
+
+                                    // Add updated positions
+                                    for position in changes.changes.positions {
+                                        if let Some(parsed_position) = parse_oanda_position(
+                                            position,
+                                            account.clone()
+                                        ) {
+                                            self.positions
+                                                .entry(account_id.clone())
+                                                .or_insert_with(DashMap::new)
+                                                .insert(
+                                                    parsed_position.symbol_name.clone(),
+                                                    parsed_position.clone()
+                                                );
+                                            let message = DataServerResponse::LivePositionUpdates {
+                                                account: account.clone(),
+                                                position: parsed_position,
+                                                time: Utc::now().to_string(),
+                                            };
+                                            for stream_name in RESPONSE_SENDERS.iter() {
+                                                match stream_name.value().send(message.clone()).await {
+                                                    Ok(_) => {}
+                                                    Err(e) => {
+                                                        eprintln!("failed to forward ResponseNewOrder 313 to strategy stream {}", e);
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
+                            // Update the last transaction ID
+                            last_transaction_ids.insert(
+                                account_id.clone(),
+                                changes.last_transaction_id
+                            );
+
+                            if let Some(account_info) = account_info.get(account_id) {
+                                let account_updates = DataServerResponse::LiveAccountUpdates {
+                                    account: account.clone(),
+                                    cash_value: account_info.cash_value,
+                                    cash_available: account_info.cash_available,
+                                    cash_used: account_info.cash_used,
+                                };
+                                for stream_name in RESPONSE_SENDERS.iter() {
+                                    match stream_name.value().send(account_updates.clone()).await {
+                                        Ok(_) => {}
+                                        Err(e) => {
+                                            eprintln!("failed to forward ResponseNewOrder 313 to strategy stream {}", e);
+
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        Err(e) => {
+                            eprintln!("Error polling account changes: {}", e);
+                        }
+                    }
+
+                    // now handle open orders
+                    let mut to_remove = Vec::new();
+                    for mut order in open_orders.iter_mut() {
+                        match self.get_order_by_client_id(account_id, &order.value().id).await {
+                            Ok(oanda_order) => {
+                                let order_state = match oanda_order.state {
+                                    OandaOrderState::Pending => OrderState::Accepted,
+                                    OandaOrderState::Filled => OrderState::Filled,
+                                    OandaOrderState::Triggered => OrderState::Accepted,
+                                    OandaOrderState::Cancelled => OrderState::Cancelled
+                                };
+
+                                if order_state != order.state {
+                                    order.state = order_state.clone();
+                                    let message = match order_state {
+                                        OrderState::Filled => {
+                                            to_remove.push(order.key().clone());
+                                            DataServerResponse::OrderUpdates {
+                                                event: OrderUpdateEvent::OrderFilled {
+                                                    account: order.account.clone(),
+                                                    symbol_name: order.symbol_name.clone(),
+                                                    symbol_code: order.symbol_name.clone(),
+                                                    order_id: order.key().clone(),
+                                                    side: order.side.clone(),
+                                                    price: Default::default(),
+                                                    quantity: Default::default(),
+                                                    tag: order.tag.clone(),
+                                                    time: Utc::now().to_string(),
+                                                },
+                                                time: Utc::now().to_string(),
+                                            }
+                                        }
+                                        OrderState::Accepted => {
+                                            DataServerResponse::OrderUpdates {
+                                                event: OrderUpdateEvent::OrderAccepted {
+                                                    account: order.account.clone(),
+                                                    symbol_name: order.symbol_name.clone(),
+                                                    symbol_code: order.symbol_name.clone(),
+                                                    order_id: order.key().clone(),
+                                                    tag: order.tag.clone(),
+                                                    time: Utc::now().to_string(),
+                                                },
+                                                time: Utc::now().to_string(),
+                                            }
+                                        }
+                                        OrderState::Cancelled => {
+                                            to_remove.push(order.key().clone());
+                                            DataServerResponse::OrderUpdates {
+                                                event: OrderUpdateEvent::OrderCancelled {
+                                                    account: order.account.clone(),
+                                                    symbol_name: order.symbol_name.clone(),
+                                                    symbol_code: order.symbol_name.clone(),
+                                                    order_id: order.key().clone(),
+                                                    reason: "Oanda provides no reason".to_string(),
+                                                    tag: order.tag.clone(),
+                                                    time: Utc::now().to_string(),
+                                                },
+                                                time: Utc::now().to_string(),
+                                            }
+                                        }
+                                        _ => continue
+                                    };
+                                    for stream_name in RESPONSE_SENDERS.iter() {
+                                        match stream_name.value().send(message.clone()).await {
+                                            Ok(_) => {}
+                                            Err(e) => {
+                                                eprintln!("failed to forward ResponseNewOrder 313 to strategy stream {}", e);
+                                            }
+                                        }
+                                    }
+                                }
+                            },
+                            Err(e) => {
+                                to_remove.push(order.key().clone());
+                                eprintln!("Failed to get order: {}", e);
+                                continue;
+                            }
+                        };
+                    }
+                    for key in to_remove {
+                        open_orders.remove(&key);
+                    }
+                }
+            }
+        });
+    }
+
+    pub async fn get_order_by_client_id(
+        self: &Arc<Self>,
+        account_id: &str,
+        client_order_id: &str,
+    ) -> Result<OandaOrderUpdate, FundForgeError> {
+        let request_uri = format!(
+            "/accounts/{}/orders/@{}",
+            account_id,
+            client_order_id
+        );
+
+        let response = self.send_rest_request(&request_uri).await
+            .map_err(|e| FundForgeError::ServerErrorDebug(
+                format!("Failed to get order: {:?}", e)
+            ))?;
+
+        if !response.status().is_success() {
+            return Err(FundForgeError::ServerErrorDebug(
+                format!("Server returned error status: {}", response.status())
+            ));
+        }
+
+        let content = response.text().await
+            .map_err(|e| FundForgeError::ServerErrorDebug(
+                format!("Failed to read response content: {:?}", e)
+            ))?;
+
+        let json: serde_json::Value = serde_json::from_str(&content)
+            .map_err(|e| FundForgeError::ServerErrorDebug(
+                format!("Failed to parse JSON response: {:?}", e)
+            ))?;
+
+        // Extract the order directly from the "order" field
+        let order: OandaOrderUpdate = serde_json::from_value(json["order"].clone())
+            .map_err(|e| FundForgeError::ServerErrorDebug(
+                format!("Failed to parse order data: {:?}", e)
+            ))?;
+
+        Ok(order)
     }
 
     // allows us to subscribe to quote bars by manually requesting bar updates every 5 seconds

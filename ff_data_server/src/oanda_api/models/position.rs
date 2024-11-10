@@ -1,8 +1,17 @@
+use std::str::FromStr;
+use chrono::Utc;
 use rust_decimal::Decimal;
-use serde::{Serialize, Deserialize};
+use rust_decimal_macros::dec;
+use serde::{Serialize, Deserialize, Deserializer};
+use serde_json::Value;
+use uuid::Uuid;
+use ff_standard_lib::helpers::converters::fund_forge_formatted_symbol_name;
+use ff_standard_lib::product_maps::oanda::maps::OANDA_SYMBOL_INFO;
+use ff_standard_lib::standardized_types::accounts::{Account};
+use ff_standard_lib::standardized_types::position::Position;
 use crate::oanda_api::models::primitives::{InstrumentName};
-use crate::oanda_api::models::trade::TradeID;
 use crate::oanda_api::models::transaction_related::TransactionID;
+
 
 /// A filter that can be used when fetching Transactions.
 #[derive(Serialize, Deserialize, Debug)]
@@ -34,83 +43,92 @@ pub struct TransactionHeartbeat {
     pub time: String,
 }
 
-/// The specification of a Position within an Account.
-#[derive(Serialize, Deserialize, Debug)]
-pub struct OandaPosition {
-    /// The Position’s Instrument.
-    pub instrument: InstrumentName,
-
-    /// Profit/loss realized by the Position over the lifetime of the Account.
+#[derive(Debug)]
+#[allow(dead_code)]
+pub(crate) struct PositionSide {
+    pub units: Decimal,
     pub pl: Decimal,
-
-    /// The unrealized profit/loss of all open Trades that contribute to this Position.
-    #[serde(rename = "unrealizedPL")]
-    pub unrealized_pl: Decimal,
-
-    /// Margin currently used by the Position.
-    #[serde(rename = "marginUsed")]
-    pub margin_used: Decimal,
-
-    /// Profit/loss realized by the Position since the Account’s resettablePL was last reset by the client.
-    #[serde(rename = "resettablePL")]
     pub resettable_pl: Decimal,
-
-    /// The total amount of financing paid/collected for this instrument over the lifetime of the Account.
+    pub unrealized_pl: Decimal,
     pub financing: Decimal,
-
-    /// The total amount of commission paid for this instrument over the lifetime of the Account.
-    pub commission: Decimal,
-
-    /// The total amount of dividend adjustment paid for this instrument over the lifetime of the Account.
-    #[serde(rename = "dividendAdjustment")]
     pub dividend_adjustment: Decimal,
-
-    /// The total amount of fees charged over the lifetime of the Account for the execution of guaranteed Stop Loss Orders for this instrument.
-    #[serde(rename = "guaranteedExecutionFees")]
     pub guaranteed_execution_fees: Decimal,
-
-    /// The details of the long side of the Position.
-    pub long: PositionSide,
-
-    /// The details of the short side of the Position.
-    pub short: PositionSide,
+    pub average_price: Option<Decimal>,
+    pub trade_ids: Vec<String>,
 }
 
-/// The representation of a Position for a single direction (long or short).
-#[derive(Serialize, Deserialize, Debug)]
-pub struct PositionSide {
-    /// Number of units in the position (negative value indicates a short position, positive indicates a long position).
-    pub units: Decimal,
+impl<'de> Deserialize<'de> for PositionSide {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let value = Value::deserialize(deserializer)?;
 
-    /// Volume-weighted average of the underlying Trade open prices for the PositionSide.
-    #[serde(rename = "averagePrice")]
-    pub average_price: Option<Decimal>,
+        Ok(PositionSide {
+            units: value.get("units")
+                .and_then(|v| v.as_str())
+                .and_then(|s| Decimal::from_str(s).ok())
+                .unwrap_or_default(),
+            pl: value.get("pl")
+                .and_then(|v| v.as_str())
+                .and_then(|s| Decimal::from_str(s).ok())
+                .unwrap_or_default(),
+            resettable_pl: value.get("resettablePL")
+                .and_then(|v| v.as_str())
+                .and_then(|s| Decimal::from_str(s).ok())
+                .unwrap_or_default(),
+            unrealized_pl: value.get("unrealizedPL")
+                .and_then(|v| v.as_str())
+                .and_then(|s| Decimal::from_str(s).ok())
+                .unwrap_or_default(),
+            financing: value.get("financing")
+                .and_then(|v| v.as_str())
+                .and_then(|s| Decimal::from_str(s).ok())
+                .unwrap_or_default(),
+            dividend_adjustment: value.get("dividendAdjustment")
+                .and_then(|v| v.as_str())
+                .and_then(|s| Decimal::from_str(s).ok())
+                .unwrap_or_default(),
+            guaranteed_execution_fees: value.get("guaranteedExecutionFees")
+                .and_then(|v| v.as_str())
+                .and_then(|s| Decimal::from_str(s).ok())
+                .unwrap_or_default(),
+            average_price: value.get("averagePrice")
+                .and_then(|v| v.as_str())
+                .and_then(|s| Decimal::from_str(s).ok()),
+            trade_ids: value.get("tradeIDs")
+                .and_then(|v| v.as_array())
+                .map(|arr| arr.iter()
+                    .filter_map(|v| v.as_str())
+                    .map(String::from)
+                    .collect())
+                .unwrap_or_default(),
+        })
+    }
+}
 
-    /// List of the open Trade IDs which contribute to the open PositionSide.
-    #[serde(rename = "tradeIDs")]
-    pub trade_ids: Vec<TradeID>,
-
-    /// Profit/loss realized by the PositionSide over the lifetime of the Account.
+#[derive(Debug, Deserialize)]
+#[allow(dead_code)]
+pub(crate) struct OandaPosition {
+    pub instrument: String,
+    #[serde(default)]
     pub pl: Decimal,
-
-    /// The unrealized profit/loss of all open Trades that contribute to this PositionSide.
-    #[serde(rename = "unrealizedPL")]
-    pub unrealized_pl: Decimal,
-
-    /// Profit/loss realized by the PositionSide since the Account’s resettablePL was last reset by the client.
-    #[serde(rename = "resettablePL")]
+    #[serde(default, rename = "resettablePL")]
     pub resettable_pl: Decimal,
-
-    /// The total amount of financing paid/collected for this PositionSide over the lifetime of the Account.
-    pub financing: Decimal,
-
-    /// The total amount of dividend adjustment paid for the PositionSide over the lifetime of the Account.
-    #[serde(rename = "dividendAdjustment")]
+    #[serde(default, rename = "unrealizedPL")]
+    pub unrealized_pl: Decimal,
+    #[serde(default, rename = "marginUsed")]
+    pub margin_used: Decimal,
+    #[serde(default)]
+    pub commission: Decimal,
+    #[serde(default, rename = "dividendAdjustment")]
     pub dividend_adjustment: Decimal,
-
-    /// The total amount of fees charged over the lifetime of the Account for the execution of guaranteed Stop Loss Orders attached to Trades for this PositionSide.
-    #[serde(rename = "guaranteedExecutionFees")]
+    #[serde(default)]
+    pub financing: Decimal,
+    #[serde(default, rename = "guaranteedExecutionFees")]
     pub guaranteed_execution_fees: Decimal,
+    pub long: PositionSide,
+    pub short: PositionSide,
 }
 
 /// The dynamic (calculated) state of a Position.
@@ -134,4 +152,43 @@ pub struct CalculatedPositionState {
     /// Margin currently used by the Position.
     #[serde(rename = "marginUsed")]
     pub margin_used: Decimal,
+}
+
+
+pub(crate) fn parse_oanda_position(position: OandaPosition, account: Account) -> Option<Position> {
+    let symbol_name = fund_forge_formatted_symbol_name(&position.instrument);
+    let (side, quantity, average_price, open_pnl) = match position.long.units > dec!(0) {
+        true => (
+            ff_standard_lib::standardized_types::enums::PositionSide::Long,
+            position.long.units,
+            position.long.average_price.unwrap_or_default(),
+            position.long.unrealized_pl,
+        ),
+        false => (
+            ff_standard_lib::standardized_types::enums::PositionSide::Short,
+            position.short.units,
+            position.short.average_price.unwrap_or_default(),
+            position.short.unrealized_pl,
+        ),
+    };
+    let symbol_info = match OANDA_SYMBOL_INFO.get(&symbol_name) {
+        Some(info) => info.clone(),
+        None => return None
+    };
+
+    let mut position = Position::new(
+        symbol_name.clone(),
+        symbol_name,
+        account.clone(),
+        side,
+        quantity,
+        average_price,
+        Uuid::new_v4().to_string(),
+        symbol_info.clone(),
+        dec!(1),
+        "Existing Order".to_string(),
+        Utc::now()
+    );
+    position.open_pnl = open_pnl;
+    Some(position)
 }

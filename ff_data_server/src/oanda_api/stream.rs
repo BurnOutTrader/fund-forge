@@ -16,7 +16,7 @@ use ff_standard_lib::standardized_types::accounts::Account;
 use std::pin::Pin;
 use std::str::FromStr;
 use futures_util::TryStreamExt;
-use crate::oanda_api::api_client::OANDA_IS_CONNECTED;
+use crate::oanda_api::api_client::{OANDA_IS_CONNECTED};
 use crate::oanda_api::instruments::OandaInstrument;
 use crate::oanda_api::models::pricing_common::PriceStreamResponse;
 use crate::subscribe_server_shutdown;
