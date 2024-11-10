@@ -329,6 +329,7 @@ impl Position {
 
         // Calculate the open PnL
         self.open_pnl = calculate_theoretical_pnl(
+            self.account.brokerage,
             self.side,
             self.average_price,
             market_price,
@@ -351,6 +352,7 @@ impl Position {
 
         // Calculate booked PnL
         let booked_pnl = calculate_theoretical_pnl(
+            self.account.brokerage,
             self.side,
             self.average_price,
             market_price,
@@ -436,6 +438,7 @@ impl Position {
         if mode != StrategyMode::Live || is_simulating_pnl {
             // Recalculate open PnL
             self.open_pnl = calculate_theoretical_pnl(
+                self.account.brokerage,
                 self.side,
                 self.average_price,
                 market_price,

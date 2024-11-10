@@ -2,11 +2,13 @@ use rust_decimal::prelude::{FromPrimitive, ToPrimitive, Zero};
 use rust_decimal::Decimal;
 use rust_decimal_macros::dec;
 use crate::standardized_types::accounts::Currency;
+use crate::standardized_types::broker_enum::Brokerage;
 use crate::standardized_types::enums::{PositionSide};
 use crate::standardized_types::new_types::{Price, Volume};
 use crate::standardized_types::symbol_info::SymbolInfo;
 
 pub fn calculate_theoretical_pnl(
+    brokerage: Brokerage,
     side: PositionSide,
     entry_price: Price,
     market_price: Price,
@@ -15,21 +17,44 @@ pub fn calculate_theoretical_pnl(
     exchange_rate_multiplier: Decimal,
     account_currency: Currency,
 ) -> Price {
-    let raw_ticks = match side {
-        PositionSide::Long => {
-            let ticks = ((market_price - entry_price) / symbol_info.tick_size).round_dp(symbol_info.decimal_accuracy);
-            if ticks == dec!(0.0) {
-                return dec!(0.0)
+    let raw_ticks = match brokerage {
+        Brokerage::Rithmic(_) => {
+            match side {
+                PositionSide::Long => {
+                    let ticks = round_to_tick_size((market_price - entry_price) / symbol_info.tick_size, symbol_info.tick_size);
+                    if ticks == dec!(0.0) {
+                        return dec!(0.0)
+                    }
+                    ticks
+                },
+                PositionSide::Short => {
+                    let ticks = round_to_tick_size((entry_price - market_price) / symbol_info.tick_size, symbol_info.tick_size);
+                    if ticks == dec!(0.0) {
+                        return dec!(0.0)
+                    }
+                    ticks
+                },
             }
-            ticks
-        },
-        PositionSide::Short => {
-            let ticks = ((entry_price - market_price) / symbol_info.tick_size).round_dp(symbol_info.decimal_accuracy);
-            if ticks == dec!(0.0) {
-                return dec!(0.0)
-            }
-            ticks
-        },
+        }
+        _ => {
+            match side {
+                PositionSide::Long => {
+                    let ticks = ((market_price - entry_price) / symbol_info.tick_size).round_dp(symbol_info.decimal_accuracy);
+                    if ticks == dec!(0.0) {
+                        return dec!(0.0)
+                    }
+                    ticks
+                },
+                PositionSide::Short => {
+                    let ticks = ((entry_price - market_price) / symbol_info.tick_size).round_dp(symbol_info.decimal_accuracy);
+                    if ticks == dec!(0.0) {
+                        return dec!(0.0)
+                    }
+                    ticks
+                },
+        }
+    }
+
     };
 
     let pnl = raw_ticks * symbol_info.value_per_tick * quantity;
