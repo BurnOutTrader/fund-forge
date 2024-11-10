@@ -31,13 +31,6 @@ impl LedgerService {
         }
     }
 
-    #[allow(dead_code)]
-    pub fn update_rates(&self, rates: HashMap<Currency, Decimal>) {
-        for ledger in self.ledgers.iter() {
-            ledger.value().update_rates(&rates);
-        }
-    }
-
     pub async fn synchronize_live_position(&self, account: Account, position: Position, time: DateTime<Utc>) {
         if let Some(sender) = self.ledger_senders.get(&account) {
             let msg = LedgerMessage::SyncPosition{position, time};

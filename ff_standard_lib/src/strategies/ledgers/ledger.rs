@@ -109,12 +109,6 @@ impl Ledger {
         ledger
     }
 
-    pub fn update_rates(&self, rates: &HashMap<Currency, Decimal>) {
-        for (c1, c2) in rates.iter() {
-            self.rates.insert(c1.clone(), c2.clone());
-        }
-    }
-
     pub fn get_exchange_multiplier(&self, to_currency: Currency) -> Decimal {
         if self.currency == to_currency {
             return dec!(1.0);
@@ -178,12 +172,9 @@ impl Ledger {
         });
     }
 
-    async fn synchronize_live_position(&self, position: Position, time: DateTime<Utc>) {
+    async fn synchronize_live_position(&self, mut position: Position, time: DateTime<Utc>) {
         let mut inserted = false;
         if let Some((_, mut existing_position)) = self.positions.remove(&position.symbol_code) {
-            self.positions.insert(position.symbol_code.clone(), position.clone());
-            inserted = true;
-
             if existing_position.side != position.side {
                 let side = match existing_position.side {
                     PositionSide::Long => OrderSide::Buy,
@@ -224,7 +215,13 @@ impl Ledger {
                     .entry(position.symbol_code.clone())
                     .or_insert_with(Vec::new)
                     .push(existing_position.clone());
+            } else {
+                position.highest_recoded_price = existing_position.highest_recoded_price;
+                position.lowest_recoded_price = existing_position.lowest_recoded_price;
+                position.open_pnl = existing_position.open_pnl;
             }
+            self.positions.insert(position.symbol_code.clone(), position.clone());
+            inserted = true;
         }
         if !inserted {
             self.positions.insert(position.symbol_code.clone(), position.clone());
