@@ -1,4 +1,3 @@
-use std::collections::HashMap;
 use std::sync::Arc;
 use chrono::{DateTime, Utc};
 use crate::standardized_types::enums::{OrderSide, PositionSide, StrategyMode};
@@ -28,13 +27,6 @@ impl LedgerService {
             ledgers: Default::default(),
             ledger_senders: Default::default(),
             strategy_sender,
-        }
-    }
-
-    #[allow(dead_code)]
-    pub fn update_rates(&self, rates: HashMap<Currency, Decimal>) {
-        for ledger in self.ledgers.iter() {
-            ledger.value().update_rates(&rates);
         }
     }
 

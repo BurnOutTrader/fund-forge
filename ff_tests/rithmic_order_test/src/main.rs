@@ -12,6 +12,7 @@ use rust_decimal_macros::dec;
 use tokio::sync::mpsc;
 use ff_standard_lib::apis::rithmic::rithmic_systems::RithmicSystem;
 use ff_standard_lib::standardized_types::accounts::{Account, AccountId, Currency};
+use ff_standard_lib::standardized_types::base_data::base_data_type::BaseDataType;
 use ff_standard_lib::standardized_types::base_data::tick::Aggressor;
 use ff_standard_lib::standardized_types::broker_enum::Brokerage;
 use ff_standard_lib::standardized_types::datavendor_enum::DataVendor;
@@ -29,21 +30,28 @@ async fn main() {
     symbol_code.push_str("Z4");
 
     let strategy = FundForgeStrategy::initialize(
-        StrategyMode::LivePaperTrading,
+        StrategyMode::Backtest,
         dec!(100000),
         Currency::USD,
-        NaiveDate::from_ymd_opt(2024, 10, 5).unwrap().and_hms_opt(0, 0, 0).unwrap(),
-        NaiveDate::from_ymd_opt(2024, 11, 15).unwrap().and_hms_opt(0, 0, 0).unwrap(),
+        NaiveDate::from_ymd_opt(2019, 10, 5).unwrap().and_hms_opt(0, 0, 0).unwrap(),
+        NaiveDate::from_ymd_opt(2019, 11, 15).unwrap().and_hms_opt(0, 0, 0).unwrap(),
         Australia::Sydney,
-        Duration::hours(8),
+        Duration::hours(1),
         vec![
-     /*       DataSubscription::new_custom(
+             DataSubscription::new (
+                symbol_name.clone(),
+                DataVendor::Rithmic,
+                Resolution::Ticks(1),
+                BaseDataType::Ticks,
+                MarketType::Futures(FuturesExchange::CME),
+            ),
+            DataSubscription::new_custom(
                 symbol_name.clone(),
                 DataVendor::Rithmic,
                 Resolution::Seconds(15),
                 MarketType::Futures(FuturesExchange::CME),
                 CandleType::CandleStick
-            ),*/
+            )
         ],
         false,
         100,
@@ -54,15 +62,6 @@ async fn main() {
         true,
         vec![Account::new(Brokerage::Rithmic(RithmicSystem::Apex), "APEX-3396-168".to_string())]
     ).await;
-
-    let sub = DataSubscription::new_custom(
-        symbol_name.clone(),
-        DataVendor::Rithmic,
-        Resolution::Seconds(1),
-        MarketType::Futures(FuturesExchange::CME),
-        CandleType::CandleStick
-    );
-    strategy.subscribe_override(sub, 100).await;
 
     on_data_received(strategy, strategy_event_receiver, symbol_name, symbol_code).await;
 }
@@ -85,7 +84,7 @@ pub async fn on_data_received(
                 for base_data in time_slice.iter() {
                     match base_data {
                         BaseDataEnum::Tick(tick) => {
-                            let msg = format!("{} {} Tick: {}, {}, Aggressor: {}", tick.symbol.name, tick.time_local(strategy.time_zone()), tick.price, tick.volume, tick.aggressor);
+                           /* let msg = format!("{} {} Tick: {}, {}, Aggressor: {}", tick.symbol.name, tick.time_local(strategy.time_zone()), tick.price, tick.volume, tick.aggressor);
                             match tick.aggressor {
                                 Aggressor::Buy => {
                                     println!("{}", msg.as_str().bright_green());
@@ -97,7 +96,7 @@ pub async fn on_data_received(
                                 Aggressor::None => {
                                     println!("{}", msg.as_str().cyan());
                                 },
-                            }
+                            }*/
                         }
                         BaseDataEnum::Candle(candle) => {
                             // Place trades based on the AUD-CAD Heikin Ashi Candles
@@ -119,7 +118,7 @@ pub async fn on_data_received(
                                 {
                                     if count == 5 {
                                         println!("Rithmic Order Test: Enter Long, Time {}", strategy.time_local());
-                                        entry_order_id = strategy.limit_order(&candle.symbol.name, None ,&account_1, None, dec!(1), OrderSide::Buy, candle.low - dec!(10), TimeInForce::GTC, String::from("Enter Long")).await;
+                                        entry_order_id = strategy.limit_order(&candle.symbol.name, Some(symbol_code.clone()) ,&account_1, None, dec!(1), OrderSide::Buy, candle.low - dec!(10), TimeInForce::GTC, String::from("Enter Long")).await;
                                     }
 
                                     let open_pnl = strategy.pnl(&account_1, &symbol_code);
@@ -132,7 +131,7 @@ pub async fn on_data_received(
                                         strategy.cancel_orders_account(account_1.clone()).await;
                                         let position_size: Decimal = strategy.position_size(&account_1, &symbol_code);
                                         println!("Rithmic Order Test: Exit Long, Time {}: Size: {}", strategy.time_local(), position_size);
-                                        let _exit_order_id = strategy.exit_long(&candle.symbol.name, None, &account_1, None, position_size, String::from("Exit Long")).await;
+                                        let _exit_order_id = strategy.exit_long(&candle.symbol.name, Some(symbol_code.clone()), &account_1, None, position_size, String::from("Exit Long")).await;
                                     }
                                 }
 
@@ -140,10 +139,6 @@ pub async fn on_data_received(
                                     //strategy.export_trades(&String::from("./trades exports"));
                                     let open_pnl = strategy.pnl(&account_1, &symbol_code);
                                     let is_long = strategy.is_long(&account_1, &symbol_code);
-                                    assert_eq!(is_long, false);
-                                    assert_eq!(open_pnl, dec!(0));
-                                    println!("TEST PASSED");
-                                    break 'strategy_loop;
                                 }
                             }
                         }

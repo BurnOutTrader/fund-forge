@@ -156,7 +156,7 @@ pub async fn on_data_received(
                                     let last_bar: QuoteBar = strategy.bar_index(&base_data.subscription(), 1).unwrap();
 
                                     // Since our "heikin_3m_atr_5" indicator was consumed when we used the strategies auto mange strategy.subscribe_indicator() function,
-                                    // we can use the name we assigned to get the indicator. We unwrap() since we should have this value, if we don't our strategy logic has a flaw.
+                                    // we can use the name we assigned to get_requests the indicator. We unwrap() since we should have this value, if we don't our strategy logic has a flaw.
                                     let quotebar_3m_atr_5_current_values: IndicatorValues = strategy.indicator_index(&"quotebar_5s_atr_5".to_string(), 0).unwrap();
                                     let quotebar_3m_atr_5_last_values: IndicatorValues = strategy.indicator_index(&"quotebar_5s_atr_5".to_string(), 1).unwrap();
 
@@ -198,6 +198,7 @@ pub async fn on_data_received(
 
                                     //stop loss conditions
                                         let in_drawdown = strategy.in_drawdown(&account, &quotebar.symbol.name);
+
                                         if bars_since_entry >= 10
                                             && in_drawdown
                                         {
@@ -207,9 +208,10 @@ pub async fn on_data_received(
                                             entry_order_state = OrderState::Cancelled;
                                         }
 
-                                        // Add to our winners when atr is increasing and we get a new signal
+                                        // Add to our winners when atr is increasing and we get_requests a new signal
                                         let in_profit = strategy.in_profit(&account, &quotebar.symbol.name);
                                         let position_size: Decimal = strategy.position_size(&account, &quotebar.symbol.name);
+
                                         if  in_profit
                                             && position_size < dec!(3000)
                                             && bars_since_entry == 3

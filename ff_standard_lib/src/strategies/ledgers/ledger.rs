@@ -1,4 +1,3 @@
-use std::collections::HashMap;
 use dashmap::DashMap;
 use tokio::sync::Mutex;
 use rust_decimal::Decimal;
@@ -109,12 +108,6 @@ impl Ledger {
         ledger
     }
 
-    pub fn update_rates(&self, rates: &HashMap<Currency, Decimal>) {
-        for (c1, c2) in rates.iter() {
-            self.rates.insert(c1.clone(), c2.clone());
-        }
-    }
-
     pub fn get_exchange_multiplier(&self, to_currency: Currency) -> Decimal {
         if self.currency == to_currency {
             return dec!(1.0);
@@ -178,12 +171,9 @@ impl Ledger {
         });
     }
 
-    async fn synchronize_live_position(&self, position: Position, time: DateTime<Utc>) {
+    async fn synchronize_live_position(&self, mut position: Position, time: DateTime<Utc>) {
         let mut inserted = false;
         if let Some((_, mut existing_position)) = self.positions.remove(&position.symbol_code) {
-            self.positions.insert(position.symbol_code.clone(), position.clone());
-            inserted = true;
-
             if existing_position.side != position.side {
                 let side = match existing_position.side {
                     PositionSide::Long => OrderSide::Buy,
@@ -224,7 +214,13 @@ impl Ledger {
                     .entry(position.symbol_code.clone())
                     .or_insert_with(Vec::new)
                     .push(existing_position.clone());
+            } else {
+                position.highest_recoded_price = existing_position.highest_recoded_price;
+                position.lowest_recoded_price = existing_position.lowest_recoded_price;
+                position.open_pnl = existing_position.open_pnl;
             }
+            self.positions.insert(position.symbol_code.clone(), position.clone());
+            inserted = true;
         }
         if !inserted {
             self.positions.insert(position.symbol_code.clone(), position.clone());
@@ -443,8 +439,8 @@ impl Ledger {
         let cash_value = self.cash_value.lock().await.clone();
         let cash_used = self.cash_used.lock().await.clone();
         let cash_available = self.cash_available.lock().await.clone();
-        format!("Account: {}, Balance: {}, Win Rate: {}%, Average Risk Reward: {}, Profit Factor {}, Total profit: {}, Total Wins: {}, Total Losses: {}, Break Even: {}, Total Trades: {}, Open Positions: {}, Cash Used: {}, Cash Available: {}",
-                self.account, cash_value.round_dp(2), win_rate.round_dp(2), risk_reward.round_dp(2), profit_factor.round_dp(2), pnl.round_dp(2), wins, losses, break_even, total_trades, self.positions.len(), cash_used.round_dp(2), cash_available.round_dp(2))
+        format!("Account: {}, Balance: {} {}, Win Rate: {}%, Average Risk Reward: {}, Profit Factor {}, Total profit: {}, Total Wins: {}, Total Losses: {}, Break Even: {}, Total Trades: {}, Open Positions: {}, Cash Used: {}, Cash Available: {}",
+                self.account, cash_value.round_dp(2), self.currency, win_rate.round_dp(2), risk_reward.round_dp(2), profit_factor.round_dp(2), pnl.round_dp(2), wins, losses, break_even, total_trades, self.positions.len(), cash_used.round_dp(2), cash_available.round_dp(2))
     }
 
     pub fn generate_id(
@@ -511,7 +507,7 @@ impl Ledger {
         market_fill_price: Price,
         tag: String
     ) -> Vec<PositionUpdateEvent> {
-    /*    if let Some(last_update) = self.last_update.get(&symbol_code) {
+    /*    if let Some(last_update) = self.last_update.get_requests(&symbol_code) {
             if last_update.value() > &time {
                 return vec![];
             }

@@ -107,6 +107,10 @@ impl Currency {
             "SGD" => Currency::SGD,
             "NZD" => Currency::NZD,
             "CNH" => Currency::CNH,
+            "BCH" => Currency::BCH,
+            "BTC" => Currency::BTC,
+            "ETH" => Currency::ETH,
+            "LTC" => Currency::LTC,
             _ => panic!("No currency matching string: {}", string),
         }
     }

@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 use ff_standard_lib::standardized_types::orders::OrderId;
-use crate::oanda_api::models::order::order_related::{OrderState};
+use crate::oanda_api::models::order::order_related::{OandaOrderState};
 use crate::oanda_api::models::primitives::DateTime;
 use crate::oanda_api::models::transaction_related::ClientExtensions;
 
@@ -18,7 +18,7 @@ pub struct Order {
 
     /// The current state of the Order.
     #[serde(rename = "state")]
-    pub state: OrderState,
+    pub state: OandaOrderState,
 
     /// The client extensions of the Order. Do not set, modify, or delete
     /// clientExtensions if your account is associated with MT4.

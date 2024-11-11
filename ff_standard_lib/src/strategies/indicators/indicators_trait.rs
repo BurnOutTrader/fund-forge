@@ -73,7 +73,7 @@ pub trait Indicators {
 
     /// Returns the indicators history, we can still use another data structure to store history like a BTreeMap,
     /// this function would be expensive to use and doesn't server much purpose
-    /// since we can just use strategy.indicator_index(u64) to get the historical data.
+    /// since we can just use strategy.indicator_index(u64) to get_requests the historical data.
     fn history(&self) -> RollingWindow<IndicatorValues>;
 
     /// the number of base data points we need to fill the history on warm up, for example an 5 period ATR indicator that keeps a history of 12 data points will require 17 base data enums to warm up

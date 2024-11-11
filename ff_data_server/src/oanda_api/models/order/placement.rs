@@ -1,10 +1,38 @@
 use serde::{Deserialize, Serialize};
 use crate::oanda_api::models::order::order_related;
+use crate::oanda_api::models::order::order_related::OandaOrderState;
+use crate::oanda_api::models::primitives::DateTime;
+use crate::oanda_api::models::transaction_related::ClientExtensions;
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct OandaOrderRequest {
     pub(crate) order: OandaOrder,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct OandaOrderUpdate {
+    pub id: String,
+    #[serde(rename = "createTime")]
+    pub create_time: DateTime,
+    pub state: OandaOrderState,
+    pub instrument: String,
+    #[serde(rename = "timeInForce")]
+    pub time_in_force: String,
+    #[serde(rename = "type")]
+    pub order_type: String,
+    pub units: String,
+    pub price: Option<String>,
+    #[serde(rename = "positionFill")]
+    pub position_fill: String,
+    #[serde(rename = "triggerCondition")]
+    pub trigger_condition: String,
+    #[serde(rename = "partialFill")]
+    pub partial_fill: String,
+    #[serde(rename = "clientExtensions")]
+    pub client_extensions: Option<ClientExtensions>,
+    #[serde(rename = "replacesOrderID")]
+    pub replaces_order_id: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]

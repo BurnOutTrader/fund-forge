@@ -16,8 +16,8 @@ use ff_standard_lib::standardized_types::accounts::Account;
 use std::pin::Pin;
 use std::str::FromStr;
 use futures_util::TryStreamExt;
-use crate::oanda_api::api_client::OANDA_IS_CONNECTED;
-use crate::oanda_api::instruments::OandaInstrument;
+use crate::oanda_api::api_client::{OANDA_IS_CONNECTED};
+use crate::oanda_api::get::instruments::OandaInstrument;
 use crate::oanda_api::models::pricing_common::PriceStreamResponse;
 use crate::subscribe_server_shutdown;
 
@@ -53,7 +53,7 @@ pub async fn establish_stream(
     eprintln!("Stream response status: {}", status);
 
     if !status.is_success() {
-        let error_text = response.text().await.unwrap_or_else(|_| "Could not get error text".to_string());
+        let error_text = response.text().await.unwrap_or_else(|_| "Could not get_requests error text".to_string());
         eprintln!("Stream request failed: {}", error_text);
         return Err(FundForgeError::ServerErrorDebug(format!(
             "Stream request failed with status {}: {}",
@@ -69,7 +69,9 @@ pub async fn establish_stream(
     Ok(response.bytes_stream())
 }
 
-pub async fn handle_price_stream(
+
+
+pub fn handle_price_stream(
     client: Arc<Client>,
     instrument_symbol_map: Arc<DashMap<String, Symbol>>,
     instruments_map: Arc<DashMap<SymbolName, OandaInstrument>>,

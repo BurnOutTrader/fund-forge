@@ -24,7 +24,7 @@ pub const TIMEOUT_DURATION: Duration = Duration::from_secs(10);
 /// This request is only sent to Oanda server
 pub async fn exchange_rate_response(mode: StrategyMode, from_currency: Currency, to_currency: Currency, time_string: TimeString, data_vendor: DataVendor, side: OrderSide, callback_id: u64) -> DataServerResponse {
     //todo, if live mode we request the api directly for the latest rate.
-    //todo get exchange rate from hybrid storage,
+    //todo get_requests exchange rate from hybrid storage,
     let time = match DateTime::<Utc>::from_str(&time_string) {
         Ok(time) => time,
         Err(_) => return DataServerResponse::Error {

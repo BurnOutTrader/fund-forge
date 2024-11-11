@@ -45,7 +45,7 @@ impl VendorApiResponse for RithmicBrokerageClient {
             }
             StrategyMode::LivePaperTrading | StrategyMode::Live => {
                 match market_type {
-                    //todo, use this in a rithmic only fn, to get the toi products, just return the hardcoded list here.
+                    //todo, use this in a rithmic only fn, to get_requests the toi products, just return the hardcoded list here.
                     MarketType::Futures(exchange) => {
                         let _req = RequestProductCodes {
                             template_id: 111 ,
@@ -334,7 +334,7 @@ impl VendorApiResponse for RithmicBrokerageClient {
     }
 
     async fn base_data_types_response(&self, _mode: StrategyMode, _stream_name: StreamName, callback_id: u64) -> DataServerResponse {
-        //todo get dynamically from server using stream name to fwd callback
+        //todo get_requests dynamically from server using stream name to fwd callback
         DataServerResponse::BaseDataTypes {
             callback_id,
             base_data_types: vec![BaseDataType::Ticks, BaseDataType::Quotes, BaseDataType::Candles],
@@ -425,12 +425,12 @@ impl VendorApiResponse for RithmicBrokerageClient {
                         response
                     },
                     Err(e) =>{
-                        progress_bar.set_message(format!("Failed to get data for: {} - {}, {}", window_start, window_end, e));
+                        progress_bar.set_message(format!("Failed to get_requests data for: {} - {}, {}", window_start, window_end, e));
                         break 'main_loop;
                     }
                 },
                 Err(e) => {
-                    progress_bar.set_message(format!("Failed to get data for: {} - {}, {}", window_start, window_end, e));
+                    progress_bar.set_message(format!("Failed to get_requests data for: {} - {}, {}", window_start, window_end, e));
                     break 'main_loop
                 }
             };

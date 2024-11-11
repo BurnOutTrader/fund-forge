@@ -98,7 +98,7 @@ impl TimeSlice {
         })
     }
 
-    // New method to get an efficient iterator over all items
+    // New method to get_requests an efficient iterator over all items
     pub fn iter_ordered(&self) -> impl Iterator<Item = (&i64, &BaseDataEnum)> {
         self.data.iter().flat_map(|(time, items)| {
             items.iter().map(move |item| (time, item))

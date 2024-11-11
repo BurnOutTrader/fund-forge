@@ -1,6 +1,7 @@
 use rust_decimal::Decimal;
 use chrono::{NaiveDateTime, DateTime as ChronoDateTime, Utc};
 use serde::{self, Deserialize, Deserializer, Serializer, Serialize, de};
+use crate::oanda_api::models::pricing_common::PriceBucket;
 
 /// A tag associated with an entity.
 #[derive(Serialize, Deserialize, Debug)]
@@ -293,4 +294,24 @@ pub struct HomeConversionFactors {
     /// Conversion factor for losses in Instrument base units to the home currency.
     #[serde(rename = "lossBaseHome")]
     pub loss_base_home: ConversionFactor,
+}
+
+#[derive(Debug, Deserialize)]
+#[allow(dead_code)]
+pub struct PricingResponse {
+    prices: Vec<Price>
+}
+
+#[derive(Debug, Deserialize)]
+#[allow(dead_code)]
+pub struct Price {
+    instrument: String,
+    time: String,
+    #[serde(rename = "closeoutAsk")]
+    closeout_ask: String,
+    #[serde(rename = "closeoutBid")]
+    closeout_bid: String,
+    status: String,
+    asks: Vec<PriceBucket>,
+    bids: Vec<PriceBucket>,
 }

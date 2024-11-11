@@ -90,7 +90,7 @@ impl BrokerApiResponse for RithmicBrokerageClient {
     }
 
     async fn commission_info_response(&self, _mode: StrategyMode, _stream_name: StreamName, symbol_name: SymbolName, callback_id: u64) -> DataServerResponse {
-        //todo add a mode to get live commsions from specific brokerage.
+        //todo add a mode to get_requests live commsions from specific brokerage.
         match get_futures_commissions_info(&symbol_name) {
             Ok(commission_info) => DataServerResponse::CommissionInfo {
                 callback_id,

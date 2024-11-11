@@ -114,7 +114,7 @@ impl FundForgeStrategy {
     /// If out base data source is tick data, but we are trading only on 15min bars, then we can just consolidate the tick data and ignore it in on_data_received().
     /// In live trading our strategy will capture the tick stream in a buffer and pass it to the strategy in the correct resolution/durations, this helps to prevent spamming our on_data_received() fn.
     /// If we don't need to make strategy decisions on every tick, we can just consolidate the tick stream into buffered time slice events.
-    /// This also helps us get consistent results between backtesting and live trading.
+    /// This also helps us get_requests consistent results between backtesting and live trading.
     /// If 0 then it will default to a 1-millisecond buffer.
     ///
     /// `gui_enabled: bool`: If true the engine will forward all StrategyEventSlice's sent to the strategy, to the strategy registry so they can be used by GUI implementations.
@@ -718,7 +718,7 @@ impl FundForgeStrategy {
         }
     }
 
-    /// get the last price for the symbol name
+    /// get_requests the last price for the symbol name
     pub async fn last_price(&self, _symbol_name: &SymbolName) -> Option<Price> {
         todo!("send callback to price service")
     }

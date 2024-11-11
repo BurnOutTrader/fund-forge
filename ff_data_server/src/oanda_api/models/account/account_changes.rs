@@ -1,13 +1,13 @@
 use serde::Deserialize;
-use serde::Serialize;
+use crate::oanda_api::get::positions::OandaPosition;
 use crate::oanda_api::models::order::placement::OandaOrder;
-use crate::oanda_api::models::position::OandaPosition;
 use crate::oanda_api::models::trade::TradeSummary;
 use crate::oanda_api::models::transaction::transaction::Transaction;
 
 /// An AccountChanges Object is used to represent the changes to an Account's Orders, Trades,
 /// and Positions since a specified Account TransactionID in the past.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Deserialize)]
+#[allow(dead_code)]
 struct AccountChanges {
     /// The Orders created. These Orders may have been filled, cancelled, or triggered in the same period.
     #[serde(rename = "ordersCreated")]

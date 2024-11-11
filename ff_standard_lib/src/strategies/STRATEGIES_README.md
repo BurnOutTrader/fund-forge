@@ -16,6 +16,7 @@
 - [Order Books](#order-books-)
 - [Estimate Fills Before Placing an Order](#estimate-fill-price)
 - [Placing Orders](#placing-orders)
+- [Currency Conversion](#currency-conversion)
 - [Debugging Strategies](#debugging-strategies)
 
 ## Important Info
@@ -573,7 +574,7 @@ pub async fn on_data_received(strategy: FundForgeStrategy, notify: Arc<Notify>, 
 
     // this will return a RollingWindow<BaseData> for the subscription by cloning the history.
     // at the current point this clones the whole rolling window, and so is not suitable for frequent use of large history.
-    // An alternative would be to get the history once, after initializing the indicator, so we have a warmed up history, then keep the history in a separate variable and add the new data to it.
+    // An alternative would be to get_requests the history once, after initializing the indicator, so we have a warmed up history, then keep the history in a separate variable and add the new data to it.
     let history: Option<RollingWindow<Candle>>  = strategy.candle_history(&aud_usd_15m).await;
 
     // if we are keeping a large history and need to access it often, it could be better to manually keep the history we need to avoid clone()ing the whole history on every iter.
@@ -584,21 +585,21 @@ pub async fn on_data_received(strategy: FundForgeStrategy, notify: Arc<Notify>, 
     }
     
 
-    // we can get the open candle for a candles subscription, note we return an optional `Candle` object, not a `BaseDataEnum`
+    // we can get_requests the open candle for a candles subscription, note we return an optional `Candle` object, not a `BaseDataEnum`
     let aud_cad_60m_candles = DataSubscription::new("AUD-CAD".to_string(), DataVendor::Test, Resolution::Minutes(60), BaseDataType::Candles, MarketType::Forex);
     let current_open_candle: Option<Candle> = strategy.open_candle(&aud_cad_60m_candles);
     
-   // we can get a historical candle from the history we retained according to the 'history_to_retain' parameter when subscribing. (this only retains closed Candles)
+   // we can get_requests a historical candle from the history we retained according to the 'history_to_retain' parameter when subscribing. (this only retains closed Candles)
     let last_historical_candle: Option<Candle>  = candle_index(&aud_cad_60m_candles, 0);
     
    //expensive currently clones whole object, not an updating reference, but will give you the whole history should you need it (better to manually keep history in strategy loop)
     let candle_history: Option<RollingWindow<Candle>>  = strategy.candle_history(&aud_cad_60m_candles).await;
 
-    // we can get the open quotebar for a quotebars subscription, note we return an optional `Candle` QuoteBar, not a `BaseDataEnum`
+    // we can get_requests the open quotebar for a quotebars subscription, note we return an optional `Candle` QuoteBar, not a `BaseDataEnum`
     let aud_cad_60m_quotebars = DataSubscription::new("AUD-CAD".to_string(), DataVendor::Test, Resolution::Minutes(60), BaseDataType::QuoteBars, MarketType::Forex);
     let current_open_candle: Option<QuoteBar> = strategy.open_bar(&aud_cad_60m_quotebars);
     
-   // we can get a historical quotebar from the history we retained according to the 'history_to_retain' parameter when subscribing. (this only retains closed QuoteBars)
+   // we can get_requests a historical quotebar from the history we retained according to the 'history_to_retain' parameter when subscribing. (this only retains closed QuoteBars)
     let last_historical_quotebar: Option<QuoteBar>  = bar_index(&aud_cad_60m, 0);
     
    //expensive currently clones whole object, not an updating reference, but will give you the whole history should you need it (better to manually keep history in strategy loop)
@@ -606,7 +607,7 @@ pub async fn on_data_received(strategy: FundForgeStrategy, notify: Arc<Notify>, 
 
     let aud_cad_ticks = DataSubscription::new("AUD-CAD".to_string(), DataVendor::Test, Resolution::Ticks(1), BaseDataType::Ticks, MarketType::Forex);
     
-   // we can get a historical tick from the history we retained according to the 'history_to_retain' parameter when subscribing.
+   // we can get_requests a historical tick from the history we retained according to the 'history_to_retain' parameter when subscribing.
     // since ticks are never open or closed the current tick is always in history as index 0, so the last tick is index 1
     let current_tick: Option<Tick>  = tick_index(&aud_cad_ticks, 0);
     let last_historical_tick: Option<Tick>  = tick_index(&aud_cad_ticks, 1);
@@ -616,7 +617,7 @@ pub async fn on_data_received(strategy: FundForgeStrategy, notify: Arc<Notify>, 
 
     let aud_cad_quotes = DataSubscription::new("AUD-CAD".to_string(), DataVendor::Test, Resolution::Instant, BaseDataType::Quotes, MarketType::Forex);
     
-   // we can get a historical quote from the history we retained according to the 'history_to_retain' parameter when subscribing.
+   // we can get_requests a historical quote from the history we retained according to the 'history_to_retain' parameter when subscribing.
     // since quotes are never open or closed the current quote is always in history as index 0, so the last quote is index 1
     let current_quote: Option<Quote>  = quote_index(&aud_cad_quotes, 0);
     let last_historical_quote: Option<Quote>  = quote_index(&aud_cad_quotes, 1);
@@ -732,16 +733,16 @@ fn example() {
     
     let name: &IndicatorName = values.name();
 
-    // get the time in the UTC time zone
+    // get_requests the time in the UTC time zone
     let time: DateTime<Utc> = values.time_utc();
 
-    // get the time in the local time zone
+    // get_requests the time in the local time zone
     let local_time: dateTime<Tz> = values.time_local(time_zone: &Tz);
 
-    /// get the value of a plot by name
+    /// get_requests the value of a plot by name
     let plot: IndicatorPlot = values.get_plot(plot_name: &PlotName);
 
-    /// get all the plots`
+    /// get_requests all the plots`
     let plots : BTreeMap<PlotName, IndicatorPlot> = values.plots();
     
     ///or we can just access the plots directly
@@ -810,17 +811,17 @@ pub async fn on_data_received(strategy: FundForgeStrategy, notify: Arc<Notify>, 
                                  heikin_atr.update_base_data(candle).await;
                              }
                              
-                             // lets get the indicator value for the current candle, note for atr we can use current, as it only updates on closed candles.
+                             // lets get_requests the indicator value for the current candle, note for atr we can use current, as it only updates on closed candles.
                              if heikin_atr.is_ready() {
                                  let atr = heikin_atr.current();
                                  println!("{}...{} ATR: {}", strategy.time_utc().await, aud_cad_60m.symbol.name, atr.unwrap());
                                  heikin_atr_history.add(heikin_atr.current());
                             
-                                 // we can also get the value at a specific index, current bar (closed) is index 0, 1 bar ago is index 1 etc.
+                                 // we can also get_requests the value at a specific index, current bar (closed) is index 0, 1 bar ago is index 1 etc.
                                  let atr = heikin_atr.index(3);
                                  println!("{}...{} ATR 3 bars ago: {}", strategy.time_utc().await, aud_cad_60m.symbol.name, atr.unwrap());
                                  
-                                 //or we can use our own history to get the value at a specific index
+                                 //or we can use our own history to get_requests the value at a specific index
                                  let atr = heikin_atr_history.get(10);
                                  println!("{}...{} ATR 10 bars ago: {}", strategy.time_utc().await, aud_cad_60m.symbol.name, atr.unwrap());
                              }
@@ -841,7 +842,7 @@ pub async fn on_data_received(strategy: FundForgeStrategy, notify: Arc<Notify>, 
                              println!("Indicator Time Slice: {:?}", indicator_values);
                          }
 
-                         // we could also get the auto-managed indicator values from the strategy at any time. we should have history immediately since the indicator will warm itself up.
+                         // we could also get_requests the auto-managed indicator values from the strategy at any time. we should have history immediately since the indicator will warm itself up.
                          // this will not be the case if we did not have historical data available for the indicator.
                          let history: Option<RollingWindow<IndicatorValues>> = strategy.indicator_history(IndicatorName::from("heikin_atr_20")).await;
                          if let Some(history) = history {
@@ -1054,7 +1055,7 @@ async fn example() {
         }
     }
     
-    // We can also get a specific date range up to the current strategy time, the strategy methods will protect against look ahead bias.
+    // We can also get_requests a specific date range up to the current strategy time, the strategy methods will protect against look ahead bias.
     let to_time = NaiveDate::from_ymd_opt(2023, 03, 30).unwrap().and_hms_opt(0, 0, 0).unwrap();
     let history_range_from_local = strategy.historical_range_from_local_time(from_time.clone(), to_time.clone(), time_zone.clone(), aud_cad_60m.clone());
     for (time, slice) in history_range_from_local {
@@ -1104,11 +1105,11 @@ fn example() {
     let volume: Volume = dec!(0.0);
     let brokerage: Brokerage = Brokerage::Test;
     
-    // we can get the best estimate based on our intended trade volume //todo this needs to be changed, it currently wont work.
+    // we can get_requests the best estimate based on our intended trade volume //todo this needs to be changed, it currently wont work.
     let estimated_fill_price: Result<Price, FundForgeError> = get_market_fill_price_estimate(order_side, symbol_name, volume, brokerage).await;
     let price: Price = estimated_fill_price.unwrap();
     
-    // we can get the closest market estimate without volume, just check best price if we have best bid offer we will get the correct return based on order side, else we just get the last price.
+    // we can get_requests the closest market estimate without volume, just check best price if we have best bid offer we will get_requests the correct return based on order side, else we just get_requests the last price.
     let order_side: OrderSide = OrderSide::Buy;
     let symbol_name: SymbolName =SymbolName::from("AUD-CAD");
     let estimated_price: Result<Price, FundForgeError> = get_market_price (
@@ -1201,7 +1202,7 @@ async fn example() {
         },
     }
 
-    // Exit a long position and get back the order_id
+    // Exit a long position and get_requests back the order_id
     let order_id: OrderId = strategy.exit_long(
         account: &account_1,
         symbol_name: &SymbolName,
@@ -1211,7 +1212,7 @@ async fn example() {
         tag: String
     ).await;
 
-    // Exit a short position and get back the order_id
+    // Exit a short position and get_requests back the order_id
     let order_id: OrderId = strategy.exit_short(
         account: &account_1,
         symbol_name: &SymbolName,
@@ -1221,7 +1222,7 @@ async fn example() {
         tag: String
     ).await;
 
-    // Place a market buy order and get back the order_id
+    // Place a market buy order and get_requests back the order_id
     let order_id: OrderId = strategy.buy_market(
         account: &account_1,
         symbol_name: &SymbolName,
@@ -1231,7 +1232,7 @@ async fn example() {
         tag: String
     ).await;
 
-    // Place a market sell order and get back the order_id
+    // Place a market sell order and get_requests back the order_id
     let order_id: OrderId = strategy.sell_market(
         account: &account_1,
         symbol_name: &SymbolName,
@@ -1241,7 +1242,7 @@ async fn example() {
         tag: String
     ).await;
 
-    // Place a limit order and get back the order_id
+    // Place a limit order and get_requests back the order_id
     let order_id: OrderId = strategy.limit_order(
         account: &account_1,
         symbol_name: &SymbolName,
@@ -1322,6 +1323,20 @@ async fn example() {
     }
 }
 ```
+
+## Currency Conversion
+The engine will always attempt to convert open + booked pnl into the account currency, this is done using the historical data sets.
+In the future I will build this as an option, so that you can keep a ledger with multiple currencies.
+
+In the present implementation, this feature requires you to have the historical data for any currency pairs related to your account currency,
+
+It will work with data of any resolution, if you have the 5 second oanda data then the currency conversions will be accurate to the nearest 5 seconds.
+
+If you have the 1 hour data, then the conversions will be accurate to the nearest hour.
+
+The Oanda download list is configured to get all the 1 hour data for you by default.
+
+The currency conversion will also work with bitget once the bitget api is finished.
 
 ## Debugging Strategies
 Exported positions include their tag property, which always == the tag of the order that created the position.

@@ -36,7 +36,7 @@ pub enum BaseDataType {
     Fundamentals = 4,
 }
 impl BaseDataType {
-    // Function to get the TypeId of the associated data type
+    // Function to get_requests the TypeId of the associated data type
     pub fn get_type_id(&self) -> TypeId {
         match self {
             BaseDataType::Ticks => TypeId::of::<Tick>(),

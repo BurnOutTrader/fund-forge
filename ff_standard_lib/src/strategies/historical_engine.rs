@@ -258,7 +258,7 @@ impl HistoricalEngine {
                 }
 
                 if !strategy_time_slice.is_empty() {
-                    // Update indicators and get any generated events.
+                    // Update indicators and get_requests any generated events.
                     if let Some(events) = self.indicator_handler.update_time_slice(&strategy_time_slice).await {
                         match self.strategy_event_sender.send(StrategyEvent::IndicatorEvent(events)).await {
                             Ok(_) => {}

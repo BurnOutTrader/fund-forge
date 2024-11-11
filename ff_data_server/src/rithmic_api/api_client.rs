@@ -841,7 +841,7 @@ impl RithmicBrokerageClient {
 
         MARKET_DATA_SYSTEM.get_or_init(||
             RithmicSystem::from_file_string(&market_data_system)
-                .expect("Failed to get RithmicSystem from file string")
+                .expect("Failed to get_requests RithmicSystem from file string")
         );
 
         let init_tasks = toml_files.into_iter().filter_map(|file| {

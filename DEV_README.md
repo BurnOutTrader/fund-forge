@@ -215,7 +215,7 @@ fn example(client: ClientExample, subscription: DataSubscription) {
         receiver
       }
       None => {
-        // you will have to handle how you intialize new streams with your client. you just need to get data from the api and convert it to base data enum
+        // you will have to handle how you intialize new streams with your client. you just need to get_requests data from the api and convert it to base data enum
         // you need to create a new broadcaster for the subscription
         // you need to broadcast the base data enum to subscribers
       }

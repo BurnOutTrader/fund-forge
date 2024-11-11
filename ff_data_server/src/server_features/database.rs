@@ -162,7 +162,7 @@ impl HybridStorage {
             }
         }
 
-        // If we get here, we couldn't find either direct or inverse rates
+        // If we get_requests here, we couldn't find either direct or inverse rates
         Err(FundForgeError::ServerErrorDebug(format!(
             "Could not find exchange rate for {}-{} or {}-{} at {}",
             from_currency.to_string(),
@@ -776,7 +776,7 @@ impl HybridStorage {
                     current_date = match current_date.succ_opt() {
                         Some(date) => date,
                         None => {
-                            eprintln!("Failed to get next day");
+                            eprintln!("Failed to get_requests next day");
                             break
                         },
                     }
@@ -899,7 +899,7 @@ impl HybridStorage {
             return Ok(None);
         }
 
-        // Sort to get earliest year
+        // Sort to get_requests earliest year
         let years = tokio::task::spawn_blocking(move || {
             let mut years = years;
             years.sort_by_key(|e| e.path());
