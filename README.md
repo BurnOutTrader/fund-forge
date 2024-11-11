@@ -12,23 +12,9 @@ fund-forge is built to allow simple abstractions for common strategy functionali
 ## Limitless Free Historical Data
 See below for all the free historical data you will ever need.
 
-## Announcements: Read Before Live Trading or Backtesting
-- 1/11/2024: Occasionally there are some very minor position sync issues with rithmic live trading, be sure to monitor any live strategies.
-- 05/11/2024: Live warm up now works up until the last few seconds of data, when a history request is made by the engine for data that includes the present date, the server will first update the historical data to get the latest data, this means you need to have at least minimal historical data specified in you download_list.toml file for any symbols you trade live.
-On the client/strategy side, warming up data feeds etc is not currently done async, so you might see a pause in strategies if subscribing at run time (after strategy start), this will be async in the future as a background task, but I don't want to implement that until I have let the current implementation test for a little while.
-- 05/11/2024: My next task is live data and trading for Oanda. Then I will focus on making backtests more accurate and finishing backtest related functionality for all brokers/vendors, then I will focus on any live trading bugs, finnally i will add the bitget api, then some fundamental data provider apis, and finally add an equities/etf/options brokerage.
-- 05/11/2024: Since Oanda Uses quote data, but there is no historical quote data, live warm up does not work with Oanda. Indicators and DataSubscriptions can still have instant history, if you subscribe after the strategy is warmed up. Use the Warm-up complete strategy event for this, OR you can subscribe directly to the resolution if you know you have historical data for the subscription. [see Oanda Setup](ff_data_server/src/oanda_api/OANDA_SETUP.md/#live-oanda-strategies)
-If you use the second option before launching the on_data_received function, you will still get warm up data, just pass in an empty vec in strategy initialize.
-- 05/11/2024: Fixed divide by 0 bug in backtesting engine, from using order quantity filled instead of quantity open in backtest matching engine.
-- 05/11/2024: Data download functions are now working perfectly, as far as I can tell.
-- 05-11-2024: Oanda backtesting accuracy should now be as good as it can be, using a symbol info map for tick size, value and decimal accuracy, and using the best bid, offer for fills.
-- 06-11-2024: Enter Long, Enter Short, Exit Long, Exit Short and Market Orders work for Oanda, but I have not tested limit orders or stop orders yet, other orders will work but the strategy will not get update events and so they are currently unsafe.
-- 06-11-2024: Oanda backtesting is not accurate for currencies, I need to redo the symbol info map to account for lot sizes on currencies.
-- 06-11-2024: I had a major problem on indicator updates, I hadn't tested a change over the weekend because the market was closed, it resulted in multiple live updates for the same indicator, I have fixed this now.
-- 06-11-2024: Don't use sync_accounts == true for any strategy, It is not working properly.
-- 07-11-2024: Oanda Symbols like Jpy will have very high value per point, because they are in yen, I will be building a currency conversion tool for backtesting to convert the pnl to the account currency, this will require the user to have the 1-hour data for every currency pair.
-
-- Please report any issues, some bugs I don't notice after I change code because there are so many possible states to test, backtesting, live trading, live paper * 2 brokerages.
+### Announcements
+12-11-24: Added a fix to avoid memory crash when downloading a large amount of high resolution data in short periods.
+12-11-24: A Added a compression algorithm to reduce the size of files by 98%, a 200mb tick file is now <5mb. This will have a massive impact on the amount of data we can process when running strategies on remote machines.
 
 ### Initial Setup
 1. Install [rust](https://www.rust-lang.org/tools/install).
