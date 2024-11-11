@@ -26,7 +26,7 @@ The currency conversion will also work with Bitget and crypto, allowing us to sp
 - 10-11-2024: I have done a lot of work on Oanda live trading, but nothing is tested, now I have 2 brokers, semi working my focus will be to simplify the standardised fuctions and types, get the code base clean and into some sort of standardised pattern. This will take some time, I intend to do this slowly when experimenting with backtesting and live trading.
 
 ### 11-11-2024 CRITICAL UPDATE IF YOU HAVE DOWNLOADED DATA BEFORE THIS DATE PLEASE READ
-Added a fix to avoid memory crash when downloading a large amount of high resolution data in short periods (like the initial download), I did not know about this critical flaw in the data base until I downlaoded the 1 hour data sets.
+Added a fix to avoid memory crash when downloading a large amount of high resolution data in short periods (like the initial download), I did not know about this critical flaw in the database until I downloaded the 1 hour data sets.
 It has been fixed.
 
 I Have added a compression algorithm to Base data, Any data downloaded prior to this announcement will need to be deleted.
@@ -50,6 +50,7 @@ This step will be done slowly by testing strategies under live and historical co
 - Simplify subscribing and unsubscribing data, by allowing the trader to specify subscriptions as either consolidator or primary data.
 - Improve download functions.
 - Build data server logging.
+- The data base is not properly set up to handle fundamental data, it will save, but only 1 data point per vendor per time, I will probably remove fundamental data from BaseDataEnum and make it a unique StrategyEvent.
 
 ### Initial Setup
 1. Install [rust](https://www.rust-lang.org/tools/install).

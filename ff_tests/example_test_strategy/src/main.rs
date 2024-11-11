@@ -44,7 +44,7 @@ async fn main() {
         vec![
             // Since we only have quote level test data, the 2 subscriptions will be created by consolidating the quote feed. Quote data will automatically be subscribed as primary data source.
             DataSubscription::new(
-                SymbolName::from("NAS100-USD"),
+                SymbolName::from("MNQ"),
                 DataVendor::Oanda,
                 Resolution::Seconds(5),
                 BaseDataType::QuoteBars,

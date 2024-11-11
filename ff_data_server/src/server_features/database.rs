@@ -671,7 +671,7 @@ impl HybridStorage {
         }
 
         // Get oldest file outside of any locks
-        let oldest_path = if self.mmap_cache.len() >= 50 {
+        let oldest_path = if self.mmap_cache.len() >= 200 {
             self.cache_last_accessed
                 .iter()
                 .min_by_key(|entry| entry.value().clone())
