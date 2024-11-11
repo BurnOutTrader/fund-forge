@@ -13,10 +13,6 @@ fund-forge is built to allow simple abstractions for common strategy functionali
 See below for all the free historical data you will ever need.
 
 ## Announcements: Read Before Live Trading or Backtesting
-- 1/11/2024: Occasionally there are some very minor position sync issues with rithmic live trading, be sure to monitor any live strategies.
-- 05/11/2024: Live warm up now works up until the last few seconds of data, when a history request is made by the engine for data that includes the present date, the server will first update the historical data to get the latest data, this means you need to have at least minimal historical data specified in you download_list.toml file for any symbols you trade live.
-On the client/strategy side, warming up data feeds etc is not currently done async, so you might see a pause in strategies if subscribing at run time (after strategy start), this will be async in the future as a background task, but I don't want to implement that until I have let the current implementation test for a little while.
-- 05/11/2024: My next task is live data and trading for Oanda. Then I will focus on making backtests more accurate and finishing backtest related functionality for all brokers/vendors, then I will focus on any live trading bugs, finnally i will add the bitget api, then some fundamental data provider apis, and finally add an equities/etf/options brokerage.
 - 05/11/2024: Since Oanda Uses quote data, but there is no historical quote data, live warm up does not work with Oanda. Indicators and DataSubscriptions can still have instant history, if you subscribe after the strategy is warmed up. Use the Warm-up complete strategy event for this, OR you can subscribe directly to the resolution if you know you have historical data for the subscription. [see Oanda Setup](ff_data_server/src/oanda_api/OANDA_SETUP.md/#live-oanda-strategies)
 If you use the second option before launching the on_data_received function, you will still get warm up data, just pass in an empty vec in strategy initialize.
 - 05/11/2024: Fixed divide by 0 bug in backtesting engine, from using order quantity filled instead of quantity open in backtest matching engine.
@@ -25,8 +21,24 @@ If you use the second option before launching the on_data_received function, you
 - 06-11-2024: Don't use sync_accounts == true for any strategy, It is not finished.
 - 09-11-2024: Historical currency conversion is now working but is untested, open and booked pnl will always be estimated in account currency even in live (live rates will be implemented soon) None of this is tested properly but it is relatively straight forward, we get the last know convertion rate and multiply it by the open or booked pnl, the server will do this as accurately as possible depending on the resolution of your fx data, if no rate is found it will fall back to 1 to 1 conversion.
 - 09-11-2024: Oanda lot sizes should be fixed but are not fully tested, I got an Ai to create the hard coded symbol info map from a table provided by Oanda, but I have not tested it yet.
-- 10-11-2024: (Untested due to weekend) Added the ability to subscribe to live quotebars with Oanda, bars will be delayed by about 10ms, since we have to manually request bars on a 5-second loop. This allows us to directly use quote bars in live strategies and therefore use strategy warm up. if speed is an issue we should subscribe quotes and use strategy.subscribe_override() for quote bar subscriptions. 
+- 10-11-2024: (Untested due to weekend) Added the ability to subscribe to live quote bars with Oanda, bars will be delayed by about 10ms, since we have to manually request bars on a 5-second loop. This allows us to directly use quote bars in live strategies and therefore use strategy warm up. if speed is an issue we should subscribe quotes and use strategy.subscribe_override() for quote bar subscriptions. 
 - 10-11-2024: I have done a lot of work on Oanda live trading, but nothing is tested, now I have 2 brokers, semi working my focus will be to simplify the standardised fuctions and types, get the code base clean and into some sort of standardised pattern. This will take some time, I intend to do this slowly when experimenting with backtesting and live trading.
+
+### Current State and Future Development
+The platform is currently in a semi-working state, think of it as a proof of concept, there is a lot of untested functionality, both in backtesting and live trading.
+
+The core logic is done, but it will be improved and made more readable and resilient.
+
+The first objective was to get everything 'sort of working' so that I could get some practical experience with the engine and brokerage api's and try to establish a consistent pattern.
+Now that Oanda and Rithmic are in a sort of working state, I will finish the Bitget api, once the bitget api is complete I will be focused on consolidating the code base into a consistent design pattern, to make maintenance and future api implementations easier.
+This step will be done slowly by testing strategies under live and historical conditions, improving functions to handle errors and refactoring as I go to create a simple, easy to understand standard for future integrations.
+
+### Things I am considering
+- Implementing ledger as an enum so that we can better utilise the functionality of each brokerage while having a set of common standardised functions for backtesting.
+- Make live accounts always synchronise with the brokerage, so that if there is a bug in our strategy logic the strategy will adjust its positions to reflect the brokerage.
+- Simplify subscribing and unsubscribing data, by allowing the trader to specify subscriptions as either consolidator or primary data.
+- Improve download functions.
+- Build data server logging.
 
 ### Initial Setup
 1. Install [rust](https://www.rust-lang.org/tools/install).
@@ -125,25 +137,6 @@ See the Rithmic file [here](ff_data_server/data/credentials/rithmic_credentials/
 In the example image 'Test' represents `DataVendor::Test`
 
 ![folder_structure.png](misc/folder_structure.png)
-
-## Current State of Live Trading
-***The server now properly handles multiple connects and disconnects when using rithmic, the problem was in shutting down rithmic broadcasters (removing broadcaster while holding a mut ref)***
-
-The platform is capable of live trading with rithmic, but it is not 100% stable or complete.
-
-No History functions have been built yet, so indicators and subscriptions will not auto warm up.
-
-Many problem scenarios have not been tested, although the strategy seems to maintain good synchronisation with rithmic, even with `synchronise_accounts` disabled.
-
-Live trading with rithmic requires you to use the `product_code` in place of `symbol_name` for functions like `strategy.is_long()`.
-
-When placing orders with rithmic you can pass in the exact product code you want to trade, or you can use the symbol name and the rithmic api will choose the front month for you.
-
-The order events will return both the symbol_name and product_code, should you let the api find the front month for you.
-
-Currently, you can only subscribe to data using symbol_name, but this will be fixed to allow trading calendar spreads.
-
-Oanda and Bitget apis are not functional and will cause a crash if you specify them as `DataVendor` or `Brokerage`
 
 ## Overview
 The engine is designed to provide simple abstractions for building strategies with an object-oriented strategy instance and familiar associated helper functions for adding indicators,
