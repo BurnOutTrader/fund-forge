@@ -12,29 +12,10 @@ fund-forge is built to allow simple abstractions for common strategy functionali
 ## Limitless Free Historical Data
 See below for all the free historical data you will ever need.
 
-## Announcements: Read Before Live Trading or Backtesting
-- 05/11/2024: Since Oanda Uses quote data, but there is no historical quote data, live warm up does not work with Oanda. Indicators and DataSubscriptions can still have instant history, if you subscribe after the strategy is warmed up. Use the Warm-up complete strategy event for this, OR you can subscribe directly to the resolution if you know you have historical data for the subscription. [see Oanda Setup](ff_data_server/src/oanda_api/OANDA_SETUP.md/#live-oanda-strategies)
-If you use the second option before launching the on_data_received function, you will still get warm up data, just pass in an empty vec in strategy initialize.
-- 05/11/2024: Fixed divide by 0 bug in backtesting engine, from using order quantity filled instead of quantity open in backtest matching engine.
-- 05/11/2024: Data download functions are now working perfectly, as far as I can tell.
-- 06-11-2024: Enter Long, Enter Short, Exit Long, Exit Short and Market Orders work for Oanda, but I have not tested limit orders or stop orders yet, other orders will work but the strategy will not get update events and so they are currently unsafe.
-- 06-11-2024: Don't use sync_accounts == true for any strategy, It is not finished.
-- 09-11-2024: Historical currency conversion is now working but is untested, open and booked pnl will always be estimated in account currency even in live (live rates will be implemented soon) None of this is tested properly but it is relatively straight forward, we get the last know convertion rate and multiply it by the open or booked pnl, the server will do this as accurately as possible depending on the resolution of your fx data, if no rate is found it will fall back to 1 to 1 conversion.
-The currency conversion will also work with Bitget and crypto, allowing us to specify crypto as an account currency and have the engine convert from fiat to crypto and back again.
-- 09-11-2024: Oanda lot sizes should be fixed but are not fully tested, I got an Ai to create the hard coded symbol info map from a table provided by Oanda, but I have not tested it yet.
-- 10-11-2024: (Untested due to weekend) Added the ability to subscribe to live quote bars with Oanda, bars will be delayed by about 10ms, since we have to manually request bars on a 5-second loop. This allows us to directly use quote bars in live strategies and therefore use strategy warm up. if speed is an issue we should subscribe quotes and use strategy.subscribe_override() for quote bar subscriptions. 
-- 10-11-2024: I have done a lot of work on Oanda live trading, but nothing is tested, now I have 2 brokers, semi working my focus will be to simplify the standardised functions and types, get the code base clean and into some sort of standardised pattern. This will take some time, I intend to do this slowly when experimenting with backtesting and live trading.
-- 12-11-2024: Reduced file sizes by >92%, the result of this is much faster data transfer between the server and strategies, much lower overall bandwidth usage and better overall backtest performance.
+### Announcements
+Added a fix to avoid memory crash when downloading a large amount of high resolution data in short periods.
 
-### 11-11-2024 CRITICAL UPDATE IF YOU HAVE DOWNLOADED DATA BEFORE THIS DATE PLEASE READ
-Added a fix to avoid memory crash when downloading a large amount of high resolution data in short periods (like the initial download), I did not know about this critical flaw in the database until I downloaded the 1 hour data sets.
-It has been fixed.
-
-I Have added a compression algorithm to Base data, Any data downloaded prior to this announcement will need to be deleted.
-
-I tried to retroactively compress data, but it was too unreliable and unpredictable. I personally have to re-download 2Tb of data, but it is worth it for the reduced storage space.
-
-A 200mb tick file is now <5mb.
+A Added a compression algorithm to reduce the size of files by 98%, a 200mb tick file is now <5mb.
 
 This will have a massive impact on the amount of data we can process when running strategies on remote machines.
 
