@@ -6,6 +6,7 @@ authors = ["Kevin Monaghan"]
 license-file = "LICENCE.md"
 
 [dependencies]
+flate2 = "*"
 chrono = "*"
 serde = { version = "*", features = ["derive"] }
 rkyv = { version =  "0.7.6", features = ["std", "alloc", "validation"] }
