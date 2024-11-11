@@ -63,7 +63,7 @@ async fn main() {
 
         // Buffer Duration
         //strategy resolution in milliseconds, all data at a lower resolution will be consolidated to this resolution, if using tick data, you will want to set this at 100 or less depending on the data granularity
-        core::time::Duration::from_secs(60),
+        core::time::Duration::from_secs(1),
 
 
         // Enabled will launch the strategy registry handler to connect to a GUI, currently will crash if enabled
