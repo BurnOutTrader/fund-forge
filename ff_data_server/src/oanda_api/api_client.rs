@@ -259,9 +259,7 @@ pub(crate) async fn oanda_init(options: ServerLaunchOptions) {
 }
 
 impl OandaClient {
-
-
-    pub async fn get_order_by_client_id(
+    pub async fn get_order_by_client_id (
         &self,
         account_id: &str,
         client_order_id: &str,
