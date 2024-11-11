@@ -339,6 +339,7 @@ impl VendorApiResponse for OandaClient {
                                 progress_bar.inc(1);
                             },
                             Err(e) => {
+                                eprintln!("Error saving data batch: {}", e);
                                 progress_bar.set_message(format!("Error saving data batch: {}", e));
                                 break 'main_loop;
                             }
@@ -366,6 +367,7 @@ impl VendorApiResponse for OandaClient {
         if !new_data.is_empty() {
             let data_vec: Vec<BaseDataEnum> = new_data.values().cloned().collect();
             if let Err(e) = data_storage.save_data_bulk(data_vec, is_bulk_download).await {
+                eprintln!("Error saving final data batch: {}", e);
                 progress_bar.set_message(format!("Error saving final data batch: {}", e));
             }
         }

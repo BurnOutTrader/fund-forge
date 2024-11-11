@@ -725,6 +725,8 @@ impl HybridStorage {
         if !is_bulk_download {
             let mmap = unsafe { Mmap::map(&file)? };
             self.mmap_cache.insert(file_path.to_string_lossy().to_string(), Arc::new(mmap));
+        } else {
+            self.mmap_cache.remove(&file_path.to_string_lossy().to_string());
         }
 
         Ok(())
