@@ -755,7 +755,17 @@ impl HybridStorage {
 
         file.seek(SeekFrom::Start(0))?;
         file.set_len(0)?;
-        file.write_all(&bytes)?;
+
+        match file.write_all(&bytes) {
+            Ok(_) => {},
+            Err(e) => {
+                // Attempt to remove the corrupt file
+                if let Err(remove_err) = std::fs::remove_file(&file_path) {
+                    eprintln!("Failed to remove corrupt file {}: {}", file_path.display(), remove_err);
+                }
+                return Err(e);
+            }
+        }
 
         if !is_bulk_download {
             let mmap = unsafe { Mmap::map(&file)? };
