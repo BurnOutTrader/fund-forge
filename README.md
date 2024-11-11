@@ -31,9 +31,11 @@ It has been fixed.
 
 I Have added a compression algorithm to Base data, Any data downloaded prior to this announcement will need to be deleted.
 
-I tried to retroactively compress data, but it was too unreliable and unpredictable. I personally have to redownload 2Tb of data, but it is worth it for the reduced storage space.
+I tried to retroactively compress data, but it was too unreliable and unpredictable. I personally have to re-download 2Tb of data, but it is worth it for the reduced storage space.
 
 A 200mb tick file is now <5mb.
+
+This will have a massive impact on the amount of data we can process when running strategies on remote machines.
 
 ### Current State and Future Development
 The platform is currently in a semi-working state, think of it as a proof of concept, there is a lot of untested functionality, both in backtesting and live trading.

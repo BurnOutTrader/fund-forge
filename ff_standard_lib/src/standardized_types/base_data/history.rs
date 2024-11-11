@@ -339,7 +339,7 @@ pub async fn range_history_data(
     let sub_res_type = SubscriptionResolutionType::new(subscription.resolution, subscription.base_data_type);
     let resolutions = subscription.symbol.data_vendor.warm_up_resolutions(subscription.symbol.market_type).await.unwrap();
     if resolutions.contains(&sub_res_type) {
-        let data = match get_historical_data(vec![subscription.clone()], from_time, to_time).await {
+        let data = match get_compressed_historical_data(vec![subscription.clone()], from_time, to_time).await {
             Ok(data) => {
                 data
             }

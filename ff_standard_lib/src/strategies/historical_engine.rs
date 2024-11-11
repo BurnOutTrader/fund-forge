@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 use chrono::{DateTime, Duration as ChronoDuration, NaiveTime, TimeZone, Utc};
 use crate::strategies::client_features::server_connections::{set_warmup_complete};
-use crate::standardized_types::base_data::history::{get_compressed_historical_data, get_historical_data};
+use crate::standardized_types::base_data::history::{get_compressed_historical_data};
 use crate::standardized_types::enums::StrategyMode;
 use crate::strategies::strategy_events::StrategyEvent;
 use crate::standardized_types::time_slices::TimeSlice;
