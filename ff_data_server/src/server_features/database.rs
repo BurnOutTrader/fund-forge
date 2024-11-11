@@ -573,6 +573,9 @@ impl HybridStorage {
                 // Remove expired entries from all caches
                 for path in keys_to_remove {
                     mmap_cache.remove(&path);
+                    if let Some((_, mmap)) = mmap_cache.remove(&path) {
+                        drop(mmap); // Explicitly drop the mmap
+                    }
                     cache_last_accessed.remove(&path);
                     let mut remove_semaphore = false;
                     if let Some(file_semaphore) = file_locks.get(&path) {
@@ -691,7 +694,9 @@ impl HybridStorage {
                 })?;
 
                 // Now safely remove from caches
-                self.mmap_cache.remove(&oldest_path);
+                if let Some((_, mmap)) = self.mmap_cache.remove(&file_path.to_string_lossy().to_string()) {
+                    drop(mmap); // Explicitly drop the mmap
+                }
                 self.cache_last_accessed.remove(&oldest_path);
                 drop(permit);
             }
@@ -778,7 +783,9 @@ impl HybridStorage {
             let mmap = unsafe { Mmap::map(&file)? };
             self.mmap_cache.insert(file_path.to_string_lossy().to_string(), Arc::new(mmap));
         } else {
-            self.mmap_cache.remove(&file_path.to_string_lossy().to_string());
+            if let Some((_, mmap)) = self.mmap_cache.remove(&file_path.to_string_lossy().to_string()) {
+                drop(mmap); // Explicitly drop the mmap
+            }
         }
 
         Ok(())
