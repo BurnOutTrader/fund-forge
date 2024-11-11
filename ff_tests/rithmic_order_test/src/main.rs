@@ -1,5 +1,6 @@
 use chrono::{Duration, NaiveDate};
 use chrono_tz::Australia;
+use chrono_tz::Tz::UTC;
 use colored::Colorize;
 use rust_decimal::Decimal;
 use ff_standard_lib::standardized_types::base_data::base_data_enum::BaseDataEnum;
@@ -33,9 +34,9 @@ async fn main() {
         StrategyMode::Backtest,
         dec!(100000),
         Currency::USD,
-        NaiveDate::from_ymd_opt(2024, 11, 11).unwrap().and_hms_opt(0, 0, 0).unwrap(),
-        NaiveDate::from_ymd_opt(2024, 11, 12).unwrap().and_hms_opt(0, 0, 0).unwrap(),
-        Australia::Sydney,
+        NaiveDate::from_ymd_opt(2024, 11, 1).unwrap().and_hms_opt(1, 0, 0).unwrap(),
+        NaiveDate::from_ymd_opt(2024, 11, 1).unwrap().and_hms_opt(23, 0, 0).unwrap(),
+        UTC,
         Duration::hours(1),
         vec![
              DataSubscription::new (

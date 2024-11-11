@@ -391,7 +391,14 @@ impl VendorApiResponse for RithmicBrokerageClient {
                 .progress_chars("=>-")
         );
 
+        let resolution_seconds = match resolution.as_seconds() > 0 {
+            true => resolution.as_seconds(),
+            false => 1,
+        };
+        let data_save_length = (Duration::days(2).num_seconds() / resolution_seconds) as usize;
+
         let mut empty_windows = 0;
+        let mut combined_data = BTreeMap::new();
         'main_loop: loop {
             // Calculate window end based on start time (always 1 hour)
             let window_end = window_start + resolution_multiplier;
@@ -454,12 +461,15 @@ impl VendorApiResponse for RithmicBrokerageClient {
                 }
             };
 
-            if !data_map.is_empty() {
-                let save_data: Vec<BaseDataEnum> = data_map.clone().into_values().collect();
+            combined_data.extend(data_map);
+
+            if combined_data.len() >= data_save_length {
+                let save_data: Vec<BaseDataEnum> = combined_data.clone().into_values().collect();
                 if let Err(e) = data_storage.save_data_bulk(save_data, is_bulk_download).await {
                     progress_bar.set_message(format!("Failed to save data for: {} - {}, {}", window_start, window_end, e));
                     break 'main_loop;
                 }
+                combined_data.clear();
             }
 
             // Check if we've caught up to the desired end or current time
@@ -467,6 +477,12 @@ impl VendorApiResponse for RithmicBrokerageClient {
                 break 'main_loop;
             }
             progress_bar.inc(1);
+        }
+        if !combined_data.is_empty() {
+            let save_data: Vec<BaseDataEnum> = combined_data.clone().into_values().collect();
+            if let Err(e) = data_storage.save_data_bulk(save_data, is_bulk_download).await {
+                progress_bar.set_message(format!("Failed to save data for: {} - {}, {}", window_start, window_start + resolution_multiplier, e));
+            }
         }
         progress_bar.finish_and_clear();
         Ok(())
