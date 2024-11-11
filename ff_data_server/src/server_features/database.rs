@@ -681,19 +681,22 @@ impl HybridStorage {
 
         // Remove oldest file if needed
         if let Some(oldest_path) = oldest_path {
-            // Remove the semaphore first to get ownership
-            if let Some((_, semaphore)) = self.file_locks.remove(&oldest_path) {
-                let _permit = semaphore.acquire().await.map_err(|e| {
+            // Get (don't remove) the semaphore first
+            if let Some(semaphore) = self.file_locks.get(&oldest_path) {
+                let permit = semaphore.value().acquire().await.map_err(|e| {
                     io::Error::new(
                         io::ErrorKind::Other,
                         format!("Error acquiring lock for cache cleanup: {}", e)
                     )
                 })?;
 
-                // Now safely remove from other caches
+                // Now safely remove from caches
                 self.mmap_cache.remove(&oldest_path);
                 self.cache_last_accessed.remove(&oldest_path);
+                drop(permit);
             }
+            // Finally remove the semaphore
+            self.file_locks.remove(&oldest_path);
         }
 
         // Rest of the function...
@@ -701,7 +704,7 @@ impl HybridStorage {
             .entry(file_path.to_str().unwrap().to_string())
             .or_insert(Semaphore::new(1));
 
-        let _permit = semaphore.acquire().await.map_err(|e| {
+        let permit = semaphore.acquire().await.map_err(|e| {
             io::Error::new(
                 io::ErrorKind::Other,
                 format!("Thread Tripwire, Error acquiring save permit: {}", e)
@@ -714,6 +717,7 @@ impl HybridStorage {
         self.mmap_cache.insert(path_str.clone(), Arc::clone(&mmap));
         self.cache_last_accessed.insert(path_str.clone(), Utc::now());
 
+        drop(permit);
         Ok(mmap)
     }
 
