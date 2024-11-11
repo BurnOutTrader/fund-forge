@@ -305,7 +305,7 @@ impl HybridStorage {
         let symbol_pb = MULTIBAR.add(ProgressBar::new(1));
         symbol_pb.set_prefix(format!("{}", symbol.name));
 
-        match client.update_historical_data(symbol.clone(), base_data_type, resolution, start_time, Utc::now() + Duration::from_secs(15), false, symbol_pb).await {
+        match client.update_historical_data(symbol.clone(), base_data_type, resolution, start_time, Utc::now() + Duration::from_secs(15), false, symbol_pb, false).await {
             Ok(_) => {},
             Err(_) => {}
         }
@@ -323,6 +323,7 @@ impl HybridStorage {
         from: DateTime<Utc>,
         to: DateTime<Utc>,
         from_back: bool,
+        is_bulk_download: bool
     ) {
         let key = (symbol.name.clone(), base_data_type.clone(), resolution.clone());
 
@@ -372,7 +373,7 @@ impl HybridStorage {
             };
             symbol_pb.set_prefix(format!("{}: {}", prefix, symbol.name));
 
-            match client.update_historical_data(symbol.clone(), base_data_type, resolution, from, to, from_back, symbol_pb).await {
+            match client.update_historical_data(symbol.clone(), base_data_type, resolution, from, to, from_back, symbol_pb, is_bulk_download).await {
                 Ok(_) => {},
                 Err(_) => {}
             }
@@ -527,7 +528,8 @@ impl HybridStorage {
                             symbol_config.base_data_type.clone(),
                             start_time,
                             end_time,
-                            from_back
+                            from_back,
+                            true
                         ).await;
                     }
                 }
@@ -624,10 +626,10 @@ impl HybridStorage {
             &data.time_closed_utc(),
             true
         );
-        self.save_data_to_file(&file_path, &[data.clone()]).await
+        self.save_data_to_file(&file_path, &[data.clone()], false).await
     }
 
-    pub async fn save_data_bulk(&self, data: Vec<BaseDataEnum>) -> io::Result<()> {
+    pub async fn save_data_bulk(&self, data: Vec<BaseDataEnum>, is_bulk_download: bool) -> io::Result<()> {
         if data.is_empty() {
             return Ok(());
         }
@@ -649,7 +651,7 @@ impl HybridStorage {
 
         for ((symbol, resolution, data_type, date), group) in grouped_data {
             let file_path = self.get_file_path(&symbol, &resolution, &data_type, &date, true);
-            self.save_data_to_file(&file_path, &group).await?;
+            self.save_data_to_file(&file_path, &group, is_bulk_download).await?;
         }
 
         Ok(())
@@ -681,7 +683,7 @@ impl HybridStorage {
     }
 
     /// This first updates the file on disk, then the file in memory is replaced with the new file, therefore we do not have saftey issues.
-    async fn save_data_to_file(&self, file_path: &Path, new_data: &[BaseDataEnum]) -> io::Result<()> {
+    async fn save_data_to_file(&self, file_path: &Path, new_data: &[BaseDataEnum], is_bulk_download: bool) -> io::Result<()> {
         let semaphore = self.file_locks.entry(file_path.to_str().unwrap().to_string()).or_insert(Semaphore::new(1));
         let _permit = match semaphore.acquire().await {
             Ok(p) => p,
@@ -720,8 +722,10 @@ impl HybridStorage {
         file.set_len(0)?;
         file.write_all(&bytes)?;
 
-        let mmap = unsafe { Mmap::map(&file)? };
-        self.mmap_cache.insert(file_path.to_string_lossy().to_string(), Arc::new(mmap));
+        if !is_bulk_download {
+            let mmap = unsafe { Mmap::map(&file)? };
+            self.mmap_cache.insert(file_path.to_string_lossy().to_string(), Arc::new(mmap));
+        }
 
         Ok(())
     }
@@ -1178,7 +1182,7 @@ mod tests {
             .collect();
 
         // Save bulk data
-        storage.save_data_bulk(test_data.clone()).await.unwrap();
+        storage.save_data_bulk(test_data.clone(), false).await.unwrap();
 
         // Retrieve data range
         let retrieved = storage.get_data_range(
@@ -1216,7 +1220,7 @@ mod tests {
             })
             .collect();
 
-        storage.save_data_bulk(test_data.clone()).await.unwrap();
+        storage.save_data_bulk(test_data.clone(), false).await.unwrap();
 
         let latest = storage.get_latest_data_point(
             test_data[0].symbol(),
@@ -1251,7 +1255,7 @@ mod tests {
             })
             .collect();
 
-        storage.save_data_bulk(test_data.clone()).await.unwrap();
+        storage.save_data_bulk(test_data.clone(), false).await.unwrap();
 
         let earliest = storage.get_earliest_data_time(
             test_data[0].symbol(),
@@ -1370,7 +1374,7 @@ mod tests {
         }));
 
         // Save all data
-        storage.save_data_bulk(test_data.clone()).await.unwrap();
+        storage.save_data_bulk(test_data.clone(), false).await.unwrap();
 
         // Retrieve data for the time period
         let retrieved = storage.get_data_range(
@@ -1417,7 +1421,7 @@ mod tests {
             })
             .collect();
 
-        storage.save_data_bulk(test_data.clone()).await.unwrap();
+        storage.save_data_bulk(test_data.clone(), false).await.unwrap();
 
         let earliest = storage.get_earliest_data_time(
             test_data[0].symbol(),
@@ -1482,7 +1486,7 @@ mod tests {
         ];
 
         // Save the test data
-        storage.save_data_bulk(test_data.clone()).await.unwrap();
+        storage.save_data_bulk(test_data.clone(), false).await.unwrap();
 
         // Test cases
         let test_cases = vec![
@@ -1544,7 +1548,7 @@ mod tests {
             }),
         ];
 
-        storage.save_data_bulk(test_data.clone()).await.unwrap();
+        storage.save_data_bulk(test_data.clone(), false).await.unwrap();
 
         // Query for a time between the two days
         let query_time = Utc.with_ymd_and_hms(2024, 1, 2, 1, 0, 0).unwrap();
