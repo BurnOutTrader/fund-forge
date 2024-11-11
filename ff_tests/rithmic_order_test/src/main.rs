@@ -34,8 +34,8 @@ async fn main() {
         StrategyMode::Backtest,
         dec!(100000),
         Currency::USD,
-        NaiveDate::from_ymd_opt(2024, 11, 1).unwrap().and_hms_opt(1, 0, 0).unwrap(),
-        NaiveDate::from_ymd_opt(2024, 11, 1).unwrap().and_hms_opt(23, 0, 0).unwrap(),
+        NaiveDate::from_ymd_opt(2019, 07, 1).unwrap().and_hms_opt(1, 0, 0).unwrap(),
+        NaiveDate::from_ymd_opt(2019, 07, 10).unwrap().and_hms_opt(23, 0, 0).unwrap(),
         UTC,
         Duration::hours(1),
         vec![

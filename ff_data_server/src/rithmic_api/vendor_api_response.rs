@@ -391,12 +391,6 @@ impl VendorApiResponse for RithmicBrokerageClient {
                 .progress_chars("=>-")
         );
 
-        let resolution_seconds = match resolution.as_seconds() > 0 {
-            true => resolution.as_seconds(),
-            false => 1,
-        };
-        let data_save_length = (Duration::days(2).num_seconds() / resolution_seconds) as usize;
-
         let mut empty_windows = 0;
         let mut combined_data = BTreeMap::new();
         'main_loop: loop {
@@ -463,7 +457,7 @@ impl VendorApiResponse for RithmicBrokerageClient {
 
             combined_data.extend(data_map);
 
-            if combined_data.len() >= data_save_length {
+            if combined_data.len() >= 100000 {
                 let save_data: Vec<BaseDataEnum> = combined_data.clone().into_values().collect();
                 if let Err(e) = data_storage.save_data_bulk(save_data, is_bulk_download).await {
                     progress_bar.set_message(format!("Failed to save data for: {} - {}, {}", window_start, window_end, e));

@@ -26,7 +26,7 @@ use crate::standardized_types::resolution::Resolution;
 use crate::strategies::strategy_events::StrategyEvent;
 use tokio::sync::broadcast;
 use tokio::sync::mpsc::Sender;
-use crate::standardized_types::base_data::history::get_historical_data;
+use crate::standardized_types::base_data::history::{get_compressed_historical_data};
 
 /// Manages all subscriptions for a strategy. each strategy has its own subscription handler.
 pub struct SubscriptionHandler {
@@ -763,7 +763,7 @@ impl SymbolSubscriptionHandler {
                     warm_up_to_time - subtract_duration - Duration::days(3)
                 }
             };
-            let data = block_on(get_historical_data(vec![new_subscription.clone()], from_time, warm_up_to_time)).unwrap_or_else(|_e| BTreeMap::new());
+            let data = block_on(get_compressed_historical_data(vec![new_subscription.clone()], from_time, warm_up_to_time)).unwrap_or_else(|_e| BTreeMap::new());
             let mut history = RollingWindow::new(history_to_retain);
             for (_, slice) in data {
                 for data in slice.iter() {
@@ -867,7 +867,7 @@ impl SymbolSubscriptionHandler {
                         warm_up_to_time - subtract_duration - Duration::days(3)
                     }
                 };
-                let data = block_on(get_historical_data(vec![closure_subscription.clone()], from_time, warm_up_to_time)).unwrap_or_else(|_e| BTreeMap::new());
+                let data = block_on(get_compressed_historical_data(vec![closure_subscription.clone()], from_time, warm_up_to_time)).unwrap_or_else(|_e| BTreeMap::new());
                 let mut history = RollingWindow::new(history_to_retain);
                 for (_, slice) in data {
                     for data in slice.iter() {
@@ -1050,7 +1050,7 @@ impl SymbolSubscriptionHandler {
                                     }
                                 }
                             };
-                            let data = get_historical_data(vec![warm_up_sub.clone()], from_time, warm_up_to_time).await.unwrap_or_else(|_e| BTreeMap::new());
+                            let data = get_compressed_historical_data(vec![warm_up_sub.clone()], from_time, warm_up_to_time).await.unwrap_or_else(|_e| BTreeMap::new());
                             let multiplier = new_subscription.resolution.as_seconds() / warm_up_sub.resolution.as_seconds();
                             let mut history = RollingWindow::new(multiplier as usize * history_to_retain);
                             for (_, slice) in data {
@@ -1092,7 +1092,7 @@ impl SymbolSubscriptionHandler {
                                     warm_up_to_time - subtract_duration - Duration::days(5)
                                 }
                             };
-                            let data = get_historical_data(vec![new_primary.clone()], from_time, warm_up_to_time).await.unwrap_or_else(|_e| BTreeMap::new());
+                            let data = get_compressed_historical_data(vec![new_primary.clone()], from_time, warm_up_to_time).await.unwrap_or_else(|_e| BTreeMap::new());
                             let mut history = RollingWindow::new(history_to_retain);
                             for (_, slice) in data {
                                 for data in slice.iter() {

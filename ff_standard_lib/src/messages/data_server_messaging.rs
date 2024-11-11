@@ -133,6 +133,12 @@ pub enum DataServerRequest {
         data_vendor: DataVendor,
         side: OrderSide
     },
+    GetCompressedHistoricalData {
+        callback_id: u64,
+        subscriptions: Vec<DataSubscription>,
+        from_time: String,
+        to_time: String
+    },
     Accounts{callback_id: u64, brokerage: Brokerage},
     SymbolNames{callback_id: u64, brokerage: Brokerage, time: Option<String>},
     RegisterStreamer{port: u16, secs: u64, subsec: u32},
@@ -172,6 +178,7 @@ impl DataServerRequest {
             DataServerRequest::HistoricalBaseDataRange { callback_id, .. } => {*callback_id = id}
             DataServerRequest::WarmUpResolutions { callback_id, .. } => {*callback_id = id}
             DataServerRequest::ExchangeRate { callback_id, .. } => {*callback_id = id}
+            DataServerRequest::GetCompressedHistoricalData { callback_id, .. } => {*callback_id = id}
         }
     }
 }
@@ -192,6 +199,11 @@ DataServerResponse {
     HistoricalBaseData {
         callback_id: u64,
         payload: BTreeMap<i64, TimeSlice>
+    },
+
+    CompressedHistoricalData {
+        callback_id: u64,
+        payload: Vec<Vec<u8>>
     },
 
     /// Responds with `instruments` as `Vec<InstrumentEnum>` which contains:
@@ -350,6 +362,7 @@ impl DataServerResponse {
             DataServerResponse::LivePositionUpdates { .. } => None,
             DataServerResponse::AsyncError { .. } => None,
             DataServerResponse::ExchangeRate { callback_id, .. } => Some(callback_id.clone()),
+            DataServerResponse::CompressedHistoricalData { callback_id, .. } => Some(callback_id.clone()),
         }
     }
 }

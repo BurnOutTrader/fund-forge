@@ -671,7 +671,7 @@ impl HybridStorage {
         }
 
         // Get oldest file outside of any locks
-        let oldest_path = if self.mmap_cache.len() >= 50 {
+        let oldest_path = if self.mmap_cache.len() >= 200 {
             self.cache_last_accessed
                 .iter()
                 .min_by_key(|entry| entry.value().clone())
@@ -872,6 +872,105 @@ impl HybridStorage {
         }
 
         Ok(all_data)
+    }
+
+    pub async fn get_files_in_range(
+        &self,
+        symbol: &Symbol,
+        resolution: &Resolution,
+        data_type: &BaseDataType,
+        start: DateTime<Utc>,
+        end: DateTime<Utc>,
+    ) -> Result<Vec<PathBuf>, FundForgeError> {
+        let mut file_paths = Vec::new();
+        let base_path = self.get_base_path(symbol, resolution, data_type, false);
+
+        let start_year = start.year();
+        let end_year = end.year();
+
+        for year in start_year..=end_year {
+            let year_path = base_path.join(format!("{:04}", year));
+            if !year_path.exists() { continue; }
+
+            let start_month = if year == start_year { start.month() } else { 1 };
+            let end_month = if year == end_year { end.month() } else { 12 };
+
+            for month in start_month..=end_month {
+                let month_path = year_path.join(format!("{:02}", month));
+                if !month_path.exists() { continue; }
+
+                // Only check relevant days in this month
+                let current_date = if year == start_year && month == start.month() {
+                    start.date_naive()
+                } else {
+                    NaiveDate::from_ymd_opt(year, month, 1).unwrap()
+                };
+
+                let month_end = if year == end_year && month == end.month() {
+                    end.date_naive()
+                } else {
+                    NaiveDate::from_ymd_opt(year, month + 1, 1)
+                        .unwrap_or_else(|| NaiveDate::from_ymd_opt(year + 1, 1, 1).unwrap())
+                        .pred_opt().unwrap()
+                };
+
+                let mut current_date = current_date;
+                while current_date <= month_end {
+                    let file_path = month_path.join(format!("{:04}{:02}{:02}.bin",
+                        year,
+                        month,
+                        current_date.day()
+                    ));
+
+                    if file_path.exists() {
+                        file_paths.push(file_path);
+                    }
+
+                    current_date = match current_date.succ_opt() {
+                        Some(date) => date,
+                        None => {
+                            eprintln!("Failed to get next day");
+                            break
+                        },
+                    }
+                }
+            }
+        }
+
+        Ok(file_paths)
+    }
+
+    pub async fn get_compressed_files_in_range(
+        &self,
+        subscription: Vec<DataSubscription>,
+        start: DateTime<Utc>,
+        end: DateTime<Utc>,
+    ) -> Result<Vec<Vec<u8>>, FundForgeError> {
+        let mut files_data = Vec::new();
+
+        for subscription in subscription {
+            let file_paths = self.get_files_in_range(&subscription.symbol, &subscription.resolution, &subscription.base_data_type, start, end).await?;
+
+            for file_path in file_paths {
+                let mut file = match File::open(&file_path) {
+                    Ok(file) => file,
+                    Err(e) => {
+                        return Err(FundForgeError::ServerErrorDebug(format!("Error opening file {:?}: {}", file_path, e)));
+                    }
+                };
+                let mut compressed_data = Vec::new();
+                match file.read_to_end(&mut compressed_data) {
+                    Ok(_) => {},
+                    Err(e) => {
+                        return Err(FundForgeError::ServerErrorDebug(format!("Error reading file {:?}: {}", file_path, e)));
+                    }
+                }
+
+                files_data.push(compressed_data);
+            }
+        }
+
+        Ok(files_data)
     }
 
     /// This function will only check back 10,000 days, it will therefore not work beyond 27.5 years into the past,

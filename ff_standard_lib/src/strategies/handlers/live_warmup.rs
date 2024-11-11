@@ -4,7 +4,7 @@ use chrono::{DateTime, NaiveTime, TimeZone, Utc};
 use lazy_static::lazy_static;
 use tokio::sync::broadcast;
 use tokio::sync::mpsc::Sender;
-use crate::standardized_types::base_data::history::get_historical_data;
+use crate::standardized_types::base_data::history::{get_compressed_historical_data};
 use crate::standardized_types::time_slices::TimeSlice;
 use crate::strategies::handlers::indicator_handler::IndicatorHandler;
 use crate::strategies::handlers::market_handler::price_service::{get_price_service_sender, PriceServiceMessage};
@@ -79,7 +79,7 @@ pub(crate) async fn live_warm_up(
                 break 'main_loop;
             }
 
-            let mut time_slices = match get_historical_data(primary_subscriptions.clone(), last_time, to_time).await {
+            let mut time_slices = match get_compressed_historical_data(primary_subscriptions.clone(), last_time, to_time).await {
                 Ok(time_slices) => {
                     if time_slices.is_empty() {
                         println!("Live Warmup: No data period, weekend or holiday: skipping to next day");
