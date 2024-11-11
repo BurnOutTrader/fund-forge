@@ -16,6 +16,7 @@
 - [Order Books](#order-books-)
 - [Estimate Fills Before Placing an Order](#estimate-fill-price)
 - [Placing Orders](#placing-orders)
+- [Currency Conversion](#currency-conversion)
 - [Debugging Strategies](#debugging-strategies)
 
 ## Important Info
@@ -1322,6 +1323,20 @@ async fn example() {
     }
 }
 ```
+
+## Currency Conversion
+The engine will always attempt to convert open + booked pnl into the account currency, this is done using the historical data sets.
+In the future I will build this as an option, so that you can keep a ledger with multiple currencies.
+
+In the present implementation, this feature requires you to have the historical data for any currency pairs related to your account currency,
+
+It will work with data of any resolution, if you have the 5 second oanda data then the currency conversions will be accurate to the nearest 5 seconds.
+
+If you have the 1 hour data, then the conversions will be accurate to the nearest hour.
+
+The Oanda download list is configured to get all the 1 hour data for you by default.
+
+The currency conversion will also work with bitget once the bitget api is finished.
 
 ## Debugging Strategies
 Exported positions include their tag property, which always == the tag of the order that created the position.
