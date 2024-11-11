@@ -77,22 +77,22 @@ impl IndicatorValues {
         &self.name
     }
 
-    /// get the time in the UTC time zone
+    /// get_requests the time in the UTC time zone
     pub fn time_utc(&self) -> DateTime<Utc> {
         DateTime::from_str(&self.time).unwrap()
     }
 
-    /// get the time in the local time zone
+    /// get_requests the time in the local time zone
     pub fn time_local(&self, time_zone: &Tz) -> DateTime<Tz> {
         time_zone.from_utc_datetime(&self.time_utc().naive_utc())
     }
 
-    /// get the value of a plot by name
+    /// get_requests the value of a plot by name
     pub fn get_plot(&self, plot_name: &PlotName) -> Option<IndicatorPlot> {
         self.plots.get(plot_name).cloned()
     }
 
-    /// get all the values `values: &AHashMap<PlotName, f64>`
+    /// get_requests all the values `values: &AHashMap<PlotName, f64>`
     pub fn plots(&self) -> BTreeMap<PlotName, IndicatorPlot> {
         self.plots.clone()
     }

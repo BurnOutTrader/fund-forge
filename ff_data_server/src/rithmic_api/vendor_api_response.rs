@@ -15,7 +15,7 @@ use ff_standard_lib::standardized_types::subscriptions::{DataSubscription, Symbo
 use ff_standard_lib::StreamName;
 use tokio::sync::{broadcast, oneshot};
 use tokio::time::timeout;
-use ff_standard_lib::product_maps::rithmic::maps::{get_available_symbol_names, get_exchange_by_symbol_name, get_symbol_info};
+use ff_standard_lib::product_maps::rithmic::maps::{get_available_rithmic_symbol_names, get_exchange_by_symbol_name, get_rithmic_symbol_info};
 use ff_standard_lib::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use crate::rithmic_api::api_client::{RithmicBrokerageClient, RITHMIC_DATA_IS_CONNECTED};
 use crate::server_features::database::DATA_STORAGE;
@@ -25,7 +25,7 @@ use crate::stream_tasks::{subscribe_stream, unsubscribe_stream};
 #[async_trait]
 impl VendorApiResponse for RithmicBrokerageClient {
     async fn symbols_response(&self, _mode: StrategyMode, _stream_name: StreamName, market_type: MarketType, _time: Option<DateTime<Utc>>, callback_id: u64) -> DataServerResponse{
-        let names = get_available_symbol_names();
+        let names = get_available_rithmic_symbol_names();
         let mut symbols = Vec::new();
         for name in names {
             let exchange = match get_exchange_by_symbol_name(name) {
@@ -45,7 +45,7 @@ impl VendorApiResponse for RithmicBrokerageClient {
             }
             StrategyMode::LivePaperTrading | StrategyMode::Live => {
                 match market_type {
-                    //todo, use this in a rithmic only fn, to get the toi products, just return the hardcoded list here.
+                    //todo, use this in a rithmic only fn, to get_requests the toi products, just return the hardcoded list here.
                     MarketType::Futures(exchange) => {
                         let _req = RequestProductCodes {
                             template_id: 111 ,
@@ -97,7 +97,7 @@ impl VendorApiResponse for RithmicBrokerageClient {
     }
 
     async fn decimal_accuracy_response(&self, _mode: StrategyMode, _stream_name: StreamName, symbol_name: SymbolName, callback_id: u64) -> DataServerResponse {
-        let info = match get_symbol_info(&symbol_name) {
+        let info = match get_rithmic_symbol_info(&symbol_name) {
             Ok(info) => {
                 info
             }
@@ -112,7 +112,7 @@ impl VendorApiResponse for RithmicBrokerageClient {
     }
 
     async fn tick_size_response(&self, _mode: StrategyMode, _stream_name: StreamName, symbol_name: SymbolName, callback_id: u64) -> DataServerResponse {
-        let info = match get_symbol_info(&symbol_name) {
+        let info = match get_rithmic_symbol_info(&symbol_name) {
             Ok(info) => {
                 info
             }
@@ -138,7 +138,7 @@ impl VendorApiResponse for RithmicBrokerageClient {
             _ => todo!()
         };
 
-        let symbols = get_available_symbol_names();
+        let symbols = get_available_rithmic_symbol_names();
         if !symbols.contains(&subscription.symbol.name) {
             return DataServerResponse::SubscribeResponse{ success: false, subscription: subscription.clone(), reason: Some(format!("This subscription is not available with {}: {}", subscription.symbol.data_vendor, subscription))}
         }
@@ -334,7 +334,7 @@ impl VendorApiResponse for RithmicBrokerageClient {
     }
 
     async fn base_data_types_response(&self, _mode: StrategyMode, _stream_name: StreamName, callback_id: u64) -> DataServerResponse {
-        //todo get dynamically from server using stream name to fwd callback
+        //todo get_requests dynamically from server using stream name to fwd callback
         DataServerResponse::BaseDataTypes {
             callback_id,
             base_data_types: vec![BaseDataType::Ticks, BaseDataType::Quotes, BaseDataType::Candles],
@@ -350,7 +350,7 @@ impl VendorApiResponse for RithmicBrokerageClient {
         todo!()
     }
 
-    async fn update_historical_data(&self, symbol: Symbol, base_data_type: BaseDataType, resolution: Resolution, from: DateTime<Utc>, to: DateTime<Utc>, from_back: bool, progress_bar: ProgressBar) -> Result<(), FundForgeError> {
+    async fn update_historical_data(&self, symbol: Symbol, base_data_type: BaseDataType, resolution: Resolution, from: DateTime<Utc>, to: DateTime<Utc>, from_back: bool, progress_bar: ProgressBar, is_bulk_download: bool) -> Result<(), FundForgeError> {
         const SYSTEM: SysInfraType = SysInfraType::HistoryPlant;
         const TIME_NEGATIVE: std::time::Duration = std::time::Duration::from_secs(1);
         let symbol_name = symbol.name.clone();
@@ -392,6 +392,7 @@ impl VendorApiResponse for RithmicBrokerageClient {
         );
 
         let mut empty_windows = 0;
+        let mut combined_data = BTreeMap::new();
         'main_loop: loop {
             // Calculate window end based on start time (always 1 hour)
             let window_end = window_start + resolution_multiplier;
@@ -415,7 +416,7 @@ impl VendorApiResponse for RithmicBrokerageClient {
                         if response.is_empty() {
                             empty_windows += 1;
                             //eprintln!("Empty window: {} - {}", window_start, window_end);
-                            if empty_windows >= 30 {
+                            if empty_windows >= 100 {
                                 progress_bar.set_message(format!("Empty window: {} - {}", window_start, window_end));
                                 break 'main_loop;
                             }
@@ -425,12 +426,12 @@ impl VendorApiResponse for RithmicBrokerageClient {
                         response
                     },
                     Err(e) =>{
-                        progress_bar.set_message(format!("Failed to get data for: {} - {}, {}", window_start, window_end, e));
+                        progress_bar.set_message(format!("Failed to get_requests data for: {} - {}, {}", window_start, window_end, e));
                         break 'main_loop;
                     }
                 },
                 Err(e) => {
-                    progress_bar.set_message(format!("Failed to get data for: {} - {}, {}", window_start, window_end, e));
+                    progress_bar.set_message(format!("Failed to get_requests data for: {} - {}, {}", window_start, window_end, e));
                     break 'main_loop
                 }
             };
@@ -454,12 +455,15 @@ impl VendorApiResponse for RithmicBrokerageClient {
                 }
             };
 
-            if !data_map.is_empty() {
-                let save_data: Vec<BaseDataEnum> = data_map.clone().into_values().collect();
-                if let Err(e) = data_storage.save_data_bulk(save_data).await {
+            combined_data.extend(data_map);
+
+            if combined_data.len() >= 100000 {
+                let save_data: Vec<BaseDataEnum> = combined_data.clone().into_values().collect();
+                if let Err(e) = data_storage.save_data_bulk(save_data, is_bulk_download).await {
                     progress_bar.set_message(format!("Failed to save data for: {} - {}, {}", window_start, window_end, e));
                     break 'main_loop;
                 }
+                combined_data.clear();
             }
 
             // Check if we've caught up to the desired end or current time
@@ -467,6 +471,12 @@ impl VendorApiResponse for RithmicBrokerageClient {
                 break 'main_loop;
             }
             progress_bar.inc(1);
+        }
+        if !combined_data.is_empty() {
+            let save_data: Vec<BaseDataEnum> = combined_data.clone().into_values().collect();
+            if let Err(e) = data_storage.save_data_bulk(save_data, is_bulk_download).await {
+                progress_bar.set_message(format!("Failed to save data for: {} - {}, {}", window_start, window_start + resolution_multiplier, e));
+            }
         }
         progress_bar.finish_and_clear();
         Ok(())

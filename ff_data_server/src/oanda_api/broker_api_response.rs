@@ -6,11 +6,10 @@ use rust_decimal::{Decimal};
 use rust_decimal_macros::dec;
 use uuid::Uuid;
 use ff_standard_lib::messages::data_server_messaging::{DataServerResponse, FundForgeError};
-use ff_standard_lib::product_maps::oanda::maps::{calculate_oanda_margin, OANDA_SYMBOL_INFO};
+use ff_standard_lib::product_maps::oanda::maps::{OANDA_SYMBOL_INFO};
 use crate::server_features::server_side_brokerage::BrokerApiResponse;
 use ff_standard_lib::standardized_types::accounts::{Account, AccountId};
 use ff_standard_lib::standardized_types::enums::{OrderSide, PositionSide, StrategyMode};
-use ff_standard_lib::standardized_types::new_types::Volume;
 use ff_standard_lib::standardized_types::orders::{Order, OrderId, OrderState, OrderType, OrderUpdateEvent, OrderUpdateType, TimeInForce};
 use ff_standard_lib::standardized_types::subscriptions::{SymbolName};
 use ff_standard_lib::StreamName;
@@ -60,28 +59,6 @@ impl BrokerApiResponse for OandaClient {
             callback_id,
             error: FundForgeError::ClientSideErrorDebug(format!("Symbol not found: {}", symbol_name)),
         }
-    }
-
-    #[allow(unused)]
-    async fn intraday_margin_required_response(&self, mode: StrategyMode, stream_name: StreamName, symbol_name: SymbolName, quantity: Volume, callback_id: u64) -> DataServerResponse {
-        // Calculate the margin required based on symbol and position size
-        if let Some(margin_used) = calculate_oanda_margin(&symbol_name, quantity, quantity) { //todo this will all be replaced, for live only, the backtesting info will come from the coded maps
-            return DataServerResponse::IntradayMarginRequired {
-                callback_id,
-                symbol_name,
-                price: Some(margin_used),
-            }
-        }
-
-        DataServerResponse::Error {
-            callback_id,
-            error: FundForgeError::ClientSideErrorDebug(format!("Symbol not found in margin map: {}", symbol_name)),
-        }
-    }
-
-    #[allow(unused)]
-    async fn overnight_margin_required_response(&self, mode: StrategyMode, stream_name: StreamName, symbol_name: SymbolName, quantity: Volume, callback_id: u64) -> DataServerResponse {
-        self.intraday_margin_required_response(mode, stream_name, symbol_name, quantity, callback_id).await
     }
 
     #[allow(unused)]
@@ -450,7 +427,7 @@ impl BrokerApiResponse for OandaClient {
                                 }
 
                                 // If order was immediately filled
-                                // Check if fill transaction exists and get its fields
+                                // Check if fill transaction exists and get_requests its fields
                                 if let Some(fill) = create_response["orderFillTransaction"].as_object() {
                                     let quantity = match fill["units"]
                                         .as_str()

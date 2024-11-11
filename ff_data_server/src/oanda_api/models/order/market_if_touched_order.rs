@@ -1,7 +1,7 @@
 use rust_decimal::Decimal;
 use serde::{Serialize, Deserialize};
 use ff_standard_lib::standardized_types::orders::OrderId;
-use crate::oanda_api::models::order::order_related::{OrderPositionFill, OrderState, OrderTriggerCondition, OrderType, TimeInForce};
+use crate::oanda_api::models::order::order_related::{OrderPositionFill, OandaOrderState, OrderTriggerCondition, OrderType, TimeInForce};
 use crate::oanda_api::models::primitives::{DateTime, InstrumentName};
 use crate::oanda_api::models::trade::TradeID;
 use crate::oanda_api::models::transaction_related::{ClientExtensions, GuaranteedStopLossDetails, StopLossDetails, TakeProfitDetails, TrailingStopLossDetails, TransactionID};
@@ -19,7 +19,7 @@ pub struct OandaMarketIfTouchedOrder {
 
     /// The current state of the Order.
     #[serde(rename = "state")]
-    pub state: OrderState,
+    pub state: OandaOrderState,
 
     /// The client extensions of the Order. Do not set, modify, or delete clientExtensions if your account is associated with MT4.
     #[serde(rename = "clientExtensions")]

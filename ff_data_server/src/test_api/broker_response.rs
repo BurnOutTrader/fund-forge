@@ -2,14 +2,12 @@ use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use rust_decimal_macros::dec;
 use ff_standard_lib::helpers::converters::fund_forge_formatted_symbol_name;
-use ff_standard_lib::helpers::decimal_calculators::round_to_decimals;
-use ff_standard_lib::messages::data_server_messaging::{DataServerResponse, FundForgeError};
+use ff_standard_lib::messages::data_server_messaging::{DataServerResponse};
 use crate::server_features::server_side_brokerage::BrokerApiResponse;
 use crate::server_features::server_side_datavendor::VendorApiResponse;
 use ff_standard_lib::standardized_types::accounts::{Account, AccountId, AccountInfo, Currency};
 use ff_standard_lib::standardized_types::broker_enum::Brokerage;
 use ff_standard_lib::standardized_types::enums::StrategyMode;
-use ff_standard_lib::standardized_types::new_types::Volume;
 use ff_standard_lib::standardized_types::orders::{Order, OrderId, OrderUpdateEvent, OrderUpdateType};
 use ff_standard_lib::standardized_types::subscriptions::SymbolName;
 use ff_standard_lib::standardized_types::symbol_info::{CommissionInfo, SymbolInfo};
@@ -71,57 +69,20 @@ impl BrokerApiResponse for TestApiClient {
             _ => (Currency::USD, dec!(0.1), dec!(0.00001))         // Default values
         };
 
+        let base_currency = symbol_name.split("-").next().unwrap().to_string();
         let symbol_info = SymbolInfo {
             symbol_name,
             pnl_currency,
             value_per_tick,
             tick_size,
             decimal_accuracy: 5,
+            base_currency: Some(Currency::from_str(&base_currency)),
         };
 
         DataServerResponse::SymbolInfo {
             callback_id,
             symbol_info,
         }
-    }
-
-    async fn intraday_margin_required_response(
-        &self,
-        _mode: StrategyMode,
-        _stream_name: StreamName,
-        symbol_name: SymbolName,
-        quantity: Volume,
-        callback_id: u64
-    ) -> DataServerResponse {
-        // Ensure quantity is not zero
-        let symbol_name = fund_forge_formatted_symbol_name(&symbol_name);
-        if quantity == dec!(0) {
-            return DataServerResponse::Error {
-                callback_id,
-                error: FundForgeError::ClientSideErrorDebug("Quantity cannot be 0".to_string())
-            };
-        }
-
-        // Assuming 100:1 leverage, calculate margin required
-        // You may want to factor in symbol-specific prices if available
-        let margin_required = round_to_decimals(quantity * dec!(100.0), 2);
-
-        DataServerResponse::IntradayMarginRequired {
-            callback_id,
-            symbol_name,
-            price: Some(margin_required),  // Here price represents the margin required
-        }
-    }
-
-    async fn overnight_margin_required_response(
-        &self,
-        mode: StrategyMode,
-        stream_name: StreamName,
-        symbol_name: SymbolName,
-        quantity: Volume,
-        callback_id: u64
-    ) -> DataServerResponse {
-        self.intraday_margin_required_response( mode, stream_name, symbol_name, quantity, callback_id).await
     }
 
     async fn accounts_response(&self, _mode: StrategyMode,_stream_name: StreamName, callback_id: u64) -> DataServerResponse {

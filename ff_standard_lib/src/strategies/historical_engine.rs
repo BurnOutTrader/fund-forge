@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 use chrono::{DateTime, Duration as ChronoDuration, NaiveTime, TimeZone, Utc};
 use crate::strategies::client_features::server_connections::{set_warmup_complete};
-use crate::standardized_types::base_data::history::get_historical_data;
+use crate::standardized_types::base_data::history::{get_compressed_historical_data};
 use crate::standardized_types::enums::StrategyMode;
 use crate::strategies::strategy_events::StrategyEvent;
 use crate::standardized_types::time_slices::TimeSlice;
@@ -157,7 +157,7 @@ impl HistoricalEngine {
             if first_iteration {
                 first_iteration = false;
             }
-            let mut time_slices = match get_historical_data(primary_subscriptions.clone(), last_time.clone(), to_time).await {
+            let mut time_slices = match get_compressed_historical_data(primary_subscriptions.clone(), last_time.clone(), to_time).await {
                 Ok(time_slices) => {
                     if time_slices.is_empty() && self.tick_over_no_data {
                         println!("Historical Engine: No data period, weekend or holiday: ticking through at buffering resolution, data will resume shortly");
@@ -177,6 +177,8 @@ impl HistoricalEngine {
                     BTreeMap::new()
                 }
             };
+
+            //eprintln!("Time Slices: {:?}", time_slices);
 
             let mut time = last_time;
             'day_loop: while time <= to_time {
@@ -258,7 +260,7 @@ impl HistoricalEngine {
                 }
 
                 if !strategy_time_slice.is_empty() {
-                    // Update indicators and get any generated events.
+                    // Update indicators and get_requests any generated events.
                     if let Some(events) = self.indicator_handler.update_time_slice(&strategy_time_slice).await {
                         match self.strategy_event_sender.send(StrategyEvent::IndicatorEvent(events)).await {
                             Ok(_) => {}

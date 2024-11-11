@@ -4,11 +4,10 @@ use dashmap::DashMap;
 use rust_decimal::Decimal;
 use rust_decimal::prelude::{FromPrimitive, ToPrimitive};
 use ff_standard_lib::messages::data_server_messaging::{DataServerResponse, FundForgeError};
-use ff_standard_lib::product_maps::rithmic::maps::{find_base_symbol, get_available_symbol_names, get_exchange_by_symbol_name, get_futures_commissions_info, get_intraday_margin, get_overnight_margin, get_symbol_info};
+use ff_standard_lib::product_maps::rithmic::maps::{find_base_symbol, get_available_rithmic_symbol_names, get_exchange_by_symbol_name, get_futures_commissions_info, get_rithmic_symbol_info};
 use crate::server_features::server_side_brokerage::BrokerApiResponse;
 use ff_standard_lib::standardized_types::accounts::{Account, AccountId};
 use ff_standard_lib::standardized_types::enums::StrategyMode;
-use ff_standard_lib::standardized_types::new_types::Volume;
 use ff_standard_lib::standardized_types::orders::{Order, OrderId, OrderUpdateEvent, OrderUpdateType};
 use ff_standard_lib::standardized_types::subscriptions::SymbolName;
 use ff_standard_lib::StreamName;
@@ -16,10 +15,11 @@ use crate::request_handlers::RESPONSE_SENDERS;
 use crate::rithmic_api::api_client::RithmicBrokerageClient;
 use crate::rithmic_api::client_base::rithmic_proto_objects::rti::request_login::SysInfraType;
 use crate::rithmic_api::client_base::rithmic_proto_objects::rti::{RequestCancelAllOrders, RequestCancelOrder, RequestExitPosition, RequestModifyOrder};
+
 #[async_trait]
 impl BrokerApiResponse for RithmicBrokerageClient {
     async fn symbol_names_response(&self, _mode: StrategyMode, _time: Option<DateTime<Utc>>, _stream_name: StreamName, callback_id: u64) -> DataServerResponse {
-        let symbol_names = get_available_symbol_names();
+        let symbol_names = get_available_rithmic_symbol_names();
 
         if symbol_names.is_empty() {
             DataServerResponse::Error {
@@ -58,72 +58,19 @@ impl BrokerApiResponse for RithmicBrokerageClient {
         symbol_name: SymbolName,
         callback_id: u64
     ) -> DataServerResponse {
-        match get_symbol_info(&symbol_name) {
+        match get_rithmic_symbol_info(&symbol_name) {
             Ok(symbol_info) => DataServerResponse::SymbolInfo {callback_id, symbol_info},
             Err(e) => {
-                match find_base_symbol(symbol_name) {
+                match find_base_symbol(&symbol_name) {
                     None => {}
                     Some(symbol) => {
-                        return match get_symbol_info(&symbol) {
+                        return match get_rithmic_symbol_info(&symbol) {
                             Ok(info) => DataServerResponse::SymbolInfo { callback_id, symbol_info: info },
                             Err(e) => DataServerResponse::Error { callback_id, error: FundForgeError::ServerErrorDebug(format!("{}", e)) }
                         }
                     }
                 };
                 DataServerResponse::Error {callback_id, error: FundForgeError::ClientSideErrorDebug(format!("{}", e))}
-            }
-        }
-    }
-
-    async fn intraday_margin_required_response(
-        &self,
-        _mode: StrategyMode, //todo we should check with broker when live
-        _stream_name: StreamName,
-        symbol_name: SymbolName,
-        quantity: Volume,
-        callback_id: u64
-    ) -> DataServerResponse {
-        match get_intraday_margin(&symbol_name) {
-            None => {
-                DataServerResponse::Error {
-                    callback_id,
-                    error: FundForgeError::ClientSideErrorDebug(format!("{} not found with: {}", symbol_name, self.brokerage)),
-                }
-            }
-            Some(margin) => {
-                let required_margin = margin * Decimal::from(quantity.abs());
-                DataServerResponse::IntradayMarginRequired {
-                    callback_id,
-                    symbol_name,
-                    price: Some(required_margin),
-                }
-            }
-        }
-    }
-
-    async fn overnight_margin_required_response(
-        &self,
-        _mode: StrategyMode, //todo we should check with broker when live
-        _stream_name: StreamName,
-        symbol_name: SymbolName,
-        quantity: Volume,
-        callback_id: u64
-    ) -> DataServerResponse {
-        match get_overnight_margin(&symbol_name) {
-            None => {
-                DataServerResponse::Error {
-                    callback_id,
-                    error: FundForgeError::ClientSideErrorDebug(format!("{} not found with: {}", symbol_name, self.brokerage)),
-                }
-            }
-            Some(margin) => {
-                let required_margin = margin * Decimal::from(quantity.abs());
-
-                DataServerResponse::IntradayMarginRequired {
-                    callback_id,
-                    symbol_name,
-                    price: Some(required_margin),
-                }
             }
         }
     }
@@ -143,7 +90,7 @@ impl BrokerApiResponse for RithmicBrokerageClient {
     }
 
     async fn commission_info_response(&self, _mode: StrategyMode, _stream_name: StreamName, symbol_name: SymbolName, callback_id: u64) -> DataServerResponse {
-        //todo add a mode to get live commsions from specific brokerage.
+        //todo add a mode to get_requests live commsions from specific brokerage.
         match get_futures_commissions_info(&symbol_name) {
             Ok(commission_info) => DataServerResponse::CommissionInfo {
                 callback_id,

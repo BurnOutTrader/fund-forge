@@ -1,11 +1,9 @@
-use std::collections::HashMap;
 use std::sync::Arc;
 use chrono::{DateTime, Utc};
 use crate::standardized_types::enums::{OrderSide, PositionSide, StrategyMode};
 use crate::standardized_types::subscriptions::{SymbolCode, SymbolName};
 use dashmap::DashMap;
 use rust_decimal::Decimal;
-use rust_decimal::prelude::FromPrimitive;
 use rust_decimal_macros::dec;
 use tokio::sync::Mutex;
 use crate::standardized_types::position::{Position, PositionUpdateEvent};
@@ -29,13 +27,6 @@ impl LedgerService {
             ledgers: Default::default(),
             ledger_senders: Default::default(),
             strategy_sender,
-        }
-    }
-
-    #[allow(dead_code)]
-    pub fn update_rates(&self, rates: HashMap<(Currency, Currency), Decimal>) {
-        for ledger in self.ledgers.iter() {
-            ledger.value().update_rates(&rates);
         }
     }
 
@@ -177,7 +168,6 @@ impl LedgerService {
                         mode: strategy_mode.clone(),
                         is_simulating_pnl: true,
                         strategy_sender: self.strategy_sender.clone(),
-                        leverage: Decimal::from_u32(1).unwrap(), //todo, need a way to init accounts per broker without hardcode in server
                         rates: Arc::new(DashMap::new()),
                     })
                 }

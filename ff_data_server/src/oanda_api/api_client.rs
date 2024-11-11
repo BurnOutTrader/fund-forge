@@ -11,21 +11,21 @@ use tokio::sync::mpsc::Sender;
 use ff_standard_lib::messages::data_server_messaging::FundForgeError;
 use ff_standard_lib::standardized_types::accounts::{Account, AccountId, AccountInfo};
 use ff_standard_lib::standardized_types::base_data::base_data_enum::BaseDataEnum;
-use ff_standard_lib::standardized_types::base_data::base_data_type::BaseDataType;
-use ff_standard_lib::standardized_types::base_data::traits::BaseData;
 use ff_standard_lib::standardized_types::broker_enum::Brokerage;
 use ff_standard_lib::standardized_types::datavendor_enum::DataVendor;
-use ff_standard_lib::standardized_types::orders::{OrderId};
+use ff_standard_lib::standardized_types::orders::OrderId;
 use ff_standard_lib::standardized_types::position::Position;
-use ff_standard_lib::standardized_types::resolution::Resolution;
-use ff_standard_lib::standardized_types::subscriptions::{Symbol, SymbolName};
-use crate::oanda_api::base_data_converters::{candle_from_candle, oanda_quotebar_from_candle};
-use crate::oanda_api::get_requests::{oanda_account_summary, oanda_accounts_list, oanda_clean_instrument, oanda_instruments_download};
-use crate::oanda_api::instruments::OandaInstrument;
-use crate::oanda_api::support_and_conversions::resolution_to_oanda_interval;
-use crate::server_features::database::DATA_STORAGE;
+use ff_standard_lib::standardized_types::subscriptions::{DataSubscription, Symbol, SymbolName};
+use crate::oanda_api::get::accounts::account_details::get_oanda_account_details;
+use crate::oanda_api::get::accounts::account_list::get_oanda_accounts_list;
+use crate::oanda_api::get::accounts::account_summary::get_oanda_account_summary;
+use crate::oanda_api::get::instruments::get_oanda_instruments;
+use crate::oanda_api::handlers::stream::handle_price_stream;
+use crate::oanda_api::get::instruments::OandaInstrument;
+use crate::oanda_api::get::positions::parse_oanda_position;
+use crate::oanda_api::handlers::quotebar_streams::handle_quotebar_subscribers;
+use crate::oanda_api::models::order::placement::OandaOrderUpdate;
 use crate::ServerLaunchOptions;
-use crate::oanda_api::stream;
 
 lazy_static! {
     pub static ref OANDA_IS_CONNECTED: AtomicBool = AtomicBool::new(false);
@@ -62,11 +62,31 @@ pub struct OandaClient {
     pub positions: DashMap<AccountId, DashMap<SymbolName, Position>>,
     pub instrument_symbol_map: Arc<DashMap<String, Symbol>>,
     pub quote_feed_broadcasters: Arc<DashMap<SymbolName, broadcast::Sender<BaseDataEnum>>>,
-    pub subscription_sender: Sender<Vec<SymbolName>>,
+    pub quote_subscription_sender: Sender<Vec<SymbolName>>,
     pub oanda_id_map: DashMap<String, OrderId>,
     pub open_orders: DashMap<OrderId, ff_standard_lib::standardized_types::orders::Order>,
     pub id_stream_name_map: DashMap<OrderId , u16>,
     pub last_transaction_id: DashMap<AccountId, String>,
+    pub quotebar_broadcasters: Arc<DashMap<DataSubscription, broadcast::Sender<BaseDataEnum>>>
+}
+
+impl OandaClient {
+    pub async fn send_rest_request(&self, endpoint: &str) -> Result<Response, Error> {
+        let url = format!("{}{}", self.base_endpoint, endpoint);
+        let _permit = self.rate_limiter.acquire().await;
+        match self.client.get(&url)
+            .header("Authorization", format!("Bearer {}", self.api_key))
+            .send()
+            .await
+        {
+            Ok(response) => {
+                Ok(response)
+            }
+            Err(e) => {
+                Err(e)
+            }
+        }
+    }
 }
 
 pub(crate) async fn oanda_init(options: ServerLaunchOptions) {
@@ -167,25 +187,26 @@ pub(crate) async fn oanda_init(options: ServerLaunchOptions) {
         positions: Default::default(),
         instrument_symbol_map: Default::default(),
         quote_feed_broadcasters: Arc::new(Default::default()),
-        subscription_sender: sender,
+        quotebar_broadcasters: Arc::new(Default::default()),
+        quote_subscription_sender: sender,
         oanda_id_map: Default::default(),
         open_orders: Default::default(),
         id_stream_name_map: Default::default(),
         last_transaction_id: Default::default(),
     };
-    match oanda_accounts_list(&oanda_client).await {
+    match get_oanda_accounts_list(&oanda_client).await {
         Ok(accounts) => oanda_client.accounts = accounts.clone(),
         Err(e) => eprintln!("Error getting accounts: {:?}", e)
     };
     if let Some(account) = oanda_client.accounts.get(0) {
-        let instruments = oanda_instruments_download(&oanda_client, &account.account_id).await.unwrap_or_else(|| vec![]);
+        let instruments = get_oanda_instruments(&oanda_client, &account.account_id).await.unwrap_or_else(|| vec![]);
         for instrument in instruments {
             oanda_client.instrument_symbol_map.insert(instrument.name.clone(), Symbol::new(instrument.symbol_name.clone(), DataVendor::Oanda, instrument.market_type.clone()));
             oanda_client.instruments_map.insert(instrument.symbol_name.clone(), instrument);
         }
     }
     for account in &oanda_client.accounts {
-        match oanda_account_summary(&oanda_client, &account.account_id).await {
+        match get_oanda_account_summary(&oanda_client, &account.account_id).await {
             Ok(summary) => {
                 let info = AccountInfo {
                     account_id: account.account_id.clone(),
@@ -211,42 +232,83 @@ pub(crate) async fn oanda_init(options: ServerLaunchOptions) {
             }
             Err(e) => eprintln!("Error getting oanda account info: {}", e)
         }
+        match get_oanda_account_details(&oanda_client, &account.account_id).await {
+            Ok(details) => {
+                //eprintln!("Oanda account details: {:?}", details);
+                for position in details.positions {
+                    match parse_oanda_position(position, account.clone()) {
+                        Some(pos) => {
+                            oanda_client.positions.entry(account.account_id.clone()).or_insert(Default::default()).insert(pos.symbol_name.clone(), pos);
+                        }
+                        None => {}
+                    }
+                }
+
+            }
+            Err(e) => eprintln!("Error getting oanda account positions: {}", e)
+        }
     }
     let stream_limit = Arc::new(Semaphore::new(20));
     if let Some(account) = oanda_client.accounts.get(0) {
-        stream::handle_price_stream(oanda_client.streaming_client.clone(), oanda_client.instrument_symbol_map.clone(), oanda_client.instruments_map.clone(), oanda_client.quote_feed_broadcasters.clone(), receiver, account.clone(), stream_limit.clone(), oanda_client.stream_endpoint.clone(), oanda_client.api_key.clone()).await;
+        handle_price_stream(oanda_client.streaming_client.clone(), oanda_client.instrument_symbol_map.clone(), oanda_client.instruments_map.clone(), oanda_client.quote_feed_broadcasters.clone(), receiver, account.clone(), stream_limit.clone(), oanda_client.stream_endpoint.clone(), oanda_client.api_key.clone());
     }
+    let client =Arc::new(oanda_client);
+    handle_quotebar_subscribers(client.clone(), client.accounts.get(0).unwrap().account_id.clone());
     eprintln!("Oanda client initialized");
-    let _ = OANDA_CLIENT.set(Arc::new(oanda_client));
+    let _ = OANDA_CLIENT.set(client);
 }
 
 impl OandaClient {
-    pub async fn send_rest_request(&self, endpoint: &str) -> Result<Response, Error> {
-        let url = format!("{}{}", self.base_endpoint, endpoint);
-        let _permit = self.rate_limiter.acquire().await;
-        match self.client.get(&url)
-            .header("Authorization", format!("Bearer {}", self.api_key))
-            .send()
-            .await
-        {
-            Ok(response) => {
-                Ok(response)
-            }
-            Err(e) => {
-                Err(e)
-            }
+    pub async fn get_order_by_client_id (
+        &self,
+        account_id: &str,
+        client_order_id: &str,
+    ) -> Result<OandaOrderUpdate, FundForgeError> {
+        let request_uri = format!(
+            "/accounts/{}/orders/@{}",
+            account_id,
+            client_order_id
+        );
+
+        let response = self.send_rest_request(&request_uri).await
+            .map_err(|e| FundForgeError::ServerErrorDebug(
+                format!("Failed to get_requests order: {:?}", e)
+            ))?;
+
+        if !response.status().is_success() {
+            return Err(FundForgeError::ServerErrorDebug(
+                format!("Server returned error status: {}", response.status())
+            ));
         }
+
+        let content = response.text().await
+            .map_err(|e| FundForgeError::ServerErrorDebug(
+                format!("Failed to read response content: {:?}", e)
+            ))?;
+
+        let json: serde_json::Value = serde_json::from_str(&content)
+            .map_err(|e| FundForgeError::ServerErrorDebug(
+                format!("Failed to parse JSON response: {:?}", e)
+            ))?;
+
+        // Extract the order directly from the "order" field
+        let order: OandaOrderUpdate = serde_json::from_value(json["order"].clone())
+            .map_err(|e| FundForgeError::ServerErrorDebug(
+                format!("Failed to parse order data: {:?}", e)
+            ))?;
+
+        Ok(order)
     }
 
     pub async fn send_download_request(&self, endpoint: &str) -> Result<Response, Error> {
         let url = format!("{}{}", self.base_endpoint, endpoint);
         // Acquire a permit asynchronously
-        match self.quote_feed_broadcasters.is_empty() {
-            false => {
-                self.rate_limiter.acquire().await;
-                self.download_limiter.acquire().await;
-            },
-            true => self.rate_limiter.acquire().await,
+        // Use a guard pattern to ensure we release permits properly
+        let _rate_permit = self.rate_limiter.acquire().await;
+        let _download_permit = if !self.quote_feed_broadcasters.is_empty() {
+            Some(self.download_limiter.acquire().await)
+        } else {
+            None
         };
 
         match self.client.get(&url)
@@ -264,138 +326,4 @@ impl OandaClient {
         }
     }
 
-    pub async fn get_latest_bars(
-        &self,
-        symbol: Symbol,
-        base_data_type: BaseDataType,
-        resolution: Resolution,
-        account_id: &str,
-    ) -> Result<Vec<BaseDataEnum>, FundForgeError> {
-        let interval = resolution_to_oanda_interval(&resolution)
-            .ok_or_else(|| FundForgeError::ClientSideErrorDebug("Invalid resolution".to_string()))?;
-
-        let instrument = oanda_clean_instrument(&symbol.name).await;
-
-        // For bid/ask we use "BA" instead of separate "B" and "A" specifications
-        let candle_spec = match base_data_type {
-            BaseDataType::QuoteBars => format!("{}:{}:BA", instrument, interval),
-            _ => return Err(FundForgeError::ClientSideErrorDebug("Unsupported data type".to_string())),
-        };
-
-        // Use UTC alignment
-        let url = format!(
-            "/accounts/{}/candles/latest?candleSpecifications={}&smooth=false&alignmentTimezone=UTC",
-            account_id,
-            candle_spec
-        );
-
-        let response = match self.send_rest_request(&url).await {
-            Ok(response) => response,
-            Err(e) => {
-                return Err(FundForgeError::ClientSideErrorDebug(format!("Failed to get latest bars: {}", e)));
-            }
-        };
-
-        if !response.status().is_success() {
-            return Err(FundForgeError::ClientSideErrorDebug(format!(
-                "Failed to get latest bars: HTTP {}",
-                response.status()
-            )));
-        }
-
-        let content = response.text().await.map_err(|e| {
-            FundForgeError::ClientSideErrorDebug(format!("Failed to get response text: {}", e))
-        })?;
-
-        let json: serde_json::Value = serde_json::from_str(&content).map_err(|e| {
-            FundForgeError::ClientSideErrorDebug(format!("Failed to parse JSON: {}", e))
-        })?;
-
-        let latest_candles = json["latestCandles"].as_array().ok_or_else(|| {
-            FundForgeError::ClientSideErrorDebug("No latestCandles array in response".to_string())
-        })?;
-
-        let mut bars = Vec::new();
-
-        for candle_response in latest_candles {
-            let candles = candle_response["candles"].as_array().ok_or_else(|| {
-                FundForgeError::ClientSideErrorDebug("No candles array in response".to_string())
-            })?;
-
-            for price_data in candles {
-                // Only process complete candles
-                if !price_data["complete"].as_bool().unwrap_or(false) {
-                    continue;
-                }
-
-                let bar: BaseDataEnum = match base_data_type {
-                    BaseDataType::QuoteBars => {
-                        match oanda_quotebar_from_candle(price_data, symbol.clone(), resolution.clone()) {
-                            Ok(quotebar) => BaseDataEnum::QuoteBar(quotebar),
-                            Err(e) => {
-                                eprintln!("Failed to create quote bar: {}", e);
-                                continue;
-                            }
-                        }
-                    },
-                    BaseDataType::Candles => {
-                        match candle_from_candle(price_data, symbol.clone(), resolution.clone()) {
-                            Ok(candle) => BaseDataEnum::Candle(candle),
-                            Err(e) => {
-                                eprintln!("Failed to create candle: {}", e);
-                                continue;
-                            }
-                        }
-                    },
-                    _ => continue,
-                };
-
-                bars.push(bar);
-            }
-        }
-
-        bars.sort_by_key(|bar| bar.time_utc());
-        Ok(bars)
-    }
-
-    pub async fn update_latest_bars(
-        &self,
-        symbol: Symbol,
-        base_data_type: BaseDataType,
-        resolution: Resolution,
-    ) -> Result<(), FundForgeError> {
-        let data_storage = DATA_STORAGE.get().unwrap();
-        let account_id = if let Some(id) = self.accounts.get(0) {
-            id.account_id.clone()
-        } else {
-            return Err(FundForgeError::ClientSideErrorDebug("No account ID found".to_string()));
-        };
-
-
-        let bars = self.get_latest_bars(symbol, base_data_type, resolution, &account_id).await?;
-
-        if bars.is_empty() {
-            return Ok(());
-        }
-
-
-        const MAX_RETRIES: u32 = 3;
-        let mut retry_count = 0;
-        while retry_count < MAX_RETRIES {
-            match data_storage.save_data_bulk(bars.clone()).await {
-                Ok(_) => return Ok(()),
-                Err(e) => {
-                    retry_count += 1;
-                    if retry_count >= MAX_RETRIES {
-                        return Err(FundForgeError::ClientSideErrorDebug(
-                            format!("Failed to save latest bars after {} retries: {}", MAX_RETRIES, e)
-                        ));
-                    }
-                    tokio::time::sleep(Duration::from_secs(1)).await;
-                }
-            }
-        }
-
-        Ok(())
-    }
 }

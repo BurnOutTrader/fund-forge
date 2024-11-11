@@ -26,7 +26,7 @@ use crate::standardized_types::resolution::Resolution;
 use crate::strategies::strategy_events::StrategyEvent;
 use tokio::sync::broadcast;
 use tokio::sync::mpsc::Sender;
-use crate::standardized_types::base_data::history::get_historical_data;
+use crate::standardized_types::base_data::history::{get_compressed_historical_data};
 
 /// Manages all subscriptions for a strategy. each strategy has its own subscription handler.
 pub struct SubscriptionHandler {
@@ -230,7 +230,7 @@ impl SubscriptionHandler {
         match windows {
             Ok(windows) => {
                 for (subscription, window) in windows {
-                    //todo need to iter windows and get out the correct type of data
+                    //todo need to iter windows and get_requests out the correct type of data
                     match new_subscription.base_data_type {
                         BaseDataType::Ticks => {
                             self.tick_history.insert(subscription.clone(), RollingWindow::new(history_to_retain));
@@ -763,7 +763,7 @@ impl SymbolSubscriptionHandler {
                     warm_up_to_time - subtract_duration - Duration::days(3)
                 }
             };
-            let data = block_on(get_historical_data(vec![new_subscription.clone()], from_time, warm_up_to_time)).unwrap_or_else(|_e| BTreeMap::new());
+            let data = block_on(get_compressed_historical_data(vec![new_subscription.clone()], from_time, warm_up_to_time)).unwrap_or_else(|_e| BTreeMap::new());
             let mut history = RollingWindow::new(history_to_retain);
             for (_, slice) in data {
                 for data in slice.iter() {
@@ -783,13 +783,13 @@ impl SymbolSubscriptionHandler {
         warm_up_to_time: DateTime<Utc>,
         history_to_retain: usize,
     ) -> Result<(RollingWindow<BaseDataEnum>, DataSubscriptionEvent), DataSubscriptionEvent> {
-        if let Some(subscription) = self.primary_subscriptions.get(&new_subscription.subscription_resolution_type()) {
+        if let Some(subscription) = self.primary_subscriptions.get_requests(&new_subscription.subscription_resolution_type()) {
             if *subscription.value() == new_subscription {
                 return Err(DataSubscriptionEvent::FailedToSubscribe(new_subscription.clone(), format!("{}: Already subscribed: {}", new_subscription.symbol.data_vendor, new_subscription.symbol.name)))
             }
         }
-        if let Some(subscriptions) = self.secondary_subscriptions.get(&new_subscription.subscription_resolution_type()) {
-            if let Some(_subscription) = subscriptions.get(&new_subscription) {
+        if let Some(subscriptions) = self.secondary_subscriptions.get_requests(&new_subscription.subscription_resolution_type()) {
+            if let Some(_subscription) = subscriptions.get_requests(&new_subscription) {
                 return Err(DataSubscriptionEvent::FailedToSubscribe(new_subscription.clone(), format!("{}: Already subscribed: {}", new_subscription.symbol.data_vendor, new_subscription.symbol.name)))
             }
         }
@@ -827,7 +827,7 @@ impl SymbolSubscriptionHandler {
     /// The advantage is backetest speed. we should todo, we should also check here that we don't have a subscription of a lower resolution we can use, its pointless to use serialized bars in this case, might as well consolidate
     /// 2. Live or Live paper, it will subscribe to the most appropriate lowest resolution for the new subscription.
     /// Example for Live: if you subscribed to 1 min QuoteBars, it will try to subscribe to quote data, if that fails it will try to subscribe to the lowest res quotebar data.
-    /// for consolidating candles it will try to get tick data, failing that it will try to get quotes and failing that it will try to get other candles, as a last resort it will try to get quote bars.
+    /// for consolidating candles it will try to get_requests tick data, failing that it will try to get_requests quotes and failing that it will try to get_requests other candles, as a last resort it will try to get_requests quote bars.
     /// todo simplify live subscribing by just sending base subscription request to data server, and await callback for primary feed.
     async fn subscribe(
         &self,
@@ -867,7 +867,7 @@ impl SymbolSubscriptionHandler {
                         warm_up_to_time - subtract_duration - Duration::days(3)
                     }
                 };
-                let data = block_on(get_historical_data(vec![closure_subscription.clone()], from_time, warm_up_to_time)).unwrap_or_else(|_e| BTreeMap::new());
+                let data = block_on(get_compressed_historical_data(vec![closure_subscription.clone()], from_time, warm_up_to_time)).unwrap_or_else(|_e| BTreeMap::new());
                 let mut history = RollingWindow::new(history_to_retain);
                 for (_, slice) in data {
                     for data in slice.iter() {
@@ -1050,7 +1050,7 @@ impl SymbolSubscriptionHandler {
                                     }
                                 }
                             };
-                            let data = get_historical_data(vec![warm_up_sub.clone()], from_time, warm_up_to_time).await.unwrap_or_else(|_e| BTreeMap::new());
+                            let data = get_compressed_historical_data(vec![warm_up_sub.clone()], from_time, warm_up_to_time).await.unwrap_or_else(|_e| BTreeMap::new());
                             let multiplier = new_subscription.resolution.as_seconds() / warm_up_sub.resolution.as_seconds();
                             let mut history = RollingWindow::new(multiplier as usize * history_to_retain);
                             for (_, slice) in data {
@@ -1092,7 +1092,7 @@ impl SymbolSubscriptionHandler {
                                     warm_up_to_time - subtract_duration - Duration::days(5)
                                 }
                             };
-                            let data = get_historical_data(vec![new_primary.clone()], from_time, warm_up_to_time).await.unwrap_or_else(|_e| BTreeMap::new());
+                            let data = get_compressed_historical_data(vec![new_primary.clone()], from_time, warm_up_to_time).await.unwrap_or_else(|_e| BTreeMap::new());
                             let mut history = RollingWindow::new(history_to_retain);
                             for (_, slice) in data {
                                 for data in slice.iter() {

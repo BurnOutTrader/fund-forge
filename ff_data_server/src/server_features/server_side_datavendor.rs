@@ -136,7 +136,7 @@ pub trait VendorApiResponse: Sync + Send {
     /// return `DataServerResponse::SessionMarketHours` or `DataServerResponse::Error(FundForgeError)` //todo build historical closing hours function and add it to the function BaseDataEnum::serialize_and_save()
     /// `FundForgeError::ServerSideErrorDebug` or `FundForgeError::ClientSideErrorDebug` depending on who caused this problem.
     ///
-    /// We might be able to get this from the vendor when trading live, or we could use serialized lists.
+    /// We might be able to get_requests this from the vendor when trading live, or we could use serialized lists.
     ///
     /// In historical we use the datetime to determine the date, so we can determine the response.
     ///
@@ -176,12 +176,12 @@ pub trait VendorApiResponse: Sync + Send {
     ) -> DataServerResponse;
 
     /// This should be your conversion into the DataVendor implementations historical data download function, historical data will be downloaded at the end of each Trading Day or intraday if the symbol is being subscribed..
-    /// You are returning a join handle to the update task, so that we can await the task completion. You simply add data to the data base to be saved using DATA_STORAGE.get().unwrap().save_data_bulk(data: Vec<BaseDataEnum>);
+    /// You are returning a join handle to the update task, so that we can await the task completion. You simply add data to the data base to be saved using DATA_STORAGE.get_requests().unwrap().save_data_bulk(data: Vec<BaseDataEnum>);
     /// If there was no data during the period then we return None.
     /// You should only return data.is_closed == true data points. although the server will filter out open data, it will still be better.
     /// We are downloading from the last time downloaded or from the earliest data available with the broker, we only need to download data once, so we should initialize by getting everything if we can.
-    /// We can use the static DATA_STORAGE.get().unwrap().get_latest_data_point() to get the last time downloaded.
-    /// The data base will ignore any duplicate data and will also store data in the perfect order, all you need to do is get the data without missing data points.
+    /// We can use the static DATA_STORAGE.get_requests().unwrap().get_latest_data_point() to get_requests the last time downloaded.
+    /// The data base will ignore any duplicate data and will also store data in the perfect order, all you need to do is get_requests the data without missing data points.
     /// For the sake of saving memory, you can call the save_bulk_data method every 1 days worth of data. Remember we will be updating many symbols concurrently.
     /// ```rust
     /// use std::sync::Arc;
@@ -202,7 +202,7 @@ pub trait VendorApiResponse: Sync + Send {
     /// let resolution = Resolution::Seconds(1);
     ///
     /// let oldest_data: DateTime<Utc> = DateTime::from_timestamp(1325376000, 0).unwrap(); //the oldest data available from the vendor
-    /// let last_time: DateTime<Utc> = match DATA_STORAGE.get().unwrap().get_latest_data_time(&symbol, &resolution, &base_data_type).await {
+    /// let last_time: DateTime<Utc> = match DATA_STORAGE.get_requests().unwrap().get_latest_data_time(&symbol, &resolution, &base_data_type).await {
     ///             Ok(last_time) => match last_time {
     ///                 Some(last_time) => {
     ///                     last_time
@@ -226,6 +226,7 @@ pub trait VendorApiResponse: Sync + Send {
         from: DateTime<Utc>,
         to: DateTime<Utc>,
         from_back: bool,
-        progress_bar: ProgressBar
+        progress_bar: ProgressBar,
+        is_bulk_download: bool
     ) -> Result<(), FundForgeError>;
 }

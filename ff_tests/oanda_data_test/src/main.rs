@@ -5,7 +5,7 @@ use colored::Colorize;
 use rust_decimal::Decimal;
 use ff_standard_lib::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use ff_standard_lib::standardized_types::base_data::traits::BaseData;
-use ff_standard_lib::standardized_types::enums::{MarketType, StrategyMode};
+use ff_standard_lib::standardized_types::enums::{FuturesExchange, MarketType, StrategyMode};
 use ff_standard_lib::strategies::strategy_events::{StrategyEvent};
 use ff_standard_lib::standardized_types::subscriptions::{DataSubscription, SymbolName};
 use ff_standard_lib::strategies::fund_forge_strategy::FundForgeStrategy;
@@ -25,21 +25,21 @@ async fn main() {
     let (strategy_event_sender, strategy_event_receiver) = mpsc::channel(1000);
 
     let data_subscription = DataSubscription::new(
-        SymbolName::from("AUD-USD"),
-        DataVendor::Oanda,
-        Resolution::Seconds(5),
-        BaseDataType::QuoteBars,
-        MarketType::Forex
+        SymbolName::from("MNQ"),
+        DataVendor::Rithmic,
+        Resolution::Ticks(1),
+        BaseDataType::Ticks,
+        MarketType::Futures(FuturesExchange::CME)
     );
 
     let strategy = FundForgeStrategy::initialize(
-        StrategyMode::Live, // Backtest, Live, LivePaper
+        StrategyMode::Backtest, // Backtest, Live, LivePaper
         dec!(100000),
         Currency::USD,
-        NaiveDate::from_ymd_opt(2024, 10, 8).unwrap().and_hms_opt(0, 0, 0).unwrap(), // Starting date of the backtest is a NaiveDateTime not NaiveDate
-        NaiveDate::from_ymd_opt(2024, 10, 10).unwrap().and_hms_opt(0, 0, 0).unwrap(), // Ending date of the backtest is a NaiveDateTime not NaiveDate
+        NaiveDate::from_ymd_opt(2024, 11, 10).unwrap().and_hms_opt(0, 0, 0).unwrap(), // Starting date of the backtest is a NaiveDateTime not NaiveDate
+        NaiveDate::from_ymd_opt(2010, 11, 11).unwrap().and_hms_opt(0, 0, 0).unwrap(), // Ending date of the backtest is a NaiveDateTime not NaiveDate
         Australia::Sydney,                      // the strategy time zone
-        Duration::hours(1), // the warmup duration, the duration of historical data we will pump through the strategy to warm up indicators etc before the strategy starts executing.
+        Duration::hours(8), // the warmup duration, the duration of historical data we will pump through the strategy to warm up indicators etc before the strategy starts executing.
         vec![
             // Since we only have quote level test data, the 2 subscriptions will be created by consolidating the quote feed. Quote data will automatically be subscribed as primary data source.
             data_subscription.clone()
@@ -56,7 +56,7 @@ async fn main() {
 
         // Buffer Duration
         //strategy resolution in milliseconds, all data at a lower resolution will be consolidated to this resolution, if using tick data, you will want to set this at 100 or less depending on the data granularity
-        core::time::Duration::from_millis(100),
+        core::time::Duration::from_millis(60),
 
         // Enabled will launch the strategy registry handler to connect to a GUI, currently will crash if enabled
         false,
@@ -115,7 +115,7 @@ pub async fn on_data_received(
                                     if is_flat
                                         && qb.bid_close > qb.bid_open
                                     {
-                                        let _entry_order_id = strategy.enter_long(&qb.symbol.name, None, &account_1, None, dec!(1), String::from("Enter Long")).await;
+                                        let _entry_order_id = strategy.enter_long(&qb.symbol.name, None, &account_1, None, dec!(100000), String::from("Enter Long")).await;
                                         println!("Strategy: Enter Long, Time {}", strategy.time_local());
                                         last_side = LastSide::Long;
                                     }
@@ -127,12 +127,12 @@ pub async fn on_data_received(
                                     println!("Open pnl: {}, Is_short: {}, is_long:{} ", long_pnl, is_short, is_long);
 
                                     // LONG SL+TP
-                                    if is_long && long_pnl > dec!(10.0) {
+                                    if is_long && long_pnl > dec!(100.0) {
                                         let position_size = strategy.position_size(&account_1, &qb.symbol.name);
                                         let _exit_order_id = strategy.exit_long(&qb.symbol.name, None, &account_1, None, position_size, String::from("Exit Long Take Profit")).await;
                                         println!("Strategy: Exit Long Take Profit, Time {}", strategy.time_local());  // Fixed message
                                     } else if is_long
-                                        && long_pnl <= dec!(-10.0)
+                                        && long_pnl <= dec!(-100.0)
                                     {
                                         let position_size: Decimal = strategy.position_size(&account_1, &qb.symbol.name);
                                         let _exit_order_id = strategy.exit_long(&qb.symbol.name, None, &account_1, None, position_size, String::from("Exit Long Take Loss")).await;
@@ -149,6 +149,9 @@ pub async fn on_data_received(
 
                         BaseDataEnum::Quote(q) => {
                             println!("{}", q);
+                        }
+                        BaseDataEnum::Tick(t) => {
+                            println!("{}", t);
                         }
                         _ => {}
                     }

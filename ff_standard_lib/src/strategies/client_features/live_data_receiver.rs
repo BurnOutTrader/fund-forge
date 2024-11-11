@@ -255,7 +255,7 @@ pub async fn handle_live_data(
     let mut prefixed_msg = Vec::new();
     prefixed_msg.extend_from_slice(&length);
     prefixed_msg.extend_from_slice(&data);
-    // Lock the mutex to get mutable access
+    // Lock the mutex to get_requests mutable access
     match stream_client.write_all(&prefixed_msg).await {
         Ok(_) => { }
         Err(e) => {

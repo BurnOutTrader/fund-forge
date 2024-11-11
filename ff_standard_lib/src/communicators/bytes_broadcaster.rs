@@ -28,7 +28,7 @@ impl BytesBroadcaster {
 
     /// adds the subscriber to the subscriptions for this manager
     pub async fn subscribe(&self, subscriber: Arc<SecondaryDataSender>) -> usize {
-        // Clone the Arc to get a new reference to the same subscriber
+        // Clone the Arc to get_requests a new reference to the same subscriber
         // No need to lock the subscriber here since you're not accessing its interior
         let id = self.subscribers.len() + 1;
         self.subscribers.insert(id, subscriber);

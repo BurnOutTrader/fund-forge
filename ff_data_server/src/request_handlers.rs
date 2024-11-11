@@ -17,7 +17,7 @@ use tokio::sync::mpsc::{Receiver, Sender};
 use tokio::time::timeout;
 use tokio_rustls::server::TlsStream;
 use crate::server_features::database::DATA_STORAGE;
-use crate::server_side_brokerage::{account_info_response, accounts_response, commission_info_response, intraday_margin_required_response, overnight_margin_required_response, live_market_order, symbol_info_response, symbol_names_response, live_enter_long, live_exit_long, live_exit_short, live_enter_short, other_orders, cancel_order, flatten_all_for, update_order, cancel_orders_on_account};
+use crate::server_side_brokerage::{account_info_response, accounts_response, commission_info_response, live_market_order, symbol_info_response, symbol_names_response, live_enter_long, live_exit_long, live_exit_short, live_enter_short, other_orders, cancel_order, flatten_all_for, update_order, cancel_orders_on_account, exchange_rate_response};
 use crate::server_side_datavendor::{base_data_types_response, decimal_accuracy_response, markets_response, resolutions_response, symbols_response, tick_size_response};
 use ff_standard_lib::standardized_types::enums::StrategyMode;
 use ff_standard_lib::standardized_types::orders::{Order, OrderRequest, OrderType, OrderUpdateEvent};
@@ -54,6 +54,33 @@ pub async fn base_data_response(
     //eprintln!("Data: {:?}", data.len());
 
     DataServerResponse::HistoricalBaseData {callback_id, payload: data}
+}
+
+pub async fn compressed_file_response (
+    subscriptions: Vec<DataSubscription>,
+    from_time: String,
+    to_time: String,
+    callback_id: u64,
+) -> DataServerResponse {
+    let from_time: DateTime<Utc> = from_time.parse().unwrap();
+    let to_time: DateTime<Utc> = to_time.parse().unwrap();
+
+    if to_time.date_naive() >= Utc::now().date_naive() {
+        let mut tasks = vec![];
+        for subscription in &subscriptions {
+            tasks.push(DATA_STORAGE.get().unwrap().pre_subscribe_updates(subscription.symbol.clone(), subscription.resolution, subscription.base_data_type))
+        }
+        join_all(tasks).await;
+    }
+
+    let data = match DATA_STORAGE.get().expect("data folder not initialized").get_compressed_files_in_range(subscriptions, from_time, to_time).await {
+        Err(e) => return  DataServerResponse::Error { callback_id, error: FundForgeError::ServerErrorDebug(e.to_string())},
+        Ok(data) => data
+    };
+
+    //eprintln!("Data: {:?}", data.len());
+
+    DataServerResponse::CompressedHistoricalData {callback_id, payload: data}
 }
 
 pub async fn manage_async_requests(
@@ -102,6 +129,19 @@ pub async fn manage_async_requests(
                 // Handle the request and generate a response
                 match request {
                     DataServerRequest::Register(_) => {},
+                    DataServerRequest::ExchangeRate {
+                        callback_id,
+                        from_currency,
+                        to_currency,
+                        date_time_string,
+                        data_vendor,
+                        side
+                    } => {
+                        handle_callback(
+                            ||  exchange_rate_response(mode, from_currency, to_currency, date_time_string, data_vendor, side, callback_id),
+                            sender.clone()
+                        ).await
+                    }
                     DataServerRequest::DecimalAccuracy {
                         data_vendor,
                         callback_id,
@@ -126,21 +166,17 @@ pub async fn manage_async_requests(
                         from_time,
                         to_time
                     } => {
-                        match strategy_mode {
-                            StrategyMode::Backtest => {
-                                handle_callback(
-                                    || base_data_response(subscriptions, from_time, to_time, callback_id),
-                                    sender.clone()
-                                ).await
-                            }
-                            StrategyMode::Live | StrategyMode::LivePaperTrading => {
-                                handle_callback_no_timeouts(
-                                    || base_data_response(subscriptions, from_time, to_time, callback_id),
-                                    sender.clone()
-                                ).await
-                            }
-                        }
+                        handle_callback_no_timeouts(
+                            || base_data_response(subscriptions, from_time, to_time, callback_id),
+                            sender.clone()
+                        ).await
                     },
+
+                    DataServerRequest::GetCompressedHistoricalData { callback_id, subscriptions, from_time, to_time } => {
+                        handle_callback_no_timeouts(
+                            || compressed_file_response(subscriptions, from_time, to_time, callback_id),
+                            sender.clone()).await
+                    }
 
                     DataServerRequest::SymbolsVendor {
                         data_vendor,
@@ -219,24 +255,6 @@ pub async fn manage_async_requests(
                         || base_data_types_response(data_vendor, mode, stream_name, callback_id),
                         sender.clone()).await,
 
-                    DataServerRequest::IntradayMarginRequired {
-                        brokerage,
-                        callback_id,
-                        symbol_name,
-                        quantity,
-                    } => handle_callback(
-                        || intraday_margin_required_response(brokerage, mode, stream_name, symbol_name, quantity, callback_id),
-                        sender.clone()).await,
-
-                    DataServerRequest::OvernightMarginRequired {
-                        brokerage,
-                        callback_id,
-                        symbol_name,
-                        quantity
-                    } => handle_callback(
-                        || overnight_margin_required_response(brokerage, mode, stream_name, symbol_name, quantity, callback_id),
-                        sender.clone()).await,
-
                     DataServerRequest::SymbolNames { callback_id, brokerage, time } => {
                         let time = match time {
                             None => None,
@@ -287,7 +305,6 @@ pub async fn manage_async_requests(
                     DataServerRequest::RegisterStreamer { .. } => {
                         //no need to handle here
                     }
-                    DataServerRequest::Rates { .. } => {}
                 }
             });
         }

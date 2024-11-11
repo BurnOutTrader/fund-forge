@@ -1,21 +1,48 @@
+use std::str::FromStr;
 use chrono::{DateTime, Utc};
 use ff_standard_lib::messages::data_server_messaging::{DataServerResponse, FundForgeError};
 use crate::server_features::server_side_brokerage::BrokerApiResponse;
 use ff_standard_lib::standardized_types::broker_enum::Brokerage;
-use ff_standard_lib::standardized_types::enums::StrategyMode;
-use ff_standard_lib::standardized_types::new_types::Volume;
+use ff_standard_lib::standardized_types::enums::{OrderSide, StrategyMode};
+use ff_standard_lib::standardized_types::new_types::{TimeString};
 use ff_standard_lib::standardized_types::orders::{Order, OrderId, OrderUpdateEvent, OrderUpdateType};
 use ff_standard_lib::standardized_types::subscriptions::SymbolName;
-use ff_standard_lib::standardized_types::accounts::{Account, AccountId};
+use ff_standard_lib::standardized_types::accounts::{Account, AccountId, Currency};
 use ff_standard_lib::StreamName;
 use crate::bitget_api::api_client::BITGET_CLIENT;
 use crate::rithmic_api::api_client::{get_rithmic_client, RITHMIC_CLIENTS};
 use crate::test_api::api_client::TEST_CLIENT;
 use tokio::time::{timeout, Duration};
+use ff_standard_lib::standardized_types::datavendor_enum::DataVendor;
 use ff_standard_lib::standardized_types::orders::OrderUpdateEvent::OrderUpdateRejected;
 use crate::oanda_api::api_client::{get_oanda_client, OANDA_CLIENT};
+use crate::server_features::database::DATA_STORAGE;
 
 pub const TIMEOUT_DURATION: Duration = Duration::from_secs(10);
+
+#[allow(unused)]
+/// This request is only sent to Oanda server
+pub async fn exchange_rate_response(mode: StrategyMode, from_currency: Currency, to_currency: Currency, time_string: TimeString, data_vendor: DataVendor, side: OrderSide, callback_id: u64) -> DataServerResponse {
+    //todo, if live mode we request the api directly for the latest rate.
+    //todo get_requests exchange rate from hybrid storage,
+    let time = match DateTime::<Utc>::from_str(&time_string) {
+        Ok(time) => time,
+        Err(_) => return DataServerResponse::Error {
+            callback_id,
+            error: FundForgeError::ServerErrorDebug("Invalid time string".to_string())
+        }
+    };
+    match DATA_STORAGE.get().unwrap().get_exchange_rate(from_currency, to_currency, time, data_vendor, side).await {
+        Ok(rate) => DataServerResponse::ExchangeRate {
+            callback_id,
+            rate,
+        },
+        Err(e) => DataServerResponse::Error {
+            callback_id,
+            error: FundForgeError::ServerErrorDebug(format!("Exchange rate not found: {}", e))
+        }
+    }
+}
 
 /// return `DataServerResponse::CommissionInfo` or `DataServerResponse::Error(FundForgeError)`.
 pub async fn commission_info_response(mode: StrategyMode, brokerage: Brokerage, symbol_name: SymbolName, stream_name: StreamName, callback_id: u64) -> DataServerResponse {
@@ -123,58 +150,6 @@ pub async fn symbol_info_response(brokerage: Brokerage, mode: StrategyMode, stre
             Brokerage::Oanda => if let Some(client) = get_oanda_client() {
                 return client.symbol_info_response(mode, stream_name, symbol_name, callback_id).await
             }
-        }
-        DataServerResponse::Error{ callback_id, error: FundForgeError::ServerErrorDebug(format!("Unable to find api client instance for: {}", brokerage))}
-    };
-
-    timeout(TIMEOUT_DURATION, operation).await.unwrap_or_else(|_| DataServerResponse::Error { callback_id, error: FundForgeError::ServerErrorDebug("Operation timed out".to_string()) })
-}
-
-/// Margin required for x units of the symbol, the mode is passed in
-/// We can return hard coded values for backtesting and live values for live or live paper
-/// return `DataServerResponse::MarginRequired` or `DataServerResponse::Error(FundForgeError)`
-/// server or client error depending on who caused this problem
-pub async fn intraday_margin_required_response(brokerage: Brokerage, mode: StrategyMode, stream_name: StreamName, symbol_name: SymbolName, quantity: Volume, callback_id: u64) -> DataServerResponse {
-    let operation = async {
-        match brokerage {
-            Brokerage::Rithmic(system) => {
-                if let Some(client) = RITHMIC_CLIENTS.get(&system) {
-                    return client.intraday_margin_required_response(mode, stream_name, symbol_name, quantity, callback_id).await
-                }
-            },
-            Brokerage::Bitget => {
-                if let Some(client) = BITGET_CLIENT.get() {
-                    return client.intraday_margin_required_response(mode, stream_name, symbol_name, quantity, callback_id).await
-                }
-            }
-            Brokerage::Test => return TEST_CLIENT.intraday_margin_required_response(mode, stream_name, symbol_name, quantity, callback_id).await,
-            Brokerage::Oanda => if let Some(client) = get_oanda_client() {
-                return client.intraday_margin_required_response(mode, stream_name, symbol_name, quantity, callback_id).await
-            },
-        }
-        DataServerResponse::Error{ callback_id, error: FundForgeError::ServerErrorDebug(format!("Unable to find api client instance for: {}", brokerage))}
-    };
-
-    timeout(TIMEOUT_DURATION, operation).await.unwrap_or_else(|_| DataServerResponse::Error { callback_id, error: FundForgeError::ServerErrorDebug("Operation timed out".to_string()) })
-}
-
-pub async fn overnight_margin_required_response(brokerage: Brokerage, mode: StrategyMode, stream_name: StreamName, symbol_name: SymbolName, quantity: Volume, callback_id: u64) -> DataServerResponse {
-    let operation = async {
-        match brokerage {
-            Brokerage::Rithmic(system) => {
-                if let Some(client) = RITHMIC_CLIENTS.get(&system) {
-                    return client.overnight_margin_required_response(mode, stream_name, symbol_name, quantity, callback_id).await
-                }
-            },
-            Brokerage::Bitget => {
-                if let Some(client) = BITGET_CLIENT.get() {
-                    return client.overnight_margin_required_response(mode, stream_name, symbol_name, quantity, callback_id).await
-                }
-            }
-            Brokerage::Test => return TEST_CLIENT.overnight_margin_required_response(mode, stream_name, symbol_name, quantity, callback_id).await,
-            Brokerage::Oanda => if let Some(client) = get_oanda_client() {
-                return client.overnight_margin_required_response(mode, stream_name, symbol_name, quantity, callback_id).await
-            },
         }
         DataServerResponse::Error{ callback_id, error: FundForgeError::ServerErrorDebug(format!("Unable to find api client instance for: {}", brokerage))}
     };

@@ -44,11 +44,11 @@ async fn main() {
         vec![
             // Since we only have quote level test data, the 2 subscriptions will be created by consolidating the quote feed. Quote data will automatically be subscribed as primary data source.
             DataSubscription::new(
-                SymbolName::from("NAS100-USD"),
+                SymbolName::from("MNQ"),
                 DataVendor::Oanda,
                 Resolution::Seconds(5),
                 BaseDataType::QuoteBars,
-                MarketType::CFD
+                MarketType::CFD,
             ),
         ],
 
@@ -63,7 +63,7 @@ async fn main() {
 
         // Buffer Duration
         //strategy resolution in milliseconds, all data at a lower resolution will be consolidated to this resolution, if using tick data, you will want to set this at 100 or less depending on the data granularity
-        core::time::Duration::from_millis(100),
+        core::time::Duration::from_secs(1),
 
 
         // Enabled will launch the strategy registry handler to connect to a GUI, currently will crash if enabled
@@ -144,7 +144,7 @@ pub async fn on_data_received(
                                     continue;
                                 }
 
-                                if quotebar.resolution == Resolution::Seconds(5) && quotebar.symbol.name == "NAS100-USD" && quotebar.symbol.data_vendor == DataVendor::Oanda {
+                                if quotebar.resolution == Resolution::Seconds(5) && quotebar.symbol.name == "EUR-USD"  {
                                     // We are using a limit order to enter here, so we will manage our order differently. there are a number of ways to do this, this is probably not the best way.
                                     // Using Option<OrderId> for entry order as an alternative to is_long()
                                     if entry_order_id.is_some() {
@@ -156,7 +156,7 @@ pub async fn on_data_received(
                                     let last_bar: QuoteBar = strategy.bar_index(&base_data.subscription(), 1).unwrap();
 
                                     // Since our "heikin_3m_atr_5" indicator was consumed when we used the strategies auto mange strategy.subscribe_indicator() function,
-                                    // we can use the name we assigned to get the indicator. We unwrap() since we should have this value, if we don't our strategy logic has a flaw.
+                                    // we can use the name we assigned to get_requests the indicator. We unwrap() since we should have this value, if we don't our strategy logic has a flaw.
                                     let quotebar_3m_atr_5_current_values: IndicatorValues = strategy.indicator_index(&"quotebar_5s_atr_5".to_string(), 0).unwrap();
                                     let quotebar_3m_atr_5_last_values: IndicatorValues = strategy.indicator_index(&"quotebar_5s_atr_5".to_string(), 1).unwrap();
 
@@ -167,14 +167,14 @@ pub async fn on_data_received(
                                     // buy below the low of prior bar when atr is high and atr is increasing and the bars are closing higher, we are using a limit order which will cancel out at the end of the day
                                     if entry_order_id.is_none()
                                         && quotebar.bid_close > last_bar.bid_close
-                                        && current_heikin_3m_atr_5 >= dec!(0.3)
+                                        && current_heikin_3m_atr_5 >= dec!(0.00003)
                                         && current_heikin_3m_atr_5 > last_heikin_3m_atr_5
                                         && entry_order_id.is_none()
                                     {
                                         let limit_price = last_bar.ask_low;
                                         // we will set the time in force to Day, based on the strategy Tz of Australia::Sydney, I am not sure how this will work in live trading, TIF might be handled by manually sending cancel order on data server.
                                         let time_in_force = TimeInForce::Day;
-                                        entry_order_id = Some(strategy.limit_order(&quotebar.symbol.name, None, &account, None, dec!(1), OrderSide::Buy, limit_price, time_in_force, String::from("Enter Long Limit")).await);
+                                        entry_order_id = Some(strategy.limit_order(&quotebar.symbol.name, None, &account, None, dec!(1000), OrderSide::Buy, limit_price, time_in_force, String::from("Enter Long Limit")).await);
                                         bars_since_entry = 0;
                                     }
 
@@ -198,6 +198,7 @@ pub async fn on_data_received(
 
                                     //stop loss conditions
                                         let in_drawdown = strategy.in_drawdown(&account, &quotebar.symbol.name);
+
                                         if bars_since_entry >= 10
                                             && in_drawdown
                                         {
@@ -207,15 +208,16 @@ pub async fn on_data_received(
                                             entry_order_state = OrderState::Cancelled;
                                         }
 
-                                        // Add to our winners when atr is increasing and we get a new signal
+                                        // Add to our winners when atr is increasing and we get_requests a new signal
                                         let in_profit = strategy.in_profit(&account, &quotebar.symbol.name);
                                         let position_size: Decimal = strategy.position_size(&account, &quotebar.symbol.name);
+
                                         if  in_profit
-                                            && position_size < dec!(5)
+                                            && position_size < dec!(3000)
                                             && bars_since_entry == 3
                                             && current_heikin_3m_atr_5 >= last_heikin_3m_atr_5
                                         {
-                                            entry_order_id = Some(strategy.enter_long(&quotebar.symbol.name, None, &account, None, dec!(2), String::from("Add Long")).await);
+                                            entry_order_id = Some(strategy.enter_long(&quotebar.symbol.name, None, &account, None, dec!(1000), String::from("Add Long")).await);
                                         }
                                     }
                                 }

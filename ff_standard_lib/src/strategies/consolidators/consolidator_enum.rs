@@ -6,10 +6,10 @@ use crate::standardized_types::enums::{MarketType, StrategyMode};
 use crate::standardized_types::rolling_window::RollingWindow;
 use crate::standardized_types::subscriptions::{filter_resolutions, CandleType, DataSubscription};
 use chrono::{DateTime, Datelike, Duration, Utc, Weekday};
+use crate::product_maps::rithmic::maps::extract_symbol_from_contract;
 use crate::standardized_types::base_data::base_data_type::BaseDataType;
-use crate::standardized_types::base_data::history::get_historical_data;
+use crate::standardized_types::base_data::history::{get_compressed_historical_data};
 use crate::standardized_types::resolution::Resolution;
-use crate::standardized_types::futures_products::extract_symbol_from_contract;
 
 pub enum ConsolidatorEnum {
     Count(CountConsolidator),
@@ -172,7 +172,7 @@ impl ConsolidatorEnum {
 
         let mut history = RollingWindow::new(history_to_retain as usize);
         //eprintln!("Warmup from: {} to: {}", from_time, to_time);
-        let data = match get_historical_data(vec![base_subscription.clone()], from_time, to_time).await {
+        let data = match get_compressed_historical_data(vec![base_subscription.clone()], from_time, to_time).await {
             Ok(data) => data,
             Err(_) => {
                 //eprintln!("No data available or error: {}", e);

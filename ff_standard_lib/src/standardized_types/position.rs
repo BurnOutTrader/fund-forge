@@ -8,7 +8,7 @@ use rust_decimal_macros::dec;
 use serde_derive::{Deserialize, Serialize};
 use crate::helpers::converters::format_duration;
 use crate::helpers::decimal_calculators::calculate_theoretical_pnl;
-use crate::standardized_types::accounts::{Account, AccountId};
+use crate::standardized_types::accounts::{Account, AccountId, Currency};
 use crate::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use crate::standardized_types::broker_enum::Brokerage;
 use crate::standardized_types::enums::{PositionSide, StrategyMode};
@@ -303,7 +303,7 @@ impl Position {
     }
 
     /// Returns the open pnl for the paper position
-    pub(crate) fn update_base_data(&mut self, base_data: &BaseDataEnum) -> Decimal {
+    pub(crate) fn update_base_data(&mut self, base_data: &BaseDataEnum, account_currency: Currency) -> Decimal {
         if self.is_closed {
             return dec!(0)
         }
@@ -329,31 +329,37 @@ impl Position {
 
         // Calculate the open PnL
         self.open_pnl = calculate_theoretical_pnl(
+            self.account.brokerage,
             self.side,
             self.average_price,
             market_price,
             self.quantity_open,
             &self.symbol_info,
-            self.exchange_rate_multiplier
+            self.exchange_rate_multiplier,
+            account_currency
         );
 
         self.open_pnl.clone()
     }
 
     /// Reduces position size a position event, this event will include a booked_pnl property
-    pub(crate) async fn reduce_position_size(&mut self, market_price: Price, quantity: Volume, time: DateTime<Utc>, tag: String) -> PositionUpdateEvent {
+    pub(crate) async fn reduce_position_size(&mut self, market_price: Price, quantity: Volume, account_currency: Currency, exchange_rate: Decimal, time: DateTime<Utc>, tag: String) -> PositionUpdateEvent {
         if quantity > self.quantity_open {
             panic!("Something wrong with logic, ledger should know this not to be possible")
         }
 
+        self.exchange_rate_multiplier = exchange_rate;
+
         // Calculate booked PnL
         let booked_pnl = calculate_theoretical_pnl(
+            self.account.brokerage,
             self.side,
             self.average_price,
             market_price,
             quantity,
             &self.symbol_info,
-            self.exchange_rate_multiplier
+            self.exchange_rate_multiplier,
+            account_currency
         );
 
         // Update position
@@ -416,7 +422,7 @@ impl Position {
     }
 
     /// Adds to the paper position
-    pub(crate) async fn add_to_position(&mut self, mode: StrategyMode, is_simulating_pnl: bool, market_price: Price, quantity: Volume, time: DateTime<Utc>, tag: String) -> PositionUpdateEvent {
+    pub(crate) async fn add_to_position(&mut self, mode: StrategyMode, is_simulating_pnl: bool, account_currency: Currency, market_price: Price, quantity: Volume, time: DateTime<Utc>, tag: String) -> PositionUpdateEvent {
         // Correct the average price calculation with proper parentheses
         if mode != StrategyMode::Live || is_simulating_pnl {
             if self.quantity_open + quantity != Decimal::ZERO {
@@ -432,12 +438,14 @@ impl Position {
         if mode != StrategyMode::Live || is_simulating_pnl {
             // Recalculate open PnL
             self.open_pnl = calculate_theoretical_pnl(
+                self.account.brokerage,
                 self.side,
                 self.average_price,
                 market_price,
                 self.quantity_open,
                 &self.symbol_info,
-                self.exchange_rate_multiplier
+                self.exchange_rate_multiplier,
+                account_currency
             );
         }
 

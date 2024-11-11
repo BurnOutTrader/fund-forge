@@ -107,9 +107,12 @@ use std::collections::HashMap;
 use lazy_static::lazy_static;
 use rust_decimal::Decimal;
 use rust_decimal_macros::dec;
+use chrono::{DateTime, Datelike, NaiveTime, Utc};
+use chrono_tz::Tz;
 use crate::standardized_types::enums::FuturesExchange;
 use crate::standardized_types::symbol_info::{CommissionInfo, SymbolInfo};
 use crate::standardized_types::accounts::Currency;
+
 lazy_static! {
     static ref CODE_TO_EXCHANGE_MAP: HashMap<&'static str, FuturesExchange> = {
         let mut map = HashMap::new();
@@ -155,6 +158,7 @@ lazy_static! {
                     value_per_tick: dec!($value_per_tick),
                     tick_size: dec!($tick_size),
                     decimal_accuracy: $accuracy,
+                    base_currency: None,
                 });
             };
         }
@@ -487,9 +491,9 @@ lazy_static! {
     };
 }
 
-pub fn find_base_symbol(symbol: SymbolName) -> Option<String> {
+pub fn find_base_symbol(symbol: &SymbolName) -> Option<String> {
     // Check if the full symbol is in the list
-    if AVAILABLE_SYMBOL_NAMES.contains(&symbol) {
+    if AVAILABLE_SYMBOL_NAMES.contains(symbol) {
         return Some(symbol.to_string());
     }
 
@@ -512,7 +516,7 @@ pub fn find_base_symbol(symbol: SymbolName) -> Option<String> {
     None
 }
 
-pub fn get_available_symbol_names() -> &'static Vec<String> {
+pub fn get_available_rithmic_symbol_names() -> &'static Vec<String> {
     &AVAILABLE_SYMBOL_NAMES
 }
 
@@ -529,13 +533,13 @@ pub fn get_exchange_by_symbol_name(code: &str) -> Option<FuturesExchange> {
     }
 }
 
-pub fn get_symbol_info(symbol: &str) -> Result<SymbolInfo, String> {
+pub fn get_rithmic_symbol_info(symbol: &str) -> Result<SymbolInfo, String> {
     SYMBOL_INFO_MAP.get(symbol)
         .cloned()
         .ok_or_else(|| format!("{} not found", symbol))
 }
 
-pub fn get_intraday_margin(symbol: &str) -> Option<Decimal> {
+pub fn get_rithmic_intraday_margin_in_usd(symbol: &str) -> Option<Decimal> {
     INTRADAY_MARGINS.get(symbol).cloned()
 }
 
@@ -549,3 +553,451 @@ pub fn get_futures_commissions_info(symbol_name: &SymbolName) -> Result<Commissi
     }
     Err(format!("No Symbol Found: {}", symbol_name))
 }
+
+pub fn get_futures_trading_hours(symbol: &str) -> Option<&'static TradingHours> {
+    TRADING_HOURS.get(symbol).copied()
+}
+
+const fn const_time(hour: u32, min: u32, sec: u32) -> NaiveTime {
+    match NaiveTime::from_hms_opt(hour, min, sec) {
+        Some(t) => t,
+        None => panic!("Invalid time"),
+    }
+}
+
+const CME_HOURS: TradingHours = TradingHours {
+    timezone: chrono_tz::America::Chicago,
+    sunday: DaySession {
+        open: Some(const_time(17, 0, 0)),
+        close: None,
+    },
+    monday: DaySession {
+        open: None,
+        close: Some(const_time(16, 0, 0)),
+    },
+    tuesday: DaySession {
+        open: Some(const_time(17, 0, 0)),
+        close: Some(const_time(16, 0, 0)),
+    },
+    wednesday: DaySession {
+        open: Some(const_time(17, 0, 0)),
+        close: Some(const_time(16, 0, 0)),
+    },
+    thursday: DaySession {
+        open: Some(const_time(17, 0, 0)),
+        close: Some(const_time(16, 0, 0)),
+    },
+    friday: DaySession {
+        open: Some(const_time(17, 0, 0)),
+        close: Some(const_time(16, 0, 0)),
+    },
+    saturday: DaySession {
+        open: None,
+        close: None,
+    },
+};
+// CBOT Grains Schedule
+const CBOT_GRAINS_HOURS: TradingHours = TradingHours {
+    timezone: chrono_tz::America::Chicago,
+    sunday: DaySession {
+        open: Some(const_time(19, 0, 0)),  // 7:00 PM CT
+        close: None,                        // Continues into Monday
+    },
+    monday: DaySession {
+        open: None,                         // Continues from Sunday
+        close: Some(const_time(13, 20, 0)), // 1:20 PM CT
+    },
+    tuesday: DaySession {
+        open: Some(const_time(19, 0, 0)),  // 7:00 PM CT
+        close: Some(const_time(13, 20, 0)), // 1:20 PM CT
+    },
+    wednesday: DaySession {
+        open: Some(const_time(19, 0, 0)),  // 7:00 PM CT
+        close: Some(const_time(13, 20, 0)), // 1:20 PM CT
+    },
+    thursday: DaySession {
+        open: Some(const_time(19, 0, 0)),  // 7:00 PM CT
+        close: Some(const_time(13, 20, 0)), // 1:20 PM CT
+    },
+    friday: DaySession {
+        open: Some(const_time(19, 0, 0)),  // 7:00 PM CT
+        close: Some(const_time(13, 20, 0)), // 1:20 PM CT
+    },
+    saturday: DaySession {
+        open: None,
+        close: None,
+    },
+};
+const EUREX_HOURS: TradingHours = TradingHours {
+    timezone: chrono_tz::Europe::Berlin,
+    sunday: DaySession {
+        open: Some(const_time(8, 0, 0)),   // 08:00 CE(S)T Monday
+        close: None,
+    },
+    monday: DaySession {
+        open: None,
+        close: Some(const_time(22, 0, 0)),  // 22:00 CE(S)T
+    },
+    tuesday: DaySession {
+        open: Some(const_time(8, 0, 0)),    // 08:00 CE(S)T
+        close: Some(const_time(22, 0, 0)),  // 22:00 CE(S)T
+    },
+    wednesday: DaySession {
+        open: Some(const_time(8, 0, 0)),    // 08:00 CE(S)T
+        close: Some(const_time(22, 0, 0)),  // 22:00 CE(S)T
+    },
+    thursday: DaySession {
+        open: Some(const_time(8, 0, 0)),    // 08:00 CE(S)T
+        close: Some(const_time(22, 0, 0)),  // 22:00 CE(S)T
+    },
+    friday: DaySession {
+        open: Some(const_time(8, 0, 0)),    // 08:00 CE(S)T
+        close: Some(const_time(22, 0, 0)),  // 22:00 CE(S)T
+    },
+    saturday: DaySession {
+        open: None,
+        close: None,
+    },
+};
+
+
+lazy_static! {
+    pub static ref TRADING_HOURS: AHashMap<&'static str, &'static TradingHours> = {
+        let mut m = AHashMap::new();
+        // Micro E-mini Equity Index Futures
+        m.insert("MNQ", &CME_HOURS); // Micro Nasdaq
+        m.insert("MES", &CME_HOURS); // Micro S&P 500
+        m.insert("M2K", &CME_HOURS); // Micro Russell 2000
+        m.insert("MYM", &CME_HOURS); // Micro Dow
+
+        // E-mini Equity Index Futures
+        m.insert("NQ", &CME_HOURS);  // E-mini Nasdaq
+        m.insert("ES", &CME_HOURS);  // E-mini S&P 500
+        m.insert("RTY", &CME_HOURS); // E-mini Russell 2000
+        m.insert("YM", &CME_HOURS);  // E-mini Dow
+
+        // Standard Equity Index Futures
+        m.insert("SP", &CME_HOURS);  // Full-size S&P 500
+        m.insert("DJ", &CME_HOURS);  // Full-size Dow
+
+        // Sector Futures
+        m.insert("GD", &CME_HOURS);  // E-mini Financial Sector
+        m.insert("GI", &CME_HOURS);  // E-mini Technology Sector
+        m.insert("GK", &CME_HOURS);  // E-mini Energy Sector
+        m.insert("GV", &CME_HOURS);  // E-mini Health Care Sector
+        m.insert("GX", &CME_HOURS);  // E-mini Consumer Staples
+        m.insert("GZ", &CME_HOURS);  // E-mini Materials Sector
+
+        // Interest Rate Futures
+        m.insert("ZN", &CME_HOURS);  // 10-Year T-Note
+        m.insert("ZB", &CME_HOURS);  // 30-Year T-Bond
+        m.insert("ZF", &CME_HOURS);  // 5-Year T-Note
+        m.insert("ZT", &CME_HOURS);  // 2-Year T-Note
+        m.insert("UB", &CME_HOURS);  // Ultra T-Bond
+        m.insert("GE", &CME_HOURS);  // Eurodollar
+        m.insert("SR3", &CME_HOURS); // 3-Month SOFR
+
+        // FX Futures
+        m.insert("6E", &CME_HOURS);  // Euro FX
+        m.insert("6B", &CME_HOURS);  // British Pound
+        m.insert("6J", &CME_HOURS);  // Japanese Yen
+        m.insert("6C", &CME_HOURS);  // Canadian Dollar
+        m.insert("6A", &CME_HOURS);  // Australian Dollar
+        m.insert("6N", &CME_HOURS);  // New Zealand Dollar
+        m.insert("6S", &CME_HOURS);  // Swiss Franc
+        m.insert("E7", &CME_HOURS);  // E-mini Euro FX
+
+        // Micro FX Futures
+        m.insert("M6E", &CME_HOURS); // Micro Euro FX
+        m.insert("M6A", &CME_HOURS); // Micro AUD/USD
+        m.insert("M6B", &CME_HOURS); // Micro GBP/USD
+
+        // Metals and Commodities
+        m.insert("GC", &CME_HOURS);   // Gold Futures
+        m.insert("SI", &CME_HOURS);   // Silver Futures
+        m.insert("HG", &CME_HOURS);   // Copper Futures
+        m.insert("PL", &CME_HOURS);   // Platinum Futures
+        m.insert("PA", &CME_HOURS);   // Palladium Futures
+        m.insert("ALI", &CME_HOURS);  // Aluminum Futures
+        m.insert("QC", &CME_HOURS);   // E-mini Copper Futures
+
+        // Micro Metals
+        m.insert("MGC", &CME_HOURS);  // Micro Gold Futures
+        m.insert("SIL", &CME_HOURS);  // Micro Silver Futures
+        m.insert("MHG", &CME_HOURS);  // Micro Copper Futures
+        m.insert("M2K", &CME_HOURS);  // Micro Platinum
+        m.insert("MPA", &CME_HOURS);  // Micro Palladium
+
+        // E-mini Metals
+        m.insert("QO", &CME_HOURS);   // E-mini Gold Futures
+        m.insert("QI", &CME_HOURS);   // E-mini Silver Futures
+
+        // Options on Futures (same hours as underlying)
+        m.insert("OG", &CME_HOURS);   // Options on Gold Futures
+        m.insert("SO", &CME_HOURS);   // Options on Silver Futures
+        m.insert("HX", &CME_HOURS);   // Options on Copper Futures
+        m.insert("PO", &CME_HOURS);   // Options on Platinum Futures
+        m.insert("PAO", &CME_HOURS);  // Options on Palladium Futures
+
+        // Metal Spreads (trade same hours)
+        m.insert("GS", &CME_HOURS);   // Gold/Silver Spread
+        m.insert("GSP", &CME_HOURS);  // Gold/Platinum Spread
+        m.insert("GPS", &CME_HOURS);  // Gold/Palladium Spread
+        m.insert("SPS", &CME_HOURS);  // Silver/Platinum Spread
+        m.insert("SPA", &CME_HOURS);  // Silver/Palladium Spread
+
+        // CBOT Equities
+        m.insert("YM", &CME_HOURS);   // E-mini Dow ($5)
+        m.insert("MYM", &CME_HOURS);  // Micro E-mini Dow ($0.50)
+        m.insert("DJI", &CME_HOURS);  // DJIA Futures (Big Dow)
+        m.insert("DOW", &CME_HOURS);  // Dow Jones Industrial Average Futures
+
+        // Agricultural products use same CBOT_GRAINS_HOURS schedule
+        m.insert("ZC", &CBOT_GRAINS_HOURS);  // Corn
+        m.insert("ZS", &CBOT_GRAINS_HOURS);  // Soybeans
+        m.insert("ZW", &CBOT_GRAINS_HOURS);  // Wheat
+        m.insert("ZL", &CBOT_GRAINS_HOURS);  // Soybean Oil
+        m.insert("ZM", &CBOT_GRAINS_HOURS);  // Soybean Meal
+        m.insert("ZO", &CBOT_GRAINS_HOURS);  // Oats
+        m.insert("KE", &CBOT_GRAINS_HOURS);  // KC Wheat
+        m.insert("ZR", &CBOT_GRAINS_HOURS);  // Rough Rice
+
+        // Mini Agricultural products use same CBOT_GRAINS_HOURS schedule
+        m.insert("YC", &CBOT_GRAINS_HOURS);  // Mini-sized Corn
+        m.insert("YK", &CBOT_GRAINS_HOURS);  // Mini-sized Soybeans
+        m.insert("XW", &CBOT_GRAINS_HOURS);  // Mini-sized Wheat
+        m.insert("XC", &CBOT_GRAINS_HOURS);  // E-mini Corn
+        m.insert("XK", &CBOT_GRAINS_HOURS);  // E-mini Soybeans
+        m.insert("KE", &CBOT_GRAINS_HOURS);  // KC Wheat
+
+        // Add any product spreads that follow same schedule
+        m.insert("ZS-ZM", &CBOT_GRAINS_HOURS);  // Soybean-Soybean Meal Spread
+        m.insert("ZS-ZL", &CBOT_GRAINS_HOURS);  // Soybean-Soybean Oil Spread
+        m.insert("ZM-ZL", &CBOT_GRAINS_HOURS);  // Soybean Meal-Soybean Oil Spread
+
+        // German Index Products
+        m.insert("FDAX", &EUREX_HOURS);   // DAX Futures
+        m.insert("FDXM", &EUREX_HOURS);   // Mini-DAX Futures
+        m.insert("OGBL", &EUREX_HOURS);   // Euro-Bund Futures
+        m.insert("OGBM", &EUREX_HOURS);   // Mid-Term Euro-Bund Futures
+        m.insert("OGBS", &EUREX_HOURS);   // Short-Term Euro-Bund Futures
+
+        // European Index Products
+        m.insert("FESX", &EUREX_HOURS);   // EURO STOXX 50 Index Futures
+        m.insert("FESB", &EUREX_HOURS);   // EURO STOXX Banks Futures
+        m.insert("FESE", &EUREX_HOURS);   // EURO STOXX Select Dividend 30 Futures
+
+        // Volatility Products
+        m.insert("V2TX", &EUREX_HOURS);   // VSTOXX Futures
+        m.insert("EVIX", &EUREX_HOURS);   // Mini VSTOXX Futures
+
+        m
+    };
+}
+
+
+
+lazy_static! {
+    static ref ROLLOVER_DAYS: AHashMap<&'static str, u32> = {
+        let mut map = AHashMap::new();
+
+        // CME Contracts
+        map.insert("MES", 12);
+        map.insert("MNQ", 12);
+        map.insert("MYM", 12);
+        map.insert("M2K", 12);
+        map.insert("ES", 12);
+        map.insert("NQ", 12);
+        map.insert("YM", 12);
+        map.insert("RTY", 12);
+        map.insert("EMD", 12);
+        map.insert("6A", 12);
+        map.insert("6B", 12);
+        map.insert("6C", 12);
+        map.insert("6E", 12);
+        map.insert("6J", 12);
+        map.insert("6M", 12);
+        map.insert("6N", 12);
+        map.insert("6S", 12);
+        map.insert("E7", 12);
+        map.insert("J7", 12);
+        map.insert("MJY", 12);
+
+        // CBOT Contracts
+        map.insert("YM", 12);
+        map.insert("ZB", 12);
+        map.insert("ZC", 12);
+        map.insert("ZF", 12);
+        map.insert("ZL", 12);
+        map.insert("ZM", 12);
+        map.insert("ZN", 12);
+        map.insert("ZO", 12);
+        map.insert("ZR", 12);
+        map.insert("ZS", 12);
+        map.insert("ZT", 12);
+        map.insert("ZW", 12);
+        map.insert("XC", 12);
+        map.insert("XW", 12);
+        map.insert("XK", 12);
+
+        // COMEX Contracts
+        map.insert("GC", 28);
+        map.insert("HG", 28);
+        map.insert("QI", 25);
+        map.insert("QQ", 25);
+        map.insert("SI", 25);
+
+        // NYMEX Contracts
+        map.insert("CL", 18);
+        map.insert("HO", 25);
+        map.insert("NG", 28);
+        map.insert("RB", 25);
+        map.insert("PA", 25);
+        map.insert("PL", 25);
+        map.insert("QG", 28);
+        map.insert("QM", 18);
+        map.insert("MCL", 18);
+
+        // Micro Futures
+        map.insert("MGC", 28);
+        map.insert("SIL", 25);
+
+        map
+    };
+}
+
+pub fn extract_symbol_from_contract(contract: &str) -> String {
+    // Ensure the contract is long enough to contain a symbol and month-year code
+    if contract.len() < 4 {
+        return contract.to_string();
+    }
+
+    // Extract the symbol by removing the last three characters (month and year)
+    let symbol = &contract[..contract.len() - 3];
+
+    symbol.to_string()
+}
+
+pub fn get_front_month(symbol: &str, utc_time: DateTime<Utc>, is_quarterly: bool) -> String {
+    let rollover_day = *ROLLOVER_DAYS.get(symbol).unwrap_or(&15); // Default rollover day
+    let current_day = utc_time.day();
+
+    let month_code = if is_quarterly {
+        // Quarterly contract logic
+        match utc_time.month() {
+            1 | 2 => 'H',  // March
+            3 | 4 | 5 => 'M',  // June
+            6 | 7 | 8 => 'U',  // September
+            9 | 10 | 11 => 'Z', // December
+            12 => 'H', // Roll over to March next year
+            _ => return symbol.to_string(),
+        }
+    } else {
+        // Monthly contract logic
+        match utc_time.month() {
+            1 => 'F',  // January
+            2 => 'G',  // February
+            3 => 'H',  // March
+            4 => 'J',  // April
+            5 => 'K',  // May
+            6 => 'M',  // June
+            7 => 'N',  // July
+            8 => 'Q',  // August
+            9 => 'U',  // September
+            10 => 'V', // October
+            11 => 'X', // November
+            12 => 'Z', // December
+            _ => return symbol.to_string(),
+        }
+    };
+
+    let (month_code, year) = if current_day >= rollover_day {
+        if is_quarterly {
+            // Move to the next quarterly contract
+            let next_month_code = match month_code {
+                'H' => 'M',  // March -> June
+                'M' => 'U',  // June -> September
+                'U' => 'Z',  // September -> December
+                'Z' => 'H',  // December -> March next year
+                _ => month_code,
+            };
+            let next_year = if next_month_code == 'H' && month_code == 'Z' {
+                utc_time.year() % 100 + 1
+            } else {
+                utc_time.year() % 100
+            };
+            (next_month_code, next_year)
+        } else {
+            // Move to the next monthly contract
+            let next_month_code = match utc_time.month() + 1 {
+                1 => 'F',
+                2 => 'G',
+                3 => 'H',
+                4 => 'J',
+                5 => 'K',
+                6 => 'M',
+                7 => 'N',
+                8 => 'Q',
+                9 => 'U',
+                10 => 'V',
+                11 => 'X',
+                12 => 'Z',
+                _ => month_code,
+            };
+            let next_year = if next_month_code == 'F' {
+                utc_time.year() % 100 + 1
+            } else {
+                utc_time.year() % 100
+            };
+            (next_month_code, next_year)
+        }
+    } else {
+        (month_code, utc_time.year() % 100) // Stay in current month and year
+    };
+
+    format!("{}{}{}", symbol, month_code, year)
+}
+
+#[derive(Debug, Clone)]
+pub struct DaySession {
+    pub open: Option<NaiveTime>,
+    pub close: Option<NaiveTime>,
+}
+
+#[derive(Clone, Debug)]
+pub struct TradingHours {
+    pub timezone: Tz,
+    pub sunday: DaySession,
+    pub monday: DaySession,
+    pub tuesday: DaySession,
+    pub wednesday: DaySession,
+    pub thursday: DaySession,
+    pub friday: DaySession,
+    pub saturday: DaySession,
+}
+
+impl DaySession {
+    pub fn is_trading_time(&self, time: NaiveTime) -> bool {
+        match (self.open, self.close) {
+            (Some(open), Some(close)) => {
+                if close > open {
+                    // Normal session (e.g., 8:00 to 16:00)
+                    time >= open && time < close
+                } else {
+                    // Overnight session (e.g., 17:00 to 16:00 next day)
+                    time >= open || time < close
+                }
+            },
+            (Some(open), None) => {
+                // Session that starts but doesn't end on this day
+                time >= open
+            },
+            (None, Some(close)) => {
+                // Session that ends but didn't start on this day
+                time < close
+            },
+            (None, None) => false,
+        }
+    }
+}
+

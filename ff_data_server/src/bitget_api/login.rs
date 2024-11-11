@@ -108,7 +108,7 @@ fn generate_signature(secret_key: &str, timestamp: &str) -> Result<String, Box<d
     // Update the MAC instance with the message
     mac.update(message.as_bytes());
 
-    // Finalize the MAC computation and get the result
+    // Finalize the MAC computation and get_requests the result
     let result = mac.finalize().into_bytes();
 
     // Base64 encode the result

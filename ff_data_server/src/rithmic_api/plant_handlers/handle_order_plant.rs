@@ -165,12 +165,16 @@ pub async fn match_order_plant_id(
 
                 if let Some(route) = &msg.trade_route {
                     if let Some(exchange) = &msg.exchange {
+                        if msg.fcm_id != client.fcm_id {
+                            return;
+                        }
                         //println!("Trade Routes Response (Template ID: 311) from Server: {:?}", msg);
                         let exchange = match FuturesExchange::from_string(&exchange) {
                             Ok(exchange) => exchange,
                             Err(_) => return,
                         };
                         if let Some(fcm_id) = msg.fcm_id {
+
                             if let Some(mut system_map) = client.default_trade_route.get_mut(&client.system) {
                                 system_map.insert((fcm_id, exchange.clone()), route.clone());
                                 //println!("Rihtmic {} Trade Route Added: {:?}", exchange, route);
@@ -382,9 +386,32 @@ pub async fn match_order_plant_id(
         },
         350 => {
             if let Ok(msg) = TradeRoute::decode(&message_buf[..]) {
+                if msg.fcm_id != client.fcm_id {
+                    return;
+                }
                 // Trade Route
                 // From Server
-                println!("Trade Route (Template ID: 350) from Server: {:?}", msg);
+                //println!("Trade Route (Template ID: 350) from Server: {:?}", msg);
+                if let Some(route) = &msg.trade_route {
+                    if let Some(exchange) = &msg.exchange {
+                        //println!("Trade Routes Response (Template ID: 311) from Server: {:?}", msg);
+                        let exchange = match FuturesExchange::from_string(&exchange) {
+                            Ok(exchange) => exchange,
+                            Err(_) => return,
+                        };
+                        if let Some(fcm_id) = msg.fcm_id {
+                            if let Some(mut system_map) = client.default_trade_route.get_mut(&client.system) {
+                                system_map.insert((fcm_id, exchange.clone()), route.clone());
+                                //println!("Rihtmic {} Trade Route Added: {:?}", exchange, route);
+                            } else {
+                                let mut map = AHashMap::new();
+                                map.insert((fcm_id, exchange.clone()), route.clone());
+                                client.default_trade_route.insert(client.system.clone(), map);
+                                //println!("Rihtmic {} Trade Route Added: {:?}", exchange, route);
+                            }
+                        }
+                    }
+                }
             }
         },
         351 => {
@@ -413,7 +440,7 @@ pub async fn match_order_plant_id(
                         Ok(notify) => notify
                     };
 
-                    let tag = match ID_TO_TAG.get(&order_id) {
+                    let tag = match ID_TO_TAG.get_requests(&order_id) {
                         None => {
                             eprintln!("Tag not found for order: {}", order_id);
                             return;
@@ -539,7 +566,7 @@ pub async fn match_order_plant_id(
                     let (symbol_name, symbol_code) = match msg.symbol {
                         None => return,
                         Some(code) => {
-                            let symbol_name = match find_base_symbol(code.clone()) {
+                            let symbol_name = match find_base_symbol(&code) {
                                 None => return,
                                 Some(symbol_name) => symbol_name
                             };

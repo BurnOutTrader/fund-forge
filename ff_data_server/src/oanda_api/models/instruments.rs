@@ -1,9 +1,7 @@
-use rust_decimal::Decimal;
 use std::fmt;
 use std::str::FromStr;
 use chrono::Duration;
 use serde::{Serialize, Deserialize};
-use crate::oanda_api::models::primitives::{DateTime, InstrumentName};
 
 /// Summary: The granularity of a candlestick
 #[derive(Serialize, Deserialize, PartialEq, Ord, PartialOrd, Eq, Clone, Debug)]
@@ -128,90 +126,4 @@ impl fmt::Display for CandlestickGranularity {
             CandlestickGranularity::M => "M",
         })
     }
-}
-
-/// Summary: The day of the week to use for candlestick granularities with weekly alignment.
-#[derive(Serialize, Deserialize, Debug)]
-pub enum WeeklyAlignment {
-    Monday,
-    Tuesday,
-    Wednesday,
-    Thursday,
-    Friday,
-    Saturday,
-    Sunday,
-}
-
-/// Summary: The prices data (open, high, low, close) for the Candlestick representation.
-#[derive(Serialize, Deserialize, Debug)]
-pub struct CandlestickData {
-    #[serde(rename = "o")]
-    pub open: Decimal,
-    #[serde(rename = "h")]
-    pub high: Decimal,
-    #[serde(rename = "l")]
-    pub low: Decimal,
-    #[serde(rename = "c")]
-    pub close: Decimal,
-}
-
-/// Summary: The Candlestick representation
-#[derive(Serialize, Deserialize, Debug)]
-pub struct Candlestick {
-    pub time: DateTime,
-    pub bid: Option<CandlestickData>,
-    pub ask: Option<CandlestickData>,
-    pub mid: Option<CandlestickData>,
-    pub volume: i32,
-    pub complete: bool,
-}
-
-/// Summary: Response containing instrument, granularity, and a list of quotebars.
-#[derive(Serialize, Deserialize, Debug)]
-pub struct CandlestickResponse {
-    pub instrument: InstrumentName,
-    pub granularity: CandlestickGranularity,
-    pub candles: Vec<Candlestick>,
-}
-
-/// Summary: The representation of an instrument’s order book at a point in time
-#[derive(Serialize, Deserialize, Debug)]
-pub struct OrderBook {
-    pub instrument: InstrumentName,
-    pub time: DateTime,
-    pub price: Decimal,
-    #[serde(rename = "bucketWidth")]
-    pub bucket_width: Decimal,
-    pub buckets: Vec<OrderBookBucket>,
-}
-
-/// Summary: The order book data for a partition of the instrument’s prices.
-#[derive(Serialize, Deserialize, Debug)]
-pub struct OrderBookBucket {
-    pub price: Decimal,
-    #[serde(rename = "longCountPercent")]
-    pub long_count_percent: Decimal,
-    #[serde(rename = "shortCountPercent")]
-    pub short_count_percent: Decimal,
-}
-
-/// Summary: The representation of an instrument’s position book at a point in time
-#[derive(Serialize, Deserialize, Debug)]
-pub struct PositionBook {
-    pub instrument: InstrumentName,
-    pub time: DateTime,
-    pub price: Decimal,
-    #[serde(rename = "bucketWidth")]
-    pub bucket_width: Decimal,
-    pub buckets: Vec<PositionBookBucket>,
-}
-
-/// Summary: The position book data for a partition of the instrument’s prices.
-#[derive(Serialize, Deserialize, Debug)]
-pub struct PositionBookBucket {
-    pub price: Decimal,
-    #[serde(rename = "longCountPercent")]
-    pub long_count_percent: Decimal,
-    #[serde(rename = "shortCountPercent")]
-    pub short_count_percent: Decimal,
 }

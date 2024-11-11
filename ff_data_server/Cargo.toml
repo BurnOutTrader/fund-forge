@@ -7,6 +7,7 @@ license-file = "LICENCE.md"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+flate2 = "*"
 strum = "*"
 futures-util = "0.3.30"
 chrono-tz ="*"
@@ -53,3 +54,4 @@ memmap2 = "0.9.5"
 rand = "0.8.5"
 socket2 = "0.5.7"
 tempfile = "3.13.0"
+time = "0.3.36"

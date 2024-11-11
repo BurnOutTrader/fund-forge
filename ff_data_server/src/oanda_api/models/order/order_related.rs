@@ -70,7 +70,7 @@ pub enum CancellableOrderType {
 
 /// The current state of the Order.
 #[derive(Serialize, Deserialize, Debug)]
-pub enum OrderState {
+pub enum OandaOrderState {
     #[serde(rename = "PENDING")]
     Pending,
     #[serde(rename = "FILLED")]

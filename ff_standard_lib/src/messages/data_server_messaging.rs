@@ -1,5 +1,5 @@
 use std::collections::{BTreeMap};
-use crate::standardized_types::enums::{MarketType, StrategyMode, SubscriptionResolutionType};
+use crate::standardized_types::enums::{MarketType, OrderSide, StrategyMode, SubscriptionResolutionType};
 use crate::standardized_types::subscriptions::{DataSubscription, Symbol, SymbolName};
 use crate::standardized_types::bytes_trait::Bytes;
 use rkyv::{Archive, Deserialize, Serialize};
@@ -10,7 +10,7 @@ use crate::standardized_types::accounts::{Account, AccountId, AccountInfo, Curre
 use crate::standardized_types::broker_enum::Brokerage;
 use crate::standardized_types::datavendor_enum::DataVendor;
 use crate::standardized_types::base_data::base_data_type::BaseDataType;
-use crate::standardized_types::new_types::{Price, Volume};
+use crate::standardized_types::new_types::{Price};
 use crate::standardized_types::orders::{OrderRequest, OrderUpdateEvent};
 use crate::standardized_types::position::Position;
 use crate::standardized_types::symbol_info::{CommissionInfo, FrontMonthInfo, SymbolInfo};
@@ -54,12 +54,6 @@ pub enum StreamRequest {
 /// * [`SynchronousRequestType::HistoricalBaseData`](ff_data_vendors::networks::RequestType) : Requests the Base data for the specified subscriptions. Server returns a ResponseType::HistoricalBaseData with the data payload.
 pub enum DataServerRequest {
     Register(StrategyMode),
-
-    Rates{
-        callback_id: u64,
-        currency: Currency,
-        time: String
-    },
 
     HistoricalBaseDataRange {
         callback_id: u64,
@@ -122,18 +116,6 @@ pub enum DataServerRequest {
     OrderRequest {
         request: OrderRequest
     },
-    IntradayMarginRequired {
-        callback_id: u64,
-        quantity: Volume,
-        brokerage: Brokerage,
-        symbol_name: SymbolName
-    },
-    OvernightMarginRequired {
-        callback_id: u64,
-        quantity: Volume,
-        brokerage: Brokerage,
-        symbol_name: SymbolName
-    },
     PrimarySubscriptionFor {
         callback_id: u64,
         subscription: DataSubscription
@@ -143,7 +125,20 @@ pub enum DataServerRequest {
         brokerage: Brokerage,
         symbol_name: SymbolName
     },
-
+    ExchangeRate {
+        callback_id: u64,
+        from_currency: Currency,
+        to_currency: Currency,
+        date_time_string: String,
+        data_vendor: DataVendor,
+        side: OrderSide
+    },
+    GetCompressedHistoricalData {
+        callback_id: u64,
+        subscriptions: Vec<DataSubscription>,
+        from_time: String,
+        to_time: String
+    },
     Accounts{callback_id: u64, brokerage: Brokerage},
     SymbolNames{callback_id: u64, brokerage: Brokerage, time: Option<String>},
     RegisterStreamer{port: u16, secs: u64, subsec: u32},
@@ -175,16 +170,15 @@ impl DataServerRequest {
             DataServerRequest::StreamRequest   { .. } => {}
             DataServerRequest::Register {  .. } => {}
             DataServerRequest::OrderRequest { .. } => {}
-            DataServerRequest::IntradayMarginRequired { callback_id, .. } => {*callback_id = id}
             DataServerRequest::Accounts { callback_id, .. } => {*callback_id = id}
             DataServerRequest::PrimarySubscriptionFor { callback_id, .. } => {*callback_id = id}
             DataServerRequest::SymbolNames { callback_id, .. } => {*callback_id = id}
             DataServerRequest::RegisterStreamer{..} => {}
             DataServerRequest::CommissionInfo { callback_id, .. } => {*callback_id = id}
-            DataServerRequest::OvernightMarginRequired { callback_id, .. } => {*callback_id = id}
             DataServerRequest::HistoricalBaseDataRange { callback_id, .. } => {*callback_id = id}
             DataServerRequest::WarmUpResolutions { callback_id, .. } => {*callback_id = id}
-            DataServerRequest::Rates{ callback_id, .. } => {*callback_id = id}
+            DataServerRequest::ExchangeRate { callback_id, .. } => {*callback_id = id}
+            DataServerRequest::GetCompressedHistoricalData { callback_id, .. } => {*callback_id = id}
         }
     }
 }
@@ -205,6 +199,11 @@ DataServerResponse {
     HistoricalBaseData {
         callback_id: u64,
         payload: BTreeMap<i64, TimeSlice>
+    },
+
+    CompressedHistoricalData {
+        callback_id: u64,
+        payload: Vec<Vec<u8>>
     },
 
     /// Responds with `instruments` as `Vec<InstrumentEnum>` which contains:
@@ -230,6 +229,11 @@ DataServerResponse {
         callback_id: u64,
         subscription_resolutions_types: Vec<SubscriptionResolutionType>,
         market_type: MarketType
+    },
+
+    ExchangeRate {
+        callback_id: u64,
+        rate: Decimal,
     },
 
     /// Provides the client with an error message
@@ -278,20 +282,6 @@ DataServerResponse {
     SymbolInfoMany {
         callback_id: u64,
         info_vec: Vec<SymbolInfo>
-    },
-
-    /// if `price: None` is returned the engine will treat the product as an un-leveraged product and calculate cash used as 1 to 1
-    IntradayMarginRequired {
-        callback_id: u64,
-        symbol_name: SymbolName,
-        price: Option<Price>
-    },
-
-    /// if `price: None` is returned the engine will treat the product as an un-leveraged product and calculate cash used as 1 to 1
-    OvernightMarginRequired {
-        callback_id: u64,
-        symbol_name: SymbolName,
-        price: Option<Price>
     },
 
     SubscribeResponse {
@@ -358,7 +348,6 @@ impl DataServerResponse {
             DataServerResponse::ValuePerTick  { callback_id,.. } => Some(callback_id.clone()),
             DataServerResponse::SymbolInfo  { callback_id,.. } => Some(callback_id.clone()),
             DataServerResponse::SymbolInfoMany  { callback_id,.. } => Some(callback_id.clone()),
-            DataServerResponse::IntradayMarginRequired { callback_id,.. } => Some(callback_id.clone()),
             DataServerResponse::BaseDataTypes { callback_id,.. } => Some(callback_id.clone()),
             DataServerResponse::SubscribeResponse { .. } => None,
             DataServerResponse::UnSubscribeResponse { .. } => None,
@@ -368,12 +357,12 @@ impl DataServerResponse {
             DataServerResponse::SymbolNames {callback_id, ..} => Some(callback_id.clone()),
             DataServerResponse::RegistrationResponse(_) => None,
             DataServerResponse::CommissionInfo { callback_id,.. } => Some(callback_id.clone()),
-            DataServerResponse::OvernightMarginRequired { callback_id, .. } => Some(callback_id.clone()),
             DataServerResponse::FrontMonthInfo { callback_id, .. } => Some(callback_id.clone()),
-            //DataServerResponse::Rates { callback_id, .. } => Some(callback_id.clone()),
             DataServerResponse::LiveAccountUpdates { .. } => None,
             DataServerResponse::LivePositionUpdates { .. } => None,
-            DataServerResponse::AsyncError { .. } => None
+            DataServerResponse::AsyncError { .. } => None,
+            DataServerResponse::ExchangeRate { callback_id, .. } => Some(callback_id.clone()),
+            DataServerResponse::CompressedHistoricalData { callback_id, .. } => Some(callback_id.clone()),
         }
     }
 }

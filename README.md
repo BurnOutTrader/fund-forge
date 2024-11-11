@@ -16,6 +16,23 @@ See below for all the free historical data you will ever need.
 12-11-24: Added a fix to avoid memory crash when downloading a large amount of high resolution data in short periods.
 12-11-24: A Added a compression algorithm to reduce the size of files by 98%, a 200mb tick file is now <5mb. This will have a massive impact on the amount of data we can process when running strategies on remote machines.
 
+### Current State and Future Development
+The platform is currently in a semi-working state, think of it as a proof of concept, there is a lot of untested functionality, both in backtesting and live trading.
+
+The core logic is done, but it will be improved and made more readable and resilient.
+
+The first objective was to get everything 'sort of working' so that I could get some practical experience with the engine and brokerage api's and try to establish a consistent pattern.
+Now that Oanda and Rithmic are in a sort of working state, I will finish the Bitget api, once the bitget api is complete I will be focused on consolidating the code base into a consistent design pattern, to make maintenance and future api implementations easier.
+This step will be done slowly by testing strategies under live and historical conditions, improving functions to handle errors and refactoring as I go to create a simple, easy to understand standard for future integrations.
+
+### Things I am considering
+- Implementing ledger as an enum so that we can better utilise the functionality of each brokerage while having a set of common standardised functions for backtesting.
+- Make live accounts always synchronise with the brokerage, so that if there is a bug in our strategy logic the strategy will adjust its positions to reflect the brokerage.
+- Simplify subscribing and unsubscribing data, by allowing the trader to specify subscriptions as either consolidator or primary data.
+- Improve download functions.
+- Build data server logging.
+- The data base is not properly set up to handle fundamental data, it will save, but only 1 data point per vendor per time, I will probably remove fundamental data from BaseDataEnum and make it a unique StrategyEvent.
+
 ### Initial Setup
 1. Install [rust](https://www.rust-lang.org/tools/install).
 2. You can download some data I have already parsed [here](https://1drv.ms/f/s!AllvRPz1aHoThKQU2hQbLEBqZyQ5RA?e=nzilot), or you need to set up a [Rithmic account](ff_data_server/src/rithmic_api/RITHMIC_SETUP.md) or [Oanda account](ff_data_server/src/oanda_api/OANDA_SETUP.md). [Free Historical Data](#historical-data)
@@ -70,6 +87,8 @@ You can download data that I have already parsed [here](https://1drv.ms/f/s!Allv
 Or you can configure the data server to download any desired data for you automatically.
 Just see the setup guide for your data vendor/brokerage.
 
+If backtesting with 1 hour data resolution, set the buffer duration >= 1 second to avoid slow back tests.
+
 ### Oanda Data
 Historical Oanda Data is Available as QuoteBars
 ```rust
@@ -113,25 +132,6 @@ See the Rithmic file [here](ff_data_server/data/credentials/rithmic_credentials/
 In the example image 'Test' represents `DataVendor::Test`
 
 ![folder_structure.png](misc/folder_structure.png)
-
-## Current State of Live Trading
-***The server now properly handles multiple connects and disconnects when using rithmic, the problem was in shutting down rithmic broadcasters (removing broadcaster while holding a mut ref)***
-
-The platform is capable of live trading with rithmic, but it is not 100% stable or complete.
-
-No History functions have been built yet, so indicators and subscriptions will not auto warm up.
-
-Many problem scenarios have not been tested, although the strategy seems to maintain good synchronisation with rithmic, even with `synchronise_accounts` disabled.
-
-Live trading with rithmic requires you to use the `product_code` in place of `symbol_name` for functions like `strategy.is_long()`.
-
-When placing orders with rithmic you can pass in the exact product code you want to trade, or you can use the symbol name and the rithmic api will choose the front month for you.
-
-The order events will return both the symbol_name and product_code, should you let the api find the front month for you.
-
-Currently, you can only subscribe to data using symbol_name, but this will be fixed to allow trading calendar spreads.
-
-Oanda and Bitget apis are not functional and will cause a crash if you specify them as `DataVendor` or `Brokerage`
 
 ## Overview
 The engine is designed to provide simple abstractions for building strategies with an object-oriented strategy instance and familiar associated helper functions for adding indicators,

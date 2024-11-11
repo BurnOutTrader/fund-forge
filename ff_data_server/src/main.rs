@@ -105,7 +105,7 @@ pub struct ServerLaunchOptions {
     #[structopt(
         short = "m",
         long = "downloads",
-        default_value = "20"
+        default_value = "5"
     )]
     pub max_downloads: usize,
 
@@ -150,12 +150,12 @@ static SHUTDOWN_CHANNEL: Lazy<broadcast::Sender<()>> = Lazy::new(|| {
     sender
 });
 
-// Function to get the sender
+// Function to get_requests the sender
 fn get_shutdown_sender() -> &'static broadcast::Sender<()> {
     &SHUTDOWN_CHANNEL
 }
 
-// Function to get a new receiver
+// Function to get_requests a new receiver
 pub fn subscribe_server_shutdown() -> broadcast::Receiver<()> {
     SHUTDOWN_CHANNEL.subscribe()
 }
@@ -170,7 +170,11 @@ async fn main() -> io::Result<()> {
     let options = ServerLaunchOptions::from_args();
     let _ = DATA_FOLDER.set(options.data_folder.clone());
     println!("Data Folder: {:?}", get_data_folder());
-    let _ = DATA_STORAGE.set(Arc::new(HybridStorage::new(Duration::from_secs(900), options.clone(), options.max_downloads, options.update_seconds)));
+    let _ = DATA_STORAGE.set(Arc::new(HybridStorage::new(Duration::from_secs(450), options.clone(), options.max_downloads, options.update_seconds)));
+
+    // Start the background task for cache management
+    HybridStorage::start_cache_management(DATA_STORAGE.get().unwrap().clone());
+
     let cert = Path::join(&options.ssl_auth_folder, "cert.pem");
     let key = Path::join(&options.ssl_auth_folder, "key.pem");
 

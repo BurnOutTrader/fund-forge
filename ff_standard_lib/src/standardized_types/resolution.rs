@@ -45,7 +45,7 @@ impl FromStr for Resolution {
         let number = parts[0].parse::<u64>()
             .map_err(|_| format!("Invalid number in {}", s))?;
 
-        // Trim any whitespace and get first character
+        // Trim any whitespace and get_requests first character
         match parts[1].trim().chars().next() {
             Some('I') => Ok(Resolution::Instant),
             Some('T') => Ok(Resolution::Ticks(number)),

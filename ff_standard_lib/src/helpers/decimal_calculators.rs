@@ -1,41 +1,83 @@
 use rust_decimal::prelude::{FromPrimitive, ToPrimitive, Zero};
 use rust_decimal::Decimal;
 use rust_decimal_macros::dec;
+use crate::standardized_types::accounts::Currency;
+use crate::standardized_types::broker_enum::Brokerage;
 use crate::standardized_types::enums::{PositionSide};
 use crate::standardized_types::new_types::{Price, Volume};
 use crate::standardized_types::symbol_info::SymbolInfo;
 
 pub fn calculate_theoretical_pnl(
+    brokerage: Brokerage,
     side: PositionSide,
     entry_price: Price,
     market_price: Price,
     quantity: Volume,
     symbol_info: &SymbolInfo,
     exchange_rate_multiplier: Decimal,
+    account_currency: Currency,
 ) -> Price {
-    // Calculate the price difference based on position side
-    let raw_ticks = match side {
-        PositionSide::Long => {
-            let ticks = ((market_price - entry_price) / symbol_info.tick_size).round_dp(symbol_info.decimal_accuracy);
-            if ticks == dec!(0.0) {
-                return dec!(0.0)
+    let raw_ticks = match brokerage {
+        Brokerage::Rithmic(_) => {
+            match side {
+                PositionSide::Long => {
+                    let ticks = round_to_tick_size((market_price - entry_price) / symbol_info.tick_size, symbol_info.tick_size);
+                    if ticks == dec!(0.0) {
+                        return dec!(0.0)
+                    }
+                    ticks
+                },
+                PositionSide::Short => {
+                    let ticks = round_to_tick_size((entry_price - market_price) / symbol_info.tick_size, symbol_info.tick_size);
+                    if ticks == dec!(0.0) {
+                        return dec!(0.0)
+                    }
+                    ticks
+                },
             }
-            ticks
-        },
-        PositionSide::Short => {
-            let ticks = ((entry_price - market_price) / symbol_info.tick_size).round_dp(symbol_info.decimal_accuracy);
-            if ticks == dec!(0.0) {
-                return dec!(0.0)
-            }
-            ticks
-        },
+        }
+        _ => {
+            match side {
+                PositionSide::Long => {
+                    let ticks = ((market_price - entry_price) / symbol_info.tick_size).round_dp(symbol_info.decimal_accuracy);
+                    if ticks == dec!(0.0) {
+                        return dec!(0.0)
+                    }
+                    ticks
+                },
+                PositionSide::Short => {
+                    let ticks = ((entry_price - market_price) / symbol_info.tick_size).round_dp(symbol_info.decimal_accuracy);
+                    if ticks == dec!(0.0) {
+                        return dec!(0.0)
+                    }
+                    ticks
+                },
+        }
+    }
+
     };
 
-    // Calculate PnL in the symbol's currency
     let pnl = raw_ticks * symbol_info.value_per_tick * quantity;
 
-    // Convert to account currency
-    pnl * exchange_rate_multiplier
+    // Convert PnL to account currency
+    if let Some(base_curr) = symbol_info.base_currency {
+        if account_currency == base_curr {
+            // Case 1: Account currency is base currency
+            // Example: AUD account trading AUD/JPY
+            pnl / entry_price
+        } else if account_currency == symbol_info.pnl_currency {
+            // Case 2: Account currency is quote/pnl currency
+            // Example: JPY account trading AUD/JPY
+            pnl
+        } else {
+            // Case 3: Account currency is neither
+            // Example: EUR account trading AUD/JPY
+            pnl / exchange_rate_multiplier
+        }
+    } else {
+        // Not a currency pair
+        pnl * exchange_rate_multiplier
+    }
 }
 
 /// Safely divides two f64 values using Decimal for precision.
@@ -63,7 +105,7 @@ pub fn round_to_tick_size(value: Decimal, tick_size: Decimal) -> Decimal {
     // Divide the value by the tick size, then round to the nearest integer
     let ticks = (value / tick_size).round();
 
-    // Multiply the rounded number of ticks by the tick size to get the final rounded value
+    // Multiply the rounded number of ticks by the tick size to get_requests the final rounded value
     ticks * tick_size
 }
 
