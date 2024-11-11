@@ -33,8 +33,8 @@ async fn main() {
         StrategyMode::Backtest,
         dec!(100000),
         Currency::USD,
-        NaiveDate::from_ymd_opt(2019, 10, 5).unwrap().and_hms_opt(0, 0, 0).unwrap(),
-        NaiveDate::from_ymd_opt(2019, 11, 15).unwrap().and_hms_opt(0, 0, 0).unwrap(),
+        NaiveDate::from_ymd_opt(2024, 11, 11).unwrap().and_hms_opt(0, 0, 0).unwrap(),
+        NaiveDate::from_ymd_opt(2024, 11, 12).unwrap().and_hms_opt(0, 0, 0).unwrap(),
         Australia::Sydney,
         Duration::hours(1),
         vec![
@@ -45,18 +45,18 @@ async fn main() {
                 BaseDataType::Ticks,
                 MarketType::Futures(FuturesExchange::CME),
             ),
-            DataSubscription::new_custom(
+         /*   DataSubscription::new_custom(
                 symbol_name.clone(),
                 DataVendor::Rithmic,
                 Resolution::Seconds(15),
                 MarketType::Futures(FuturesExchange::CME),
                 CandleType::CandleStick
-            )
+            )*/
         ],
         false,
         100,
         strategy_event_sender,
-        core::time::Duration::from_millis(5),
+        core::time::Duration::from_millis(100),
         false,
         false,
         true,
@@ -84,7 +84,7 @@ pub async fn on_data_received(
                 for base_data in time_slice.iter() {
                     match base_data {
                         BaseDataEnum::Tick(tick) => {
-                           /* let msg = format!("{} {} Tick: {}, {}, Aggressor: {}", tick.symbol.name, tick.time_local(strategy.time_zone()), tick.price, tick.volume, tick.aggressor);
+                            let msg = format!("{} {} Tick: {}, {}, Aggressor: {}", tick.symbol.name, tick.time_local(strategy.time_zone()), tick.price, tick.volume, tick.aggressor);
                             match tick.aggressor {
                                 Aggressor::Buy => {
                                     println!("{}", msg.as_str().bright_green());
@@ -96,7 +96,7 @@ pub async fn on_data_received(
                                 Aggressor::None => {
                                     println!("{}", msg.as_str().cyan());
                                 },
-                            }*/
+                            }
                         }
                         BaseDataEnum::Candle(candle) => {
                             // Place trades based on the AUD-CAD Heikin Ashi Candles

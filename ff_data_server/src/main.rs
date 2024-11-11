@@ -172,9 +172,6 @@ async fn main() -> io::Result<()> {
     println!("Data Folder: {:?}", get_data_folder());
     let _ = DATA_STORAGE.set(Arc::new(HybridStorage::new(Duration::from_secs(450), options.clone(), options.max_downloads, options.update_seconds)));
 
-    //todo Uncomment this to compress data downloaded before 11.11.2024, recomment after you have ran it to completion.
-    //DATA_STORAGE.get().unwrap().compress_historical_data(10).await?;
-
     // Start the background task for cache management
     HybridStorage::start_cache_management(DATA_STORAGE.get().unwrap().clone());
 

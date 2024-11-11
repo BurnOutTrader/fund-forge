@@ -29,25 +29,7 @@ The currency conversion will also work with Bitget and crypto, allowing us to sp
 Added a fix to avoid memory crash when downloading a large amount of high resolution data in short periods (like the initial download), I did not know about this critical flaw in the data base until I downlaoded the 1 hour data sets.
 It has been fixed.
 
-I Have added a compression algorithm to Base data, Any data downloaded prior to this announcement will need to be compressed or deleted.
-
-To compress data:
-
-1. uncomment this line in `ff_data_server/src/main.rs` 
-```rust
- // Uncomment this to compress data downloaded before 11.11.2024
-DATA_STORAGE.get().unwrap().compress_historical_data(10).await?;
-```
-
-3. Let the server run until it says `Listening on xxxx port` Do Not Stop the server or your data will need to be deleted
-
-3. re-comment the line before restarting the server. do not run this fn twice.
-
-Your data should be converted.
-
-This update results in significant storage savings > 92%, and will allow us to download and store more data in the future.
-
-This should be the last change to the Data base regarding file formatting.
+I Have added a compression algorithm to Base data, Any data downloaded prior to this announcement will need to be deleted.
 
 ### Current State and Future Development
 The platform is currently in a semi-working state, think of it as a proof of concept, there is a lot of untested functionality, both in backtesting and live trading.
