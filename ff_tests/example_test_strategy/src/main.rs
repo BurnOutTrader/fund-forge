@@ -44,11 +44,11 @@ async fn main() {
         vec![
             // Since we only have quote level test data, the 2 subscriptions will be created by consolidating the quote feed. Quote data will automatically be subscribed as primary data source.
             DataSubscription::new(
-                SymbolName::from("EUR-USD"),
+                SymbolName::from("NAS100-USD"),
                 DataVendor::Oanda,
                 Resolution::Seconds(5),
                 BaseDataType::QuoteBars,
-                MarketType::Forex
+                MarketType::CFD,
             ),
         ],
 
@@ -63,7 +63,7 @@ async fn main() {
 
         // Buffer Duration
         //strategy resolution in milliseconds, all data at a lower resolution will be consolidated to this resolution, if using tick data, you will want to set this at 100 or less depending on the data granularity
-        core::time::Duration::from_millis(100),
+        core::time::Duration::from_secs(1),
 
 
         // Enabled will launch the strategy registry handler to connect to a GUI, currently will crash if enabled
@@ -81,11 +81,11 @@ async fn main() {
             IndicatorName::from("quotebar_5s_atr_5"),
               // The subscription for the indicator
               DataSubscription::new(
-                  SymbolName::from("EUR-USD"),
+                  SymbolName::from("NAS100-USD"),
                   DataVendor::Oanda,
                   Resolution::Seconds(5),
                   BaseDataType::QuoteBars,
-                  MarketType::Forex,
+                  MarketType::CFD,
               ),
 
               // history to retain

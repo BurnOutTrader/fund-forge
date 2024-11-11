@@ -928,6 +928,7 @@ dependencies = [
  "dashmap",
  "env_logger",
  "ff_standard_lib",
+ "flate2",
  "futures",
  "futures-util",
  "hmac",
