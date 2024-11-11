@@ -350,7 +350,7 @@ impl VendorApiResponse for RithmicBrokerageClient {
         todo!()
     }
 
-    async fn update_historical_data(&self, symbol: Symbol, base_data_type: BaseDataType, resolution: Resolution, from: DateTime<Utc>, to: DateTime<Utc>, from_back: bool, progress_bar: ProgressBar) -> Result<(), FundForgeError> {
+    async fn update_historical_data(&self, symbol: Symbol, base_data_type: BaseDataType, resolution: Resolution, from: DateTime<Utc>, to: DateTime<Utc>, from_back: bool, progress_bar: ProgressBar, is_bulk_download: bool) -> Result<(), FundForgeError> {
         const SYSTEM: SysInfraType = SysInfraType::HistoryPlant;
         const TIME_NEGATIVE: std::time::Duration = std::time::Duration::from_secs(1);
         let symbol_name = symbol.name.clone();
@@ -456,7 +456,7 @@ impl VendorApiResponse for RithmicBrokerageClient {
 
             if !data_map.is_empty() {
                 let save_data: Vec<BaseDataEnum> = data_map.clone().into_values().collect();
-                if let Err(e) = data_storage.save_data_bulk(save_data).await {
+                if let Err(e) = data_storage.save_data_bulk(save_data, is_bulk_download).await {
                     progress_bar.set_message(format!("Failed to save data for: {} - {}, {}", window_start, window_end, e));
                     break 'main_loop;
                 }

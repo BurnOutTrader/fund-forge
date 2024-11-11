@@ -226,6 +226,7 @@ pub trait VendorApiResponse: Sync + Send {
         from: DateTime<Utc>,
         to: DateTime<Utc>,
         from_back: bool,
-        progress_bar: ProgressBar
+        progress_bar: ProgressBar,
+        is_bulk_download: bool
     ) -> Result<(), FundForgeError>;
 }
