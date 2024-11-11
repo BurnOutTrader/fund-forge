@@ -391,7 +391,7 @@ impl VendorApiResponse for RithmicBrokerageClient {
                 .progress_chars("=>-")
         );
 
-        let mut resolution_seconds = match resolution.as_seconds() > 0 {
+        let resolution_seconds = match resolution.as_seconds() > 0 {
             true => resolution.as_seconds(),
             false => 1,
         };
