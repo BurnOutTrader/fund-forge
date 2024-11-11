@@ -759,7 +759,10 @@ impl HybridStorage {
         match file.write_all(&bytes) {
             Ok(_) => {},
             Err(e) => {
-                // Attempt to remove the corrupt file
+                // Drop the file handle first
+                drop(file);
+
+                // Now attempt to remove the corrupt file
                 if let Err(remove_err) = std::fs::remove_file(&file_path) {
                     eprintln!("Failed to remove corrupt file {}: {}", file_path.display(), remove_err);
                 }
