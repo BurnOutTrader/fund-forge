@@ -661,25 +661,58 @@ impl HybridStorage {
     async fn get_or_create_mmap(&self, file_path: &Path) -> io::Result<Arc<Mmap>> {
         let path_str = file_path.to_string_lossy().to_string();
 
+        // If file is in cache, update last accessed time and return it
         if let Some(mmap) = self.mmap_cache.get(&path_str) {
             self.cache_last_accessed.insert(path_str.clone(), Utc::now());
-            Ok(Arc::clone(mmap.value()))
-        } else {
-            let semaphore = self.file_locks.entry(file_path.to_str().unwrap().to_string()).or_insert(Semaphore::new(1));
-            let _permit = match semaphore.acquire().await {
-                Ok(p) => p,
-                Err(e) => {
-                    panic!("Thread Tripwire, Error aquiring save permit: {}", e)
-                }
-            };
-            let file = File::open(file_path)?;
-            let mmap = Arc::new(unsafe { Mmap::map(&file)? });
-            self.mmap_cache.insert(path_str.clone(), Arc::clone(&mmap));
-
-            self.cache_last_accessed.insert(path_str.clone(), Utc::now());
-
-            Ok(mmap)
+            return Ok(Arc::clone(mmap.value()));
         }
+
+        // Get oldest file outside of any locks
+        let oldest_path = if self.mmap_cache.len() >= 50 {
+            self.cache_last_accessed
+                .iter()
+                .min_by_key(|entry| entry.value().clone())
+                .map(|entry| entry.key().clone())
+        } else {
+            None
+        };
+
+        // Remove oldest file if needed
+        if let Some(oldest_path) = oldest_path {
+            // Remove the semaphore first to get ownership
+            if let Some((_, semaphore)) = self.file_locks.remove(&oldest_path) {
+                let _permit = semaphore.acquire().await.map_err(|e| {
+                    io::Error::new(
+                        io::ErrorKind::Other,
+                        format!("Error acquiring lock for cache cleanup: {}", e)
+                    )
+                })?;
+
+                // Now safely remove from other caches
+                self.mmap_cache.remove(&oldest_path);
+                self.cache_last_accessed.remove(&oldest_path);
+            }
+        }
+
+        // Rest of the function...
+        let semaphore = self.file_locks
+            .entry(file_path.to_str().unwrap().to_string())
+            .or_insert(Semaphore::new(1));
+
+        let _permit = semaphore.acquire().await.map_err(|e| {
+            io::Error::new(
+                io::ErrorKind::Other,
+                format!("Thread Tripwire, Error acquiring save permit: {}", e)
+            )
+        })?;
+
+        let file = File::open(file_path)?;
+        let mmap = Arc::new(unsafe { Mmap::map(&file)? });
+
+        self.mmap_cache.insert(path_str.clone(), Arc::clone(&mmap));
+        self.cache_last_accessed.insert(path_str.clone(), Utc::now());
+
+        Ok(mmap)
     }
 
     /// This first updates the file on disk, then the file in memory is replaced with the new file, therefore we do not have saftey issues.
