@@ -25,6 +25,30 @@ The currency conversion will also work with Bitget and crypto, allowing us to sp
 - 10-11-2024: (Untested due to weekend) Added the ability to subscribe to live quote bars with Oanda, bars will be delayed by about 10ms, since we have to manually request bars on a 5-second loop. This allows us to directly use quote bars in live strategies and therefore use strategy warm up. if speed is an issue we should subscribe quotes and use strategy.subscribe_override() for quote bar subscriptions. 
 - 10-11-2024: I have done a lot of work on Oanda live trading, but nothing is tested, now I have 2 brokers, semi working my focus will be to simplify the standardised fuctions and types, get the code base clean and into some sort of standardised pattern. This will take some time, I intend to do this slowly when experimenting with backtesting and live trading.
 
+### 11-11-2024 CRITICAL UPDATE IF YOU HAVE DOWNLOADED DATA BEFORE THIS DATE PLEASE READ
+Added a fix to avoid memory crash when downloading a large amount of high resolution data in short periods (like the initial download), I did not know about this critical flaw in the data base until I downlaoded the 1 hour data sets.
+It has been fixed.
+
+I Have added a compression algorithm to Base data, Any data downloaded prior to this announcement will need to be compressed or deleted.
+
+To compress data:
+
+1. uncomment this line in `ff_data_server/src/main.rs` 
+```rust
+ // Uncomment this to compress data downloaded before 11.11.2024
+DATA_STORAGE.get().unwrap().compress_historical_data(10).await?;
+```
+
+3. Let the server run until it says `Listening on xxxx port` Do Not Stop the server or your data will need to be deleted
+
+3. re-comment the line before restarting the server. do not run this fn twice.
+
+Your data should be converted.
+
+This update results in significant storage savings > 92%, and will allow us to download and store more data in the future.
+
+This should be the last change to the Data base regarding file formatting.
+
 ### Current State and Future Development
 The platform is currently in a semi-working state, think of it as a proof of concept, there is a lot of untested functionality, both in backtesting and live trading.
 
@@ -94,6 +118,8 @@ You can download data that I have already parsed [here](https://1drv.ms/f/s!Allv
 
 Or you can configure the data server to download any desired data for you automatically.
 Just see the setup guide for your data vendor/brokerage.
+
+If backtesting with 1 hour data resolution, set the buffer duration >= 1 second to avoid slow back tests.
 
 ### Oanda Data
 Historical Oanda Data is Available as QuoteBars
