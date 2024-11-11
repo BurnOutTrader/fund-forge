@@ -1,3 +1,4 @@
+use std::cmp::min;
 use strum::IntoEnumIterator;
 use std::collections::{BTreeMap, HashMap};
 use std::fmt::Display;
@@ -61,6 +62,7 @@ pub struct HybridStorage {
 
 impl HybridStorage {
     pub fn new(clear_cache_duration: Duration, options: ServerLaunchOptions, max_concurrent_downloads: usize, update_seconds: u64) -> Self {
+        let max_concurrent_downloads= min(max_concurrent_downloads, 40);
         let storage = Self {
             base_path: options.data_folder.clone().join("historical"),
             mmap_cache: Arc::new(DashMap::new()),
@@ -753,7 +755,20 @@ impl HybridStorage {
 
         file.seek(SeekFrom::Start(0))?;
         file.set_len(0)?;
-        file.write_all(&bytes)?;
+
+        match file.write_all(&bytes) {
+            Ok(_) => {},
+            Err(e) => {
+                // Drop the file handle first
+                drop(file);
+
+                // Now attempt to remove the corrupt file
+                if let Err(remove_err) = std::fs::remove_file(&file_path) {
+                    eprintln!("Failed to remove corrupt file {}: {}", file_path.display(), remove_err);
+                }
+                return Err(e);
+            }
+        }
 
         if !is_bulk_download {
             let mmap = unsafe { Mmap::map(&file)? };
