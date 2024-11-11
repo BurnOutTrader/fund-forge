@@ -105,7 +105,7 @@ pub struct ServerLaunchOptions {
     #[structopt(
         short = "m",
         long = "downloads",
-        default_value = "20"
+        default_value = "5"
     )]
     pub max_downloads: usize,
 
@@ -170,7 +170,7 @@ async fn main() -> io::Result<()> {
     let options = ServerLaunchOptions::from_args();
     let _ = DATA_FOLDER.set(options.data_folder.clone());
     println!("Data Folder: {:?}", get_data_folder());
-    let _ = DATA_STORAGE.set(Arc::new(HybridStorage::new(Duration::from_secs(900), options.clone(), options.max_downloads, options.update_seconds)));
+    let _ = DATA_STORAGE.set(Arc::new(HybridStorage::new(Duration::from_secs(30), options.clone(), options.max_downloads, options.update_seconds)));
     let cert = Path::join(&options.ssl_auth_folder, "cert.pem");
     let key = Path::join(&options.ssl_auth_folder, "key.pem");
 
