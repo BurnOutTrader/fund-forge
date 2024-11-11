@@ -391,7 +391,11 @@ impl VendorApiResponse for RithmicBrokerageClient {
                 .progress_chars("=>-")
         );
 
-        let data_save_length = (Duration::days(2).num_seconds() / resolution.as_seconds()) as usize;
+        let mut resolution_seconds = match resolution.as_seconds() > 0 {
+            true => resolution.as_seconds(),
+            false => 1,
+        };
+        let data_save_length = (Duration::days(2).num_seconds() / resolution_seconds) as usize;
 
         let mut empty_windows = 0;
         let mut combined_data = BTreeMap::new();
@@ -457,6 +461,8 @@ impl VendorApiResponse for RithmicBrokerageClient {
                 }
             };
 
+            combined_data.extend(data_map);
+
             if combined_data.len() >= data_save_length {
                 let save_data: Vec<BaseDataEnum> = combined_data.clone().into_values().collect();
                 if let Err(e) = data_storage.save_data_bulk(save_data, is_bulk_download).await {
@@ -464,8 +470,6 @@ impl VendorApiResponse for RithmicBrokerageClient {
                     break 'main_loop;
                 }
                 combined_data.clear();
-            } else {
-                combined_data.extend(data_map);
             }
 
             // Check if we've caught up to the desired end or current time
