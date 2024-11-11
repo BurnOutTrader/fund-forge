@@ -178,6 +178,8 @@ impl HistoricalEngine {
                 }
             };
 
+            //eprintln!("Time Slices: {:?}", time_slices);
+
             let mut time = last_time;
             'day_loop: while time <= to_time {
                 time += buffer_duration;

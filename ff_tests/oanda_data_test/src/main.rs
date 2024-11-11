@@ -5,7 +5,7 @@ use colored::Colorize;
 use rust_decimal::Decimal;
 use ff_standard_lib::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use ff_standard_lib::standardized_types::base_data::traits::BaseData;
-use ff_standard_lib::standardized_types::enums::{MarketType, StrategyMode};
+use ff_standard_lib::standardized_types::enums::{FuturesExchange, MarketType, StrategyMode};
 use ff_standard_lib::strategies::strategy_events::{StrategyEvent};
 use ff_standard_lib::standardized_types::subscriptions::{DataSubscription, SymbolName};
 use ff_standard_lib::strategies::fund_forge_strategy::FundForgeStrategy;
@@ -25,19 +25,19 @@ async fn main() {
     let (strategy_event_sender, strategy_event_receiver) = mpsc::channel(1000);
 
     let data_subscription = DataSubscription::new(
-        SymbolName::from("NAS100-USD"),
-        DataVendor::Oanda,
-        Resolution::Hours(1),
-        BaseDataType::QuoteBars,
-        MarketType::CFD
+        SymbolName::from("MNQ"),
+        DataVendor::Rithmic,
+        Resolution::Ticks(1),
+        BaseDataType::Ticks,
+        MarketType::Futures(FuturesExchange::CME)
     );
 
     let strategy = FundForgeStrategy::initialize(
         StrategyMode::Backtest, // Backtest, Live, LivePaper
         dec!(100000),
         Currency::USD,
-        NaiveDate::from_ymd_opt(2005, 10, 8).unwrap().and_hms_opt(0, 0, 0).unwrap(), // Starting date of the backtest is a NaiveDateTime not NaiveDate
-        NaiveDate::from_ymd_opt(2010, 12, 9).unwrap().and_hms_opt(0, 0, 0).unwrap(), // Ending date of the backtest is a NaiveDateTime not NaiveDate
+        NaiveDate::from_ymd_opt(2024, 11, 10).unwrap().and_hms_opt(0, 0, 0).unwrap(), // Starting date of the backtest is a NaiveDateTime not NaiveDate
+        NaiveDate::from_ymd_opt(2010, 11, 11).unwrap().and_hms_opt(0, 0, 0).unwrap(), // Ending date of the backtest is a NaiveDateTime not NaiveDate
         Australia::Sydney,                      // the strategy time zone
         Duration::hours(8), // the warmup duration, the duration of historical data we will pump through the strategy to warm up indicators etc before the strategy starts executing.
         vec![
@@ -56,7 +56,7 @@ async fn main() {
 
         // Buffer Duration
         //strategy resolution in milliseconds, all data at a lower resolution will be consolidated to this resolution, if using tick data, you will want to set this at 100 or less depending on the data granularity
-        core::time::Duration::from_millis(100),
+        core::time::Duration::from_millis(60),
 
         // Enabled will launch the strategy registry handler to connect to a GUI, currently will crash if enabled
         false,
@@ -149,6 +149,9 @@ pub async fn on_data_received(
 
                         BaseDataEnum::Quote(q) => {
                             println!("{}", q);
+                        }
+                        BaseDataEnum::Tick(t) => {
+                            println!("{}", t);
                         }
                         _ => {}
                     }
