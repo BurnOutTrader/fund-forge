@@ -4,7 +4,7 @@ use ff_standard_lib::messages::data_server_messaging::{DataServerResponse, FundF
 use crate::server_features::server_side_datavendor::VendorApiResponse;
 use ff_standard_lib::standardized_types::base_data::base_data_type::BaseDataType;
 use ff_standard_lib::standardized_types::datavendor_enum::DataVendor;
-use ff_standard_lib::standardized_types::enums::{MarketType, StrategyMode, SubscriptionResolutionType};
+use ff_standard_lib::standardized_types::enums::{MarketType, StrategyMode, PrimarySubscription};
 use ff_standard_lib::standardized_types::resolution::Resolution;
 use ff_standard_lib::standardized_types::subscriptions::{DataSubscription, Symbol, SymbolName};
 use ff_standard_lib::StreamName;
@@ -35,7 +35,7 @@ impl VendorApiResponse for TestApiClient {
     }
 
     async fn resolutions_response(&self, _mode: StrategyMode, _stream_name: StreamName, market_type: MarketType, callback_id: u64) -> DataServerResponse {
-        let res = SubscriptionResolutionType {
+        let res = PrimarySubscription {
             base_data_type: BaseDataType::Quotes,
             resolution: Resolution::Instant,
         };

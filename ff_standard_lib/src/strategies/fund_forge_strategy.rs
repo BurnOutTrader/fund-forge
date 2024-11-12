@@ -5,10 +5,10 @@ use crate::strategies::handlers::drawing_object_handler::DrawingObjectHandler;
 use crate::gui_types::drawing_objects::drawing_tool_enum::DrawingTool;
 use crate::strategies::indicators::indicator_enum::IndicatorEnum;
 use crate::strategies::handlers::indicator_handler::IndicatorHandler;
-use crate::strategies::indicators::indicators_trait::{IndicatorName, Indicators};
+use crate::strategies::indicators::indicators_trait::{IndicatorName};
 use crate::strategies::indicators::indicator_values::IndicatorValues;
 use crate::standardized_types::base_data::history::range_history_data;
-use crate::standardized_types::enums::{OrderSide, StrategyMode};
+use crate::standardized_types::enums::{OrderSide, StrategyMode, PrimarySubscription};
 use crate::standardized_types::rolling_window::RollingWindow;
 use crate::strategies::strategy_events::StrategyEvent;
 use crate::strategies::handlers::subscription_handler::SubscriptionHandler;
@@ -130,7 +130,7 @@ impl FundForgeStrategy {
         end_date: NaiveDateTime,
         time_zone: Tz,
         warmup_duration: ChronoDuration,
-        subscriptions: Vec<DataSubscription>,
+        subscriptions: Vec<(Option<PrimarySubscription>, DataSubscription)>,
         fill_forward: bool,
         retain_history: usize,
         strategy_event_sender: mpsc::Sender<StrategyEvent>,
@@ -165,7 +165,9 @@ impl FundForgeStrategy {
         }
         init_connections(gui_enabled, buffering_duration.clone(), strategy_mode.clone(), live_order_updates_sender, synchronize_accounts, strategy_event_sender.clone(), ledger_service.clone(), indicator_handler.clone(), subscription_handler.clone()).await;
 
-        subscription_handler.set_subscriptions(subscriptions, retain_history, warm_up_start_time.clone(), fill_forward, false).await;
+        for (primary, sub) in subscriptions {
+            subscription_handler.subscribe(primary, sub, warm_up_start_time, fill_forward, retain_history, false).await;
+        }
 
         let paper_order_sender = match strategy_mode {
             StrategyMode::Live => None,
@@ -747,36 +749,17 @@ impl FundForgeStrategy {
     /// If we subscribe to an indicator and we do not have the appropriate data subscription, we will also subscribe to the data subscription.
     /// Using unwrap on historical index() data in live mode should still be safe when using the current data as reference for the new subscription,
     /// because we won't forward bars until the consolidator is warmed up.
-    pub async fn subscribe_indicator(&self, indicator: IndicatorEnum, auto_subscribe: bool) {
+    pub async fn subscribe_indicator(&self, indicator: IndicatorEnum) {
         match self.mode {
             StrategyMode::Backtest => {
-                let subscriptions = self.subscriptions().await;
-                if !subscriptions.contains(indicator.subscription()) {
-                    match auto_subscribe {
-                        true => {
-                            self.subscribe(indicator.subscription().clone(), (indicator.data_required_warmup() + 1) as usize, false).await;
-                        }
-                        false => panic!("You have no subscription: {}, for the indicator subscription {} and AutoSubscribe is not enabled", indicator.subscription(), indicator.name())
-                    }
-                }
                 self.indicator_handler
                     .add_indicator(indicator, self.time_utc())
                     .await;
                 //add_buffer(self.time_utc(), StrategyEvent::IndicatorEvent(event)).await;
             }
             StrategyMode::Live | StrategyMode::LivePaperTrading => {
-                let handler = self.subscription_handler.clone();
                 let indicator_handler = self.indicator_handler.clone();
-                let subscriptions = self.subscriptions().await;
                // tokio::task::spawn(async move {
-                    if !subscriptions.contains(&indicator.subscription()) {
-                        match auto_subscribe {
-                            true => {
-                                handler.subscribe(indicator.subscription().clone(), Utc::now(),false, (indicator.data_required_warmup() + 1) as usize, true).await;
-                            }
-                            false => eprintln!("You have no subscription: {}, for the indicator subscription {} and AutoSubscribe is not enabled", indicator.subscription(), indicator.name())
-                        }
-                    }
                     indicator_handler
                         .add_indicator(indicator, Utc::now())
                         .await;
@@ -877,18 +860,18 @@ impl FundForgeStrategy {
     /// In live mode we will warm up the subscription as a background task, in backtest we will block the main thread.
     /// Using unwrap on historical index() data in live mode should still be safe when using the current data as reference for the new subscription,
     /// because we won't forward bars until the consolidator is warmed up.
-    pub async fn subscribe(&self, subscription: DataSubscription, history_to_retain: usize, fill_forward: bool) {
+    pub async fn subscribe(&self, primary_source: Option<PrimarySubscription>, subscription: DataSubscription, history_to_retain: usize, fill_forward: bool) {
         match self.mode {
             StrategyMode::Backtest => {
                 let _ = self.subscription_handler
-                    .subscribe(subscription.clone(), self.time_utc(), fill_forward, history_to_retain, true)
+                    .subscribe(primary_source, subscription.clone(), self.time_utc(), fill_forward, history_to_retain, true)
                     .await;
             }
             StrategyMode::Live | StrategyMode::LivePaperTrading => {
                 let handler = self.subscription_handler.clone();
                 //tokio::task::spawn(async move{
                     let _ = handler
-                        .subscribe(subscription.clone(), Utc::now(), fill_forward, history_to_retain, true)
+                        .subscribe(primary_source, subscription.clone(), Utc::now(), fill_forward, history_to_retain, true)
                         .await;
                 //});
             }
@@ -904,28 +887,6 @@ impl FundForgeStrategy {
         self.indicator_handler
                     .indicators_unsubscribe_subscription(&subscription)
                     .await;
-    }
-
-    /// Sets the subscriptions for the strategy using the subscriptions_closure.
-    /// This method will unsubscribe any subscriptions not included and set the new subscriptions to those that are passed in.
-    pub async fn subscriptions_update(
-        &self,
-        subscriptions: Vec<DataSubscription>,
-        retain_to_history: usize,
-        fill_forward: bool
-    ) {
-        match self.mode {
-            StrategyMode::Backtest => {
-                self.subscription_handler.set_subscriptions(subscriptions, retain_to_history, self.time_utc(), fill_forward, true).await;
-            }
-            StrategyMode::Live | StrategyMode::LivePaperTrading => {
-                let handler = self.subscription_handler.clone();
-                tokio::task::spawn(async move{
-                    handler.set_subscriptions(subscriptions, retain_to_history, Utc::now(), fill_forward, true).await;
-                });
-            }
-        }
-
     }
 
     /// Returns currently open `QuoteBar` for the subscription

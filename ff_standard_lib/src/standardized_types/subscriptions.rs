@@ -1,6 +1,6 @@
 use crate::helpers::converters::fund_forge_formatted_symbol_name;
 use crate::standardized_types::base_data::base_data_type::BaseDataType;
-use crate::standardized_types::enums::{MarketType, SubscriptionResolutionType};
+use crate::standardized_types::enums::{MarketType, PrimarySubscription};
 use rkyv::ser::serializers::AllocSerializer;
 use rkyv::ser::Serializer;
 use rkyv::{AlignedVec, Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv};
@@ -246,8 +246,8 @@ impl DataSubscription {
         vec.to_vec()
     }
 
-    pub fn subscription_resolution_type(&self) -> SubscriptionResolutionType {
-        SubscriptionResolutionType::new(self.resolution.clone(), self.base_data_type.clone())
+    pub fn subscription_resolution_type(&self) -> PrimarySubscription {
+        PrimarySubscription::new(self.resolution.clone(), self.base_data_type.clone())
     }
 }
 
@@ -276,9 +276,9 @@ impl fmt::Display for DataSubscriptionEvent {
 }
 
 pub fn filter_resolutions(
-    available_resolutions: Vec<SubscriptionResolutionType>,
+    available_resolutions: Vec<PrimarySubscription>,
     data_resolution: Resolution,
-) -> Vec<SubscriptionResolutionType> {
+) -> Vec<PrimarySubscription> {
     if available_resolutions.len() == 1 {
         return available_resolutions;
     }

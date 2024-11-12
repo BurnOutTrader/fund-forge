@@ -13,7 +13,7 @@ use crate::server_features::server_side_datavendor::VendorApiResponse;
 use ff_standard_lib::standardized_types::base_data::base_data_type::BaseDataType;
 use ff_standard_lib::standardized_types::base_data::traits::BaseData;
 use ff_standard_lib::standardized_types::datavendor_enum::DataVendor;
-use ff_standard_lib::standardized_types::enums::{MarketType, StrategyMode, SubscriptionResolutionType};
+use ff_standard_lib::standardized_types::enums::{MarketType, StrategyMode, PrimarySubscription};
 use ff_standard_lib::standardized_types::resolution::Resolution;
 use ff_standard_lib::standardized_types::subscriptions::{DataSubscription, Symbol, SymbolName};
 use ff_standard_lib::StreamName;
@@ -43,8 +43,8 @@ impl VendorApiResponse for OandaClient {
 
     async fn resolutions_response(&self, mode: StrategyMode, _stream_name: StreamName, market_type: MarketType, callback_id: u64) -> DataServerResponse {
         let subscription_resolutions_types = match mode {
-            StrategyMode::Backtest => vec![SubscriptionResolutionType::new(Resolution::Seconds(5), BaseDataType::QuoteBars), SubscriptionResolutionType::new(Resolution::Minutes(1), BaseDataType::QuoteBars),SubscriptionResolutionType::new(Resolution::Hours(1), BaseDataType::QuoteBars)],
-            StrategyMode::LivePaperTrading | StrategyMode::Live => vec![SubscriptionResolutionType::new(Resolution::Instant, BaseDataType::Quotes), SubscriptionResolutionType::new(Resolution::Seconds(5), BaseDataType::QuoteBars), SubscriptionResolutionType::new(Resolution::Minutes(1), BaseDataType::QuoteBars),SubscriptionResolutionType::new(Resolution::Hours(1), BaseDataType::QuoteBars)],
+            StrategyMode::Backtest => vec![PrimarySubscription::new(Resolution::Seconds(5), BaseDataType::QuoteBars), PrimarySubscription::new(Resolution::Minutes(1), BaseDataType::QuoteBars), PrimarySubscription::new(Resolution::Hours(1), BaseDataType::QuoteBars)],
+            StrategyMode::LivePaperTrading | StrategyMode::Live => vec![PrimarySubscription::new(Resolution::Instant, BaseDataType::Quotes), PrimarySubscription::new(Resolution::Seconds(5), BaseDataType::QuoteBars), PrimarySubscription::new(Resolution::Minutes(1), BaseDataType::QuoteBars), PrimarySubscription::new(Resolution::Hours(1), BaseDataType::QuoteBars)],
         };
 
         DataServerResponse::Resolutions {
@@ -134,7 +134,7 @@ impl VendorApiResponse for OandaClient {
                 reason: Some("Oanda is not connected".to_string()),
             };
         }
-        if subscription.subscription_resolution_type() != SubscriptionResolutionType::new(Resolution::Instant, BaseDataType::Quotes) {
+        if subscription.subscription_resolution_type() != PrimarySubscription::new(Resolution::Instant, BaseDataType::Quotes) {
             return DataServerResponse::UnSubscribeResponse {
                 success: false,
                 subscription,

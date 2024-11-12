@@ -16,7 +16,7 @@ use flate2::bufread::GzDecoder;
 use futures::future::join_all;
 use tokio::sync::oneshot;
 use crate::strategies::client_features::connection_types::ConnectionType;
-use crate::standardized_types::enums::{StrategyMode, SubscriptionResolutionType};
+use crate::standardized_types::enums::{StrategyMode, PrimarySubscription};
 use crate::strategies::client_features::request_handler::{send_request, StrategyRequest};
 use crate::strategies::client_features::server_connections::SETTINGS_MAP;
 use crate::strategies::consolidators::consolidator_enum::ConsolidatorEnum;
@@ -336,7 +336,7 @@ pub async fn range_history_data(
     if from_time > to_time {
         panic!("From time cannot be greater than to time");
     }
-    let sub_res_type = SubscriptionResolutionType::new(subscription.resolution, subscription.base_data_type);
+    let sub_res_type = PrimarySubscription::new(subscription.resolution, subscription.base_data_type);
     let resolutions = subscription.symbol.data_vendor.warm_up_resolutions(subscription.symbol.market_type).await.unwrap();
     if resolutions.contains(&sub_res_type) {
         let data = match get_compressed_historical_data(vec![subscription.clone()], from_time, to_time).await {

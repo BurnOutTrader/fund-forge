@@ -6,7 +6,7 @@ use crate::product_maps::oanda::maps::OANDA_SYMBOL_INFO;
 use crate::product_maps::rithmic::maps::get_rithmic_symbol_info;
 use crate::standardized_types::base_data::base_data_type::BaseDataType;
 use crate::standardized_types::datavendor_enum::DataVendor;
-use crate::standardized_types::enums::{MarketType, SubscriptionResolutionType};
+use crate::standardized_types::enums::{MarketType, PrimarySubscription};
 use crate::standardized_types::new_types::Price;
 use crate::standardized_types::subscriptions::{Symbol, SymbolName};
 use crate::strategies::client_features::client_side_brokerage::TIME_OUT;
@@ -65,7 +65,7 @@ impl DataVendor {
         }
     }
 
-    pub async fn resolutions(&self, market_type: MarketType) -> Result<Vec<SubscriptionResolutionType>, FundForgeError> {
+    pub async fn resolutions(&self, market_type: MarketType) -> Result<Vec<PrimarySubscription>, FundForgeError> {
         let request = DataServerRequest::Resolutions {
             callback_id: 0,
             data_vendor: self.clone(),
@@ -89,7 +89,7 @@ impl DataVendor {
         }
     }
 
-    pub async fn warm_up_resolutions(&self, market_type: MarketType) -> Result<Vec<SubscriptionResolutionType>, FundForgeError> {
+    pub async fn warm_up_resolutions(&self, market_type: MarketType) -> Result<Vec<PrimarySubscription>, FundForgeError> {
         let request = DataServerRequest::WarmUpResolutions {
             callback_id: 0,
             data_vendor: self.clone(),

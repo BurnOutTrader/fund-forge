@@ -1,5 +1,4 @@
 use chrono::{Duration, NaiveDate};
-use chrono_tz::Australia;
 use chrono_tz::Tz::UTC;
 use colored::Colorize;
 use rust_decimal::Decimal;
@@ -7,7 +6,7 @@ use ff_standard_lib::standardized_types::base_data::base_data_enum::BaseDataEnum
 use ff_standard_lib::standardized_types::base_data::traits::BaseData;
 use ff_standard_lib::standardized_types::enums::{FuturesExchange, MarketType, OrderSide, StrategyMode};
 use ff_standard_lib::strategies::strategy_events::{StrategyEvent};
-use ff_standard_lib::standardized_types::subscriptions::{CandleType, DataSubscription, SymbolCode, SymbolName};
+use ff_standard_lib::standardized_types::subscriptions::{DataSubscription, SymbolCode, SymbolName};
 use ff_standard_lib::strategies::fund_forge_strategy::FundForgeStrategy;
 use rust_decimal_macros::dec;
 use tokio::sync::mpsc;
@@ -39,13 +38,13 @@ async fn main() {
         UTC,
         Duration::hours(1),
         vec![
-             DataSubscription::new (
+            (None, DataSubscription::new (
                 symbol_name.clone(),
                 DataVendor::Rithmic,
                 Resolution::Ticks(1),
                 BaseDataType::Ticks,
                 MarketType::Futures(FuturesExchange::CME),
-            ),
+            )),
          /*   DataSubscription::new_custom(
                 symbol_name.clone(),
                 DataVendor::Rithmic,

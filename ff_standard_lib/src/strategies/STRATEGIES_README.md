@@ -87,9 +87,38 @@ The time zone of the strategy, you can use Utc for default.
 The warmup duration for the strategy. used if we need to warmup consolidators, indicators etc.
 We might also need a certain amount of history to be available before starting, this will ensure that it is.
 
-#### `subscriptions: Vec<DataSubscription>:`
+#### `subscriptions: Vec<(Option<PrimarySubscription>, DataSubscription)>:`
 The initial data subscriptions for the strategy.
 If your subscriptions are empty, you will need to add some at the start of your `fn on_data_received()`.
+
+We are passing in a tuple where PrimarySubscription is an Optional, this is used when the broker does not have the resolution we want to subscribe to, we can pass in the resolution and data type that we want to consolidate data from.
+
+It is also useful if we don't have historical data, for example we want to subscribe to 15 minute candles but we only have 1 minute candles, we can pass in the 1 minute candles as a primary subscription and the engine will consolidate the data to 15 minute candles for us.
+```rust 
+pub fn example() {
+    (Some(PrimarySubscription::new(Resolution::Minutes(1), BaseDataType::QuoteBars)), 
+     DataSubscription::new(
+         SymbolName::from("EUR-USD"),
+         DataVendor::Oanda,
+         Resolution::Minutes(15),
+         BaseDataType::QuoteBars,
+         MarketType::Forex
+     )),
+}
+```
+
+If we know the broker has data or we know we have historical data, we can use the primary subscription as None, which in turn makes the subscription a primary subscription.
+```rust 
+pub fn example() {
+    (None, DataSubscription::new(
+         SymbolName::from("EUR-USD"),
+         DataVendor::Oanda,
+         Resolution::Minutes(15),
+         BaseDataType::QuoteBars,
+         MarketType::Forex
+     )),
+}
+```
 
 ##### In Backtest mode 
 The engine and server will use consolidators to consolidate historical data from a low resolution. \
@@ -228,14 +257,14 @@ async fn main() {
 
         // the initial data subscriptions for the strategy. we can also subscribe or unsubscribe at run time.
         vec![
-            DataSubscription::new("AUD-CAD".to_string(), DataVendor::Test, Resolution::Ticks(10), BaseDataType::Candles, MarketType::Forex),
-            DataSubscription::new("AUD-USD".to_string(), DataVendor::Test, Resolution::Instant, BaseDataType::Quotes, MarketType::Forex),
+            (Some(PrimarySubscription::new(Resolution::Ticks(1), BaseDataType::Ticks)), DataSubscription::new("AUD-CAD".to_string(), DataVendor::Test, Resolution::Ticks(10), BaseDataType::Candles, MarketType::Forex)),
+            (None, DataSubscription::new("AUD-USD".to_string(), DataVendor::Test, Resolution::Instant, BaseDataType::Quotes, MarketType::Forex)),
             // we can subscribe to fundamental data and alternative data sources (no fundamental test data available yet)
-            DataSubscription::new_fundamental("GDP-USA".to_string(), DataVendor::Test)
+            (None, DataSubscription::new_fundamental("GDP-USA".to_string(), DataVendor::Test))
             //if using new() default candle type is CandleStick
-            DataSubscription::new("AUD-CAD".to_string(), DataVendor::Test, Resolution::Minutes(15), BaseDataType::Candles, MarketType::Forex)
+            (Some(PrimarySubscription::new(Resolution::Minutes(1), BaseDataType::Candles)), DataSubscription::new("AUD-CAD".to_string(), DataVendor::Test, Resolution::Minutes(15), BaseDataType::Candles, MarketType::Forex)),
             // we can also specify candle types like HeikinAshi, Renko, CandleStick (more to come). 
-            DataSubscription::new_custom("AUD-USD".to_string(), DataVendor::Test, Resolution::Minutes(15), MarketType::Forex, CandleType::HeikinAshi)
+            (Some(PrimarySubscription::new(Resolution::Ticks(1), BaseDataType::Ticks)), DataSubscription::new_custom("AUD-USD".to_string(), DataVendor::Test, Resolution::Minutes(15), MarketType::Forex, CandleType::HeikinAshi))
         ],
         // Fill forward, when the market is closed or no primary data is available, consolidators will create bars based on the last close price. See parameters above
         true,
@@ -447,24 +476,17 @@ The engine defines subscriptions as 2 kinds:
 
 Subscribe using default logic.
 ```rust
-let aud_usd_15m = DataSubscription::new("AUD-USD".to_string(), DataVendor::Test, Resolution::Minutes(15), BaseDataType::Candles, MarketType::Forex);
-let history_to_retain: usize = 100;
-strategy.subscribe(aud_usd_15m.clone(), history_to_retain).await;
+pub fn example() {
+    let aud_usd_15m = DataSubscription::new("AUD-USD".to_string(), DataVendor::Test, Resolution::Minutes(15), BaseDataType::Candles, MarketType::Forex);
+    let history_to_retain: usize = 100;
+   
+   //if we have the data available we can subscribe directly to the resolution we want.
+    strategy.subscribe(None, aud_usd_15m.clone(), history_to_retain).await;
+   
+   //if we don't have the data available we can subscribe to a lower resolution and the engine will consolidate the data for us.
+    strategy.subscribe(Some(PrimarySubscription::new(Resolution::Minutes(1), BaseDataType::Candles), aud_usd_15m.clone(), history_to_retain).await;
+}
 ```
-
-### Subscribe Override
-By default, the engine will attempt to allocate subscriptions to either primary or secondary based on data availability, but the logic can only do so much, you can override the default logic and force the engine to make a subscription primary, 
-if you know you have historical data for the period, or if you know the data vendor has the live data feed.
-
-Subscribe using override logic.
-```rust
-let aud_usd_15m = DataSubscription::new("AUD-USD".to_string(), DataVendor::Test, Resolution::Minutes(15), BaseDataType::Candles, MarketType::Forex);
-let history_to_retain: usize = 100;
-strategy.subscribe_override(aud_usd_15m.clone(), history_to_retain).await;
-```
-Using subscribe_override() the engine will not perform any check to make sure the data is available as a historical or live feed.
-
-If you want to override the default logic and force the engine to make a subscription primary, you need to do it after the strategy is Initialized.
 
 ### Runtime Subscription Updates
 Subscriptions can be updated at any time, and the engine will handle the consolidation of data to the required resolution.
@@ -480,43 +502,16 @@ In live mode the engine will subscribe to the lowest possible resolution data fo
 
 This is done so that when live streaming with multiple strategies we only need to maintain 1 live data feed per symbol, no matter the number of strategies and resolutions subscribed.
 ```rust
-// we can access resolution as a Duration with resolution.as_duration() or resolution.as_seconds();
-pub enum Resolution {
-    Instant,
-    Ticks(u64),
-    Seconds(u64),
-    Minutes(u64),
-    Hours(u64),
-}
-
-// useful resolution functions
-fn example(resolution: Resolution) {
-    // Resolution::Instant will return 0 value not null.
-    let duration: Duration = resolution.as_duration();
-    let seconds: i64 = resolution.as_seconds();
-    let nanos: i64 = resolution.as_nanos();
-    let millis: i128 = resolution.as_millis();
-    let number_of: u64 = resolution.number_of();
-}
-```
-```rust
 pub async fn on_data_received(strategy: FundForgeStrategy, notify: Arc<Notify>, mut event_receiver: mpsc::Receiver<EventTimeSlice>) {
 
     // subscribing to multiple items while unsubscribing from existing items
     // if our strategy has already warmed up, the subscription will automatically have warm up to the maximum number of bars and have history available.
     let aud_cad_60m = DataSubscription::new_custom("AUD-CAD".to_string(), DataVendor::Test, Resolution::Minutes(60), MarketType::Forex, CandleType::HeikinAshi);
     let aud_usd_15m = DataSubscription::new("AUD-USD".to_string(), DataVendor::Test, Resolution::Minutes(15), BaseDataType::Candles, MarketType::Forex);
-
-    // Note that this function completely overrides our current subcsriptions, If we have any current subscriptions they will be unsubscribed if not also passed in.
-    // Any existing subscriptions which are not primary subscriptions (tick stream etc) will not be unsubscribed from.
-    // Any primary subscription, which is being used to consolidate data which is not being unsubscribed will not be unsubscribed.
-    // The second parameter is the number of bars to retain in memory for the strategy.
-    // The engine will automatically consolidate the data to the required resolution and will try to maintain only a single primary subscription per symbol to minimise data vendor api usage.
-    strategy.subscriptions_update(vec![aud_usd_15m.clone(), aud_cad_60m.clone()], 100).await;
-
-    //or we can subscribe to a single item and not effect any existing subscriptions
-    // The second parameter is the number of bars to retain in memory for the strategy.
-    strategy.subscribe(aud_usd_15m.clone(), 100).await;
+   
+    // The first parameter is optional, the primary subscrption we want to use to consolidate the data, you need this if the broker does not have the data.
+    // The third parameter is the number of bars to retain in memory for the strategy.
+    strategy.subscribe(Some(PrimarySubscription::new(Resolution::Minutes(1)), BaseDataType::Candles), aud_usd_15m.clone(), 100).await;
 
     //or we can unsubscribe from a single item
     strategy.unsubscribe(&aud_usd_15m.symbol).await;
@@ -535,12 +530,10 @@ pub async fn on_data_received(strategy: FundForgeStrategy, notify: Arc<Notify>, 
         // If the strategy was already warmed up, the consolidator will warm itself up to the maximum number of bars (50 in this case) and have history available. 
         // This is assuming we have the historical data serialized on the data server or available in the data vendor.
         let aud_usd_12m = DataSubscription::new("AUD-USD".to_string(), DataVendor::Test, Resolution::Minutes(12), BaseDataType::HeikinAshi, MarketType::Forex);
-        strategy.subscribe(aud_usd_12m.clone(), 50).await;
+        strategy.subscribe(Some(PrimarySubscription::new(Resolution::Minutes(1)), BaseDataType::Candles), aud_usd_12m.clone(), 50).await;
     }
 }
 ```
-
-
 
 ### Futures Subscriptions
 You can subscribe using the `SymbolName` eg "MNQ" or the `SymbolCode` eg "MNQZ4".

@@ -6,7 +6,7 @@ use ff_standard_lib::strategies::indicators::indicator_events::IndicatorEvents;
 use ff_standard_lib::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use ff_standard_lib::standardized_types::base_data::base_data_type::BaseDataType;
 use ff_standard_lib::standardized_types::base_data::traits::BaseData;
-use ff_standard_lib::standardized_types::enums::{MarketType, OrderSide, StrategyMode};
+use ff_standard_lib::standardized_types::enums::{MarketType, OrderSide, PrimarySubscription, StrategyMode};
 use ff_standard_lib::strategies::strategy_events::{StrategyControls, StrategyEvent};
 use ff_standard_lib::standardized_types::subscriptions::{CandleType, DataSubscription, SymbolName};
 use ff_standard_lib::strategies::fund_forge_strategy::FundForgeStrategy;
@@ -43,13 +43,13 @@ async fn main() {
         Duration::hours(1), // the warmup duration, the duration of historical data we will pump through the strategy to warm up indicators etc before the strategy starts executing.
         vec![
             // Since we only have quote level test data, the 2 subscriptions will be created by consolidating the quote feed. Quote data will automatically be subscribed as primary data source.
-            DataSubscription::new(
+            (None, DataSubscription::new(
                 SymbolName::from("MNQ"),
                 DataVendor::Oanda,
                 Resolution::Seconds(5),
                 BaseDataType::QuoteBars,
                 MarketType::CFD,
-            ),
+            )),
         ],
 
         //fill forward
@@ -102,7 +102,7 @@ async fn main() {
     );
 
     //if you set auto subscribe to false and change the resolution, the strategy will intentionally panic to let you know you won't have data for the indicator
-    strategy.subscribe_indicator(quotebar_5s_atr_5, true).await;
+    strategy.subscribe_indicator(quotebar_5s_atr_5).await;
 
     // Start receiving the buffers
     on_data_received(strategy, strategy_event_receiver).await;
@@ -377,7 +377,7 @@ pub async fn subscribe_to_my_atr_example(strategy: &FundForgeStrategy) {
     );
     // we auto subscribe to the subscription, this will warm up the data subscription, which the indicator will then use to warm up.
     // the indicator would still warm up if this was false, but if we  don't have the data subscription already subscribed the strategy will deliberately panic
-    strategy.subscribe_indicator(quote_bar_atr10_15min, true).await;
+    strategy.subscribe_indicator(quote_bar_atr10_15min).await;
 }
 
 
@@ -403,5 +403,5 @@ pub async fn subscribe_to_new_candles_example(strategy: &FundForgeStrategy) {
     );
 
     // In live we start a background task for this (untested)
-     strategy.subscribe(minute_15_ha_candles, 48, false).await;
+     strategy.subscribe(Some(PrimarySubscription::new(Resolution::Seconds(5), BaseDataType::QuoteBars)),minute_15_ha_candles, 48, false).await;
 }

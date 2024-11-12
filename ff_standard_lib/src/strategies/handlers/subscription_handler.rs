@@ -6,7 +6,7 @@ use async_std::task::block_on;
 use crate::strategies::consolidators::consolidator_enum::{ConsolidatedData, ConsolidatorEnum};
 use crate::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use crate::standardized_types::base_data::base_data_type::BaseDataType;
-use crate::standardized_types::enums::{StrategyMode, SubscriptionResolutionType};
+use crate::standardized_types::enums::{StrategyMode, PrimarySubscription};
 use crate::standardized_types::rolling_window::RollingWindow;
 use crate::standardized_types::subscriptions::{DataSubscription, DataSubscriptionEvent, Symbol};
 use crate::standardized_types::time_slices::TimeSlice;
@@ -180,6 +180,7 @@ impl SubscriptionHandler {
     /// 'strategy_mode: StrategyMode' The strategy mode is used to determine how to warm up the history, in live mode we may not yet have a serialized history to the current time.
     pub async fn subscribe(
         &self,
+        primary_source: Option<PrimarySubscription>,
         new_subscription: DataSubscription,
         current_time: DateTime<Utc>,
         fill_forward: bool,
@@ -220,6 +221,7 @@ impl SubscriptionHandler {
 
         let symbol_subscriptions = self.symbol_subscriptions.get(&new_subscription.symbol).unwrap();
         let windows = symbol_subscriptions.value().subscribe(
+                primary_source,
                 new_subscription.clone(),
                 current_time,
                 history_to_retain,
@@ -301,32 +303,6 @@ impl SubscriptionHandler {
             }
             Err(e) => {
                 let _ = self.strategy_event_sender.send(StrategyEvent::DataSubscriptionEvent(e)).await;
-            }
-        }
-    }
-
-    pub async fn set_subscriptions(
-            &self,
-            new_subscription: Vec<DataSubscription>,
-            history_to_retain: usize,
-            current_time: DateTime<Utc>,
-            fill_forward: bool,
-            broadcast: bool,
-    ) {
-        let current_subscriptions = self.subscriptions().await;
-        for sub in current_subscriptions {
-            if !new_subscription.contains(&sub) {
-                self.unsubscribe(sub.clone(), false).await;
-            }
-        }
-        for sub in new_subscription {
-           self.subscribe(sub.clone(), current_time.clone(), fill_forward, history_to_retain, false).await;
-        }
-        if broadcast {
-            let subscriptions = self.primary_subscriptions().await;
-            match self.primary_subscriptions_broadcaster.send(subscriptions) {
-                Ok(_) => {}
-                Err(_) => {}
             }
         }
     }
@@ -671,12 +647,10 @@ impl SubscriptionHandler {
 /// depending if the vendor has data available in that resolution.
 pub struct SymbolSubscriptionHandler {
     /// The primary subscription is the subscription where data is coming directly from the `DataVendor`, In the event of bar data, it is pre-consolidated.
-    primary_subscriptions: DashMap<SubscriptionResolutionType, DataSubscription>,
+    primary_subscriptions: DashMap<PrimarySubscription, DataSubscription>,
     /// The secondary subscriptions are consolidators that are used to consolidate data from the primary subscription. the first key is the primary subscription for each consolidator
-    secondary_subscriptions: DashMap<SubscriptionResolutionType, AHashMap<DataSubscription, ConsolidatorEnum>>,
-    vendor_primary_resolutions: Vec<SubscriptionResolutionType>,
-    vendor_historical_resolutions: Vec<SubscriptionResolutionType>,
-    vendor_data_types: Vec<BaseDataType>,
+    secondary_subscriptions: DashMap<PrimarySubscription, AHashMap<DataSubscription, ConsolidatorEnum>>,
+    vendor_primary_resolutions: Vec<PrimarySubscription>,
 }
 
 impl SymbolSubscriptionHandler {
@@ -684,14 +658,10 @@ impl SymbolSubscriptionHandler {
         symbol: Symbol,
     ) -> Self {
         let vendor_primary_resolutions = symbol.data_vendor.resolutions(symbol.market_type.clone()).await.unwrap();
-        let vendor_historical_resolutions = symbol.data_vendor.warm_up_resolutions(symbol.market_type.clone()).await.unwrap();
-        let vendor_data_types = symbol.data_vendor.base_data_types().await.unwrap();
         let handler = SymbolSubscriptionHandler {
             primary_subscriptions: DashMap::new(),
             secondary_subscriptions: DashMap::new(),
             vendor_primary_resolutions,
-            vendor_historical_resolutions,
-            vendor_data_types,
         };
         handler
     }
@@ -712,7 +682,7 @@ impl SymbolSubscriptionHandler {
             return vec![];
         }
 
-        let sub_res = SubscriptionResolutionType::new(base_data_enum.resolution().clone(), base_data_enum.base_data_type());
+        let sub_res = PrimarySubscription::new(base_data_enum.resolution().clone(), base_data_enum.base_data_type());
         if let Some(mut base_data_consoldiators) = self.secondary_subscriptions.get_mut(&sub_res){
             let mut data = vec![];
             for (_, consolidator) in base_data_consoldiators.iter_mut() {
@@ -776,50 +746,6 @@ impl SymbolSubscriptionHandler {
         Ok((RollingWindow::new(history_to_retain), DataSubscriptionEvent::Subscribed(new_subscription)))
     }
 
-  /*  pub(crate) async fn subscribe_consolidate(
-        &self,
-        primary_resolution: SubscriptionResolutionType,
-        new_subscription: DataSubscription,
-        warm_up_to_time: DateTime<Utc>,
-        history_to_retain: usize,
-    ) -> Result<(RollingWindow<BaseDataEnum>, DataSubscriptionEvent), DataSubscriptionEvent> {
-        if let Some(subscription) = self.primary_subscriptions.get_requests(&new_subscription.subscription_resolution_type()) {
-            if *subscription.value() == new_subscription {
-                return Err(DataSubscriptionEvent::FailedToSubscribe(new_subscription.clone(), format!("{}: Already subscribed: {}", new_subscription.symbol.data_vendor, new_subscription.symbol.name)))
-            }
-        }
-        if let Some(subscriptions) = self.secondary_subscriptions.get_requests(&new_subscription.subscription_resolution_type()) {
-            if let Some(_subscription) = subscriptions.get_requests(&new_subscription) {
-                return Err(DataSubscriptionEvent::FailedToSubscribe(new_subscription.clone(), format!("{}: Already subscribed: {}", new_subscription.symbol.data_vendor, new_subscription.symbol.name)))
-            }
-        }
-        let is_warmed_up = is_warmup_complete();
-        if is_warmed_up {
-            let from_time = match new_subscription.resolution == Resolution::Instant {
-                true => {
-                    let subtract_duration: Duration = Duration::seconds(1) * history_to_retain as i32;
-                    warm_up_to_time - subtract_duration - Duration::days(3)
-                }
-                false => {
-                    let subtract_duration: Duration = new_subscription.resolution.as_duration() * history_to_retain as i32;
-                    warm_up_to_time - subtract_duration - Duration::days(3)
-                }
-            };
-
-            self.pr
-
-            let data = block_on(get_historical_data(vec![new_subscription.clone()], from_time, warm_up_to_time)).unwrap_or_else(|_e| BTreeMap::new());
-            let mut history = RollingWindow::new(history_to_retain);
-            for (_, slice) in data {
-                for data in slice.iter() {
-                    history.add(data.clone());
-                }
-            }
-            return Ok((history, DataSubscriptionEvent::Subscribed(new_subscription)))
-        }
-        self.primary_subscriptions.insert(new_subscription.subscription_resolution_type(), new_subscription.clone());
-        Ok((RollingWindow::new(history_to_retain), DataSubscriptionEvent::Subscribed(new_subscription)))
-    }*/
 
     //todo, add a fn to DataVendor Server Side, to return the correct primary resolution for a subscription, this way we can handle on a vendor by vendor basis.
     /// Currently This function works in 1 of 2 ways,
@@ -831,6 +757,7 @@ impl SymbolSubscriptionHandler {
     /// todo simplify live subscribing by just sending base subscription request to data server, and await callback for primary feed.
     async fn subscribe(
         &self,
+        primary_source: Option<PrimarySubscription>,
         new_subscription: DataSubscription,
         warm_up_to_time: DateTime<Utc>,
         history_to_retain: usize,
@@ -855,274 +782,81 @@ impl SymbolSubscriptionHandler {
         let is_warmed_up =   is_warmup_complete();
 
         let mut returned_windows = AHashMap::new();
-        let load_data_closure = |closure_subscription: &DataSubscription| -> Result<AHashMap<DataSubscription, RollingWindow<BaseDataEnum>>, DataSubscriptionEvent>{
-            if is_warmed_up {
-                let from_time = match closure_subscription.resolution == Resolution::Instant {
-                    true => {
-                        let subtract_duration: Duration = Duration::seconds(1) * history_to_retain as i32;
-                        warm_up_to_time - subtract_duration - Duration::days(3)
-                    }
-                    false => {
-                        let subtract_duration: Duration = closure_subscription.resolution.as_duration() * history_to_retain as i32;
-                        warm_up_to_time - subtract_duration - Duration::days(3)
-                    }
-                };
-                let data = block_on(get_compressed_historical_data(vec![closure_subscription.clone()], from_time, warm_up_to_time)).unwrap_or_else(|_e| BTreeMap::new());
-                let mut history = RollingWindow::new(history_to_retain);
-                for (_, slice) in data {
-                    for data in slice.iter() {
-                        history.add(data.clone());
-                    }
-                }
-                returned_windows.insert(closure_subscription.clone(), history);
-                return Ok(returned_windows)
+        if let Some(primary) = primary_source {
+            if !self.vendor_primary_resolutions.contains(&primary) {
+                return Err(DataSubscriptionEvent::FailedToSubscribe(new_subscription.clone(), format!("{}: Does not support this subscription: {}", new_subscription.symbol.data_vendor, new_subscription)))
             }
-            returned_windows.insert(closure_subscription.clone(), RollingWindow::new(history_to_retain));
-            Ok(returned_windows)
-        };
-
-        let sub_res_type = new_subscription.subscription_resolution_type();
-
-        // if the vendor doesn't supply this data we need to determine if we can atleast consolidate it from some source they do supply
-        match new_subscription.base_data_type {
-            BaseDataType::Ticks => {
-                if !self.vendor_primary_resolutions.contains(&SubscriptionResolutionType::new(Resolution::Ticks(1), BaseDataType::Ticks)) {
-                         return Err(DataSubscriptionEvent::FailedToSubscribe(new_subscription.clone(), format!("{}: Does not support this subscription: {}", new_subscription.symbol.data_vendor, new_subscription)))
-                } else {
-                    if !self.primary_subscriptions.contains_key(&sub_res_type) {
-                        self.primary_subscriptions.insert(sub_res_type.clone(), new_subscription.clone());
-                    }
-                    if !self.secondary_subscriptions.contains_key(&sub_res_type) {
-                        self.secondary_subscriptions.insert(sub_res_type, AHashMap::new());
-                    }
-                    return load_data_closure(&new_subscription)
-                }
-            }
-            BaseDataType::Quotes => {
-                if !self.vendor_primary_resolutions.contains(&SubscriptionResolutionType::new(Resolution::Instant, BaseDataType::Quotes)) {
-                    Err( DataSubscriptionEvent::FailedToSubscribe(new_subscription.clone(), format!("{}: Does not support this subscription: {}", new_subscription.symbol.data_vendor, new_subscription)))
-                } else {
-                    if !self.primary_subscriptions.contains_key(&sub_res_type) {
-                        self.primary_subscriptions.insert(sub_res_type.clone(), new_subscription.clone());
-                    }
-                    if !self.secondary_subscriptions.contains_key(&sub_res_type) {
-                        self.secondary_subscriptions.insert(sub_res_type, AHashMap::new());
-                    }
-                    return load_data_closure(&new_subscription)
-                }
-            }
-            BaseDataType::QuoteBars | BaseDataType::Candles => {
-                let ideal_subscription = match new_subscription.base_data_type {
-                    BaseDataType::QuoteBars => {
-                        if !self.vendor_primary_resolutions.contains(&SubscriptionResolutionType::new(Resolution::Instant, BaseDataType::Quotes))
-                            && !self.vendor_data_types.contains(&BaseDataType::QuoteBars) {
-                            return Err(DataSubscriptionEvent::FailedToSubscribe(new_subscription.clone(), format!("{}: Does not support this subscription: {}", new_subscription.symbol.data_vendor, new_subscription)))
-                        }
-                        if self.vendor_primary_resolutions.contains(&SubscriptionResolutionType::new(Resolution::Instant, BaseDataType::Quotes)) {
-                            SubscriptionResolutionType::new(Resolution::Instant, BaseDataType::Quotes)
-                        } else {
-                            // Find lowest resolution quote bars available
-                            self.vendor_primary_resolutions.iter()
-                                .filter(|res| res.base_data_type == BaseDataType::QuoteBars && res.resolution <= sub_res_type.resolution)
-                                .min_by_key(|res| match res.resolution {
-                                    Resolution::Instant => 0,
-                                    Resolution::Seconds(s) => s,
-                                    Resolution::Minutes(m) => m * 60,
-                                    Resolution::Hours(h) => h * 3600,
-                                    _ => 0,
-                                })
-                                .cloned()
-                                .unwrap_or_else(|| SubscriptionResolutionType::new(Resolution::Seconds(1), BaseDataType::QuoteBars))
-                        }
-                    }
-                    BaseDataType::Candles => {
-                        if !self.vendor_primary_resolutions.contains(&SubscriptionResolutionType::new(Resolution::Ticks(1), BaseDataType::Ticks)) &&
-                            !self.vendor_primary_resolutions.contains(&SubscriptionResolutionType::new(Resolution::Instant, BaseDataType::Quotes)) &&
-                            !self.vendor_data_types.contains(&BaseDataType::Candles) {
-                            return Err(DataSubscriptionEvent::FailedToSubscribe(new_subscription.clone(), format!("{}: Does not support this subscription: {}", new_subscription.symbol.data_vendor, new_subscription)))
-                        }
-                        //todo this has issues, time to put it on server and decide per broker
-                        let has_candles = self.vendor_primary_resolutions.contains(&SubscriptionResolutionType::new(Resolution::Seconds(1), BaseDataType::Candles));
-                        let has_ticks = self.vendor_primary_resolutions.contains(&SubscriptionResolutionType::new(Resolution::Ticks(1), BaseDataType::Ticks));
-
-                        if has_ticks && has_candles {
-                            if fill_forward {
-                                SubscriptionResolutionType::new(Resolution::Ticks(1), BaseDataType::Ticks)
-                            } else {
-                                SubscriptionResolutionType::new(Resolution::Seconds(1), BaseDataType::Candles)
-                            }
-                        } else {
-                            if has_candles {
-                                match self.primary_subscriptions.contains_key(&SubscriptionResolutionType::new(Resolution::Ticks(1), BaseDataType::Ticks)) {
-                                    true => SubscriptionResolutionType::new(Resolution::Ticks(1), BaseDataType::Ticks),
-                                    false => SubscriptionResolutionType::new(Resolution::Seconds(1), BaseDataType::Candles)
-                                }
-                            } else if has_ticks {
-                                SubscriptionResolutionType::new(Resolution::Ticks(1), BaseDataType::Ticks)
-                            } else {
-                                SubscriptionResolutionType::new(Resolution::Instant, BaseDataType::Quotes)
-                            }
-                        }
-                    }
-                    _ => panic!("This cant happen")
-                };
-
-                if self.vendor_primary_resolutions.contains(&sub_res_type) && !self.primary_subscriptions.contains_key(&ideal_subscription) {
-                    self.primary_subscriptions.insert(new_subscription.subscription_resolution_type(), new_subscription.clone());
-                    return load_data_closure(&new_subscription);
-                }
-
-                //if we don't have quotes we subscribe to the lowest possible resolution of the same data type
-                if !self.vendor_primary_resolutions.contains(&ideal_subscription) {
-                    let mut has_lower_resolution = false;
-                    let mut lowest_res = new_subscription.resolution;
-                    for kind in &self.vendor_primary_resolutions {
-                        if kind.resolution < new_subscription.resolution && kind.base_data_type == new_subscription.base_data_type {
-                            has_lower_resolution = true;
-                            if kind.resolution < lowest_res {
-                                lowest_res = kind.resolution.clone()
-                            }
-                        }
-                    }
-                    // if we are try to build candles we can check we have  quote bars to consolidate from as a last resort
-                    if !has_lower_resolution {
-                            for kind in &self.vendor_primary_resolutions {
-                                if kind.resolution < new_subscription.resolution && (kind.base_data_type == BaseDataType::QuoteBars && new_subscription.base_data_type == BaseDataType::Candles) {
-                                    has_lower_resolution = true;
-                                    if kind.resolution < lowest_res {
-                                        lowest_res = kind.resolution.clone()
-                                    }
-                                }
-                        }
-                    }
-                    if !has_lower_resolution {
-                        match self.vendor_primary_resolutions.contains(&new_subscription.subscription_resolution_type()) {
+            if !self.primary_subscriptions.contains_key(&primary) {
+                let new_primary = DataSubscription::new(new_subscription.symbol.name.clone(), new_subscription.symbol.data_vendor.clone(), primary.resolution, primary.base_data_type, new_subscription.market_type.clone());
+                if !self.primary_subscriptions.contains_key(&primary) {
+                    self.primary_subscriptions.insert(new_primary.subscription_resolution_type(), new_primary.clone());
+                    if is_warmed_up {
+                        let from_time = match new_primary.resolution == Resolution::Instant {
                             true => {
-                                self.primary_subscriptions.insert(new_subscription.subscription_resolution_type(), new_subscription.clone());
-                                return load_data_closure(&new_subscription)
+                                let subtract_duration: Duration = Duration::seconds(2) * history_to_retain as i32;
+                                warm_up_to_time - subtract_duration - Duration::days(5)
                             }
                             false => {
-                                return Err(DataSubscriptionEvent::FailedToSubscribe(new_subscription.clone(), format!("{}: Does not have low enough resolution data to consolidate: {}", new_subscription.symbol.data_vendor, new_subscription)))
+                                let subtract_duration: Duration = new_primary.resolution.as_duration() * history_to_retain as i32;
+                                warm_up_to_time - subtract_duration - Duration::days(5)
                             }
-                        }
-                    }
-                    let lowest_possible_primary = DataSubscription::new(new_subscription.symbol.name.clone(), new_subscription.symbol.data_vendor.clone(), lowest_res, new_subscription.base_data_type.clone(), new_subscription.market_type.clone());
-                    let primary_res_sub_type = lowest_possible_primary.subscription_resolution_type();
-                    let mut returned_windows = AHashMap::new();
-                    if !self.primary_subscriptions.contains_key(&primary_res_sub_type) {
-                        self.primary_subscriptions.insert(primary_res_sub_type.clone(), lowest_possible_primary.clone());
-                        if is_warmed_up {
-                            let from_time = match lowest_possible_primary.resolution == Resolution::Instant {
-                                true => {
-                                    let subtract_duration: Duration = Duration::seconds(2) * history_to_retain as i32;
-                                    warm_up_to_time - subtract_duration - Duration::days(5)
-                                }
-                                false => {
-                                    let subtract_duration: Duration = lowest_possible_primary.resolution.as_duration() * history_to_retain as i32;
-                                    warm_up_to_time - subtract_duration - Duration::days(5)
-                                }
-                            };
-                            let warm_up_sub = match self.vendor_historical_resolutions.contains(&lowest_possible_primary.subscription_resolution_type()) {
-                                true => lowest_possible_primary.clone(),
-                                false => {
-                                    match self.vendor_historical_resolutions.contains(&sub_res_type) {
-                                        true => new_subscription.clone(),
-                                        false => {
-                                            let mut optimal: Option<DataSubscription> = None;
-                                            for sub in self.vendor_historical_resolutions.clone() {
-                                                if sub.resolution < new_subscription.resolution && sub.base_data_type == new_subscription.base_data_type {
-                                                    if let Some(un_wrapped_optimal) = &optimal {
-                                                        if sub.resolution > un_wrapped_optimal.resolution && sub.base_data_type == new_subscription.base_data_type {
-                                                            optimal = Some(DataSubscription::new(new_subscription.symbol.name.clone(), new_subscription.symbol.data_vendor.clone(), sub.resolution, sub.base_data_type.clone(), new_subscription.market_type.clone()));
-                                                        }
-                                                    } else {
-                                                        optimal = Some(DataSubscription::new(new_subscription.symbol.name.clone(),
-                                                                                             new_subscription.symbol.data_vendor.clone(), sub.resolution, sub.base_data_type.clone(), new_subscription.market_type.clone()));
-                                                    }
-                                                }
-                                            }
-                                            if let Some(optimal) = optimal {
-                                                optimal
-                                            } else {
-                                                return Err(DataSubscriptionEvent::FailedToSubscribe(new_subscription.clone(), format!("{}: Does not have low enough resolution data to consolidate: {}", new_subscription.symbol.data_vendor, new_subscription)))
-                                            }
-                                        }
-                                    }
-                                }
-                            };
-                            let data = get_compressed_historical_data(vec![warm_up_sub.clone()], from_time, warm_up_to_time).await.unwrap_or_else(|_e| BTreeMap::new());
-                            let multiplier = new_subscription.resolution.as_seconds() / warm_up_sub.resolution.as_seconds();
-                            let mut history = RollingWindow::new(multiplier as usize * history_to_retain);
-                            for (_, slice) in data {
-                                for data in slice.iter() {
-                                    history.add(data.clone());
-                                }
-                            }
-                            returned_windows.insert(warm_up_sub.clone(), history);
-                        } else {
-                            returned_windows.insert(lowest_possible_primary.clone(), RollingWindow::new(history_to_retain));
-                        }
-                        if !self.secondary_subscriptions.contains_key(&primary_res_sub_type) {
-                            self.secondary_subscriptions.insert(primary_res_sub_type.clone(), AHashMap::new());
-                        }
-                    }
-                    let consolidator = ConsolidatorEnum::create_consolidator(new_subscription.clone(), fill_forward.clone()).await;
-                    let (consolidator, window) = match is_warmed_up {
-                        true => ConsolidatorEnum::warmup(consolidator, warm_up_to_time, history_to_retain as i32, strategy_mode).await,
-                        false => (consolidator, RollingWindow::new(history_to_retain))
-                    };
-                    if let Some(mut map) = self.secondary_subscriptions.get_mut(&primary_res_sub_type) {
-                        map.value_mut().insert(consolidator.subscription().clone(), consolidator);
-                    }
-                    returned_windows.insert(new_subscription.clone(), window);
-                    Ok(returned_windows)
-                } else {
-                    let mut returned_windows = AHashMap::new();
-                    let new_primary = DataSubscription::new(new_subscription.symbol.name.clone(), new_subscription.symbol.data_vendor.clone(), ideal_subscription.resolution, ideal_subscription.base_data_type, new_subscription.market_type.clone());
-                    if !self.primary_subscriptions.contains_key(&ideal_subscription) {
-                        self.primary_subscriptions.insert(new_primary.subscription_resolution_type(), new_primary.clone());
-                        if is_warmed_up {
-                            let from_time = match new_primary.resolution == Resolution::Instant {
-                                true => {
-                                    let subtract_duration: Duration = Duration::seconds(2) * history_to_retain as i32;
-                                    warm_up_to_time - subtract_duration - Duration::days(5)
-                                }
-                                false => {
-                                    let subtract_duration: Duration = new_primary.resolution.as_duration() * history_to_retain as i32;
-                                    warm_up_to_time - subtract_duration - Duration::days(5)
-                                }
-                            };
-                            let data = get_compressed_historical_data(vec![new_primary.clone()], from_time, warm_up_to_time).await.unwrap_or_else(|_e| BTreeMap::new());
-                            let mut history = RollingWindow::new(history_to_retain);
-                            for (_, slice) in data {
-                                for data in slice.iter() {
-                                    history.add(data.clone());
-                                }
-                            }
-                            returned_windows.insert(new_primary.clone(), history);
-                        } else {
-                            returned_windows.insert(new_primary.clone(), RollingWindow::new(history_to_retain));
-                        }
-                    }
-                    if !self.vendor_primary_resolutions.contains(&new_subscription.subscription_resolution_type()) {
-                        let consolidator = ConsolidatorEnum::create_consolidator(new_subscription.clone(), fill_forward.clone()).await;
-                        let (final_consolidator, window) = match is_warmed_up {
-                            true => {
-                                let (final_consolidator, window) = ConsolidatorEnum::warmup(consolidator, warm_up_to_time, history_to_retain as i32, strategy_mode).await;
-                                (final_consolidator, window)
-                            },
-                            false => (consolidator, RollingWindow::new(history_to_retain))
                         };
-                        self.secondary_subscriptions
-                            .entry(new_primary.subscription_resolution_type())
-                            .or_insert_with(AHashMap::new)
-                            .insert(new_subscription.clone(), final_consolidator);
-                        returned_windows.insert(new_subscription.clone(), window);
+                        let data = get_compressed_historical_data(vec![new_primary.clone()], from_time, warm_up_to_time).await.unwrap_or_else(|_e| BTreeMap::new());
+                        let mut history = RollingWindow::new(history_to_retain);
+                        for (_, slice) in data {
+                            for data in slice.iter() {
+                                history.add(data.clone());
+                            }
+                        }
+                        returned_windows.insert(new_primary.clone(), history);
+                    } else {
+                        returned_windows.insert(new_primary.clone(), RollingWindow::new(history_to_retain));
                     }
-                    Ok(returned_windows)
                 }
             }
-            _ => panic!("This shouldnt be possible")
+            if !self.secondary_subscriptions.contains_key(&primary) {
+                let consolidator = ConsolidatorEnum::create_consolidator(new_subscription.clone(), fill_forward.clone()).await;
+                let (final_consolidator, window) = match is_warmed_up {
+                    true => {
+                        let (final_consolidator, window) = ConsolidatorEnum::warmup(consolidator, warm_up_to_time, history_to_retain as i32, strategy_mode).await;
+                        (final_consolidator, window)
+                    },
+                    false => (consolidator, RollingWindow::new(history_to_retain))
+                };
+                self.secondary_subscriptions
+                    .entry(primary)
+                    .or_insert_with(AHashMap::new)
+                    .insert(new_subscription.clone(), final_consolidator);
+                returned_windows.insert(new_subscription.clone(), window);
+            }
+            Ok(returned_windows)
+        } else {
+            if !self.primary_subscriptions.contains_key(&new_subscription.subscription_resolution_type()) {
+                self.primary_subscriptions.insert(new_subscription.subscription_resolution_type(), new_subscription.clone());
+                if is_warmed_up {
+                    let from_time = match new_subscription.resolution == Resolution::Instant {
+                        true => {
+                            let subtract_duration: Duration = chrono::Duration::seconds(2) * history_to_retain as i32;
+                            warm_up_to_time - subtract_duration - Duration::days(5)
+                        }
+                        false => {
+                            let subtract_duration: Duration = new_subscription.resolution.as_duration() * history_to_retain as i32;
+                            warm_up_to_time - subtract_duration - Duration::days(5)
+                        }
+                    };
+                    let data = get_compressed_historical_data(vec![new_subscription.clone()], from_time, warm_up_to_time).await.unwrap_or_else(|_e| BTreeMap::new());
+                    let mut history = RollingWindow::new(history_to_retain);
+                    for (_, slice) in data {
+                        for data in slice.iter() {
+                            history.add(data.clone());
+                        }
+                    }
+                    returned_windows.insert(new_subscription.clone(), history);
+                } else {
+                    returned_windows.insert(new_subscription.clone(), RollingWindow::new(history_to_retain));
+                }
+            }
+            Ok(returned_windows)
         }
     }
 

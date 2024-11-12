@@ -103,14 +103,14 @@ pub enum StrategyMode {
 #[derive(Serialize, Deserialize, Clone, Serialize_rkyv, Deserialize_rkyv, Archive, PartialOrd, Eq, Ord, PartialEq, Copy, Debug, Hash)]
 #[archive(compare(PartialEq), check_bytes)]
 #[archive_attr(derive(Debug))]
-pub struct SubscriptionResolutionType {
+pub struct PrimarySubscription {
     pub base_data_type: BaseDataType,
     pub resolution: Resolution,
 }
 
-impl SubscriptionResolutionType {
+impl PrimarySubscription {
     pub fn new(resolution: Resolution, base_data_type: BaseDataType) -> Self {
-        SubscriptionResolutionType {
+        PrimarySubscription {
             resolution,
             base_data_type,
         }

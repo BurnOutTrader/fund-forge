@@ -6,7 +6,7 @@ use colored::Colorize;
 use rust_decimal::Decimal;
 use ff_standard_lib::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use ff_standard_lib::standardized_types::base_data::traits::BaseData;
-use ff_standard_lib::standardized_types::enums::{FuturesExchange, MarketType, StrategyMode};
+use ff_standard_lib::standardized_types::enums::{FuturesExchange, MarketType, PrimarySubscription, StrategyMode};
 use ff_standard_lib::strategies::strategy_events::{StrategyEvent};
 use ff_standard_lib::standardized_types::subscriptions::{DataSubscription, SymbolName};
 use ff_standard_lib::strategies::fund_forge_strategy::FundForgeStrategy;
@@ -25,14 +25,6 @@ use ff_standard_lib::standardized_types::resolution::Resolution;
 async fn main() {
     let (strategy_event_sender, strategy_event_receiver) = mpsc::channel(1000);
 
-    let data_subscription = DataSubscription::new(
-        SymbolName::from("AUD-USD"),
-        DataVendor::Oanda,
-        Resolution::Hours(1),
-        BaseDataType::QuoteBars,
-        MarketType::Forex
-    );
-
     let strategy = FundForgeStrategy::initialize(
         StrategyMode::Backtest, // Backtest, Live, LivePaper
         dec!(100000),
@@ -40,45 +32,49 @@ async fn main() {
         NaiveDate::from_ymd_opt(2005, 02, 01).unwrap().and_hms_opt(0, 0, 0).unwrap(), // Starting date of the backtest is a NaiveDateTime not NaiveDate
         NaiveDate::from_ymd_opt(2024, 11, 11).unwrap().and_hms_opt(0, 0, 0).unwrap(), // Ending date of the backtest is a NaiveDateTime not NaiveDate
         Australia::Sydney,                      // the strategy time zone
-        Duration::hours(100), // the warmup duration, the duration of historical data we will pump through the strategy to warm up indicators etc before the strategy starts executing.
+        Duration::hours(10), // the warmup duration, the duration of historical data we will pump through the strategy to warm up indicators etc before the strategy starts executing.
         vec![
             // Since we only have quote level test data, the 2 subscriptions will be created by consolidating the quote feed. Quote data will automatically be subscribed as primary data source.
-            data_subscription.clone(),
-            DataSubscription::new(
+            (Some(PrimarySubscription::new(Resolution::Hours(1), BaseDataType::QuoteBars)),
+             DataSubscription::new(
                 SymbolName::from("EUR-USD"),
                 DataVendor::Oanda,
-                Resolution::Hours(1),
+                Resolution::Hours(4),
                 BaseDataType::QuoteBars,
                 MarketType::Forex
-            ),
-            DataSubscription::new(
-                SymbolName::from("CAD-USD"),
+            )),
+            (Some(PrimarySubscription::new(Resolution::Hours(1), BaseDataType::QuoteBars)),
+             DataSubscription::new(
+                SymbolName::from("USD-CAD"),
                 DataVendor::Oanda,
-                Resolution::Hours(1),
+                Resolution::Hours(4),
                 BaseDataType::QuoteBars,
                 MarketType::Forex
-            ),
-            DataSubscription::new(
+            )),
+            (Some(PrimarySubscription::new(Resolution::Hours(1), BaseDataType::QuoteBars)),
+             DataSubscription::new(
                 SymbolName::from("EUR-CAD"),
                 DataVendor::Oanda,
-                Resolution::Hours(1),
+                Resolution::Hours(4),
                 BaseDataType::QuoteBars,
                 MarketType::Forex
-            ),
-            DataSubscription::new(
+            )),
+            (Some(PrimarySubscription::new(Resolution::Hours(1), BaseDataType::QuoteBars)),
+             DataSubscription::new(
                 SymbolName::from("EUR-JPY"),
                 DataVendor::Oanda,
-                Resolution::Hours(1),
+                Resolution::Hours(4),
                 BaseDataType::QuoteBars,
                 MarketType::Forex
-            ),
-            DataSubscription::new(
+            )),
+            (Some(PrimarySubscription::new(Resolution::Hours(1), BaseDataType::QuoteBars)),
+             DataSubscription::new(
                 SymbolName::from("AUD-JPY"),
                 DataVendor::Oanda,
-                Resolution::Hours(1),
+                Resolution::Hours(4),
                 BaseDataType::QuoteBars,
                 MarketType::Forex
-            ),
+            )),
         ],
 
         //fill forward
@@ -92,7 +88,7 @@ async fn main() {
 
         // Buffer Duration
         //strategy resolution in milliseconds, all data at a lower resolution will be consolidated to this resolution, if using tick data, you will want to set this at 100 or less depending on the data granularity
-        core::time::Duration::from_secs(60 * 5), //use a giant buffer since we are only using 1 hour data and not actually buffering anything
+        core::time::Duration::from_secs(10), //use a giant buffer since we are only using 1 hour data and not actually buffering anything
 
         // Enabled will launch the strategy registry handler to connect to a GUI, currently will crash if enabled
         false,
@@ -103,7 +99,7 @@ async fn main() {
         vec![Account::new(Brokerage::Oanda, "101-011-24767836-001".to_string())]
     ).await;
 
-    on_data_received(strategy, strategy_event_receiver, data_subscription).await;
+    on_data_received(strategy, strategy_event_receiver).await;
 }
 
 #[derive(Clone, PartialEq, Debug)]
@@ -116,7 +112,6 @@ enum LastSide {
 pub async fn on_data_received(
     strategy: FundForgeStrategy,
     mut event_receiver: mpsc::Receiver<StrategyEvent>,
-    data_subscription: DataSubscription
 ) {
 
     let mut warmup_complete = false;

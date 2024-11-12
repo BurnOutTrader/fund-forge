@@ -1,5 +1,5 @@
 use std::collections::{BTreeMap};
-use crate::standardized_types::enums::{MarketType, OrderSide, StrategyMode, SubscriptionResolutionType};
+use crate::standardized_types::enums::{MarketType, OrderSide, StrategyMode, PrimarySubscription};
 use crate::standardized_types::subscriptions::{DataSubscription, Symbol, SymbolName};
 use crate::standardized_types::bytes_trait::Bytes;
 use rkyv::{Archive, Deserialize, Serialize};
@@ -227,7 +227,7 @@ DataServerResponse {
     /// Responds with a vec<(Resolution, BaseDataType)> which represents all the native resolutions available for the data types from the vendor api (note we only support intraday resolutions, higher resolutions are consolidated by the engine)
     Resolutions {
         callback_id: u64,
-        subscription_resolutions_types: Vec<SubscriptionResolutionType>,
+        subscription_resolutions_types: Vec<PrimarySubscription>,
         market_type: MarketType
     },
 

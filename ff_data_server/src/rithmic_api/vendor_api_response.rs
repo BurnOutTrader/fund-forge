@@ -9,7 +9,7 @@ use crate::rithmic_api::client_base::rithmic_proto_objects::rti::request_time_ba
 use ff_standard_lib::messages::data_server_messaging::{DataServerResponse, FundForgeError};
 use crate::server_features::server_side_datavendor::VendorApiResponse;
 use ff_standard_lib::standardized_types::base_data::base_data_type::BaseDataType;
-use ff_standard_lib::standardized_types::enums::{FuturesExchange, MarketType, StrategyMode, SubscriptionResolutionType};
+use ff_standard_lib::standardized_types::enums::{FuturesExchange, MarketType, StrategyMode, PrimarySubscription};
 use ff_standard_lib::standardized_types::resolution::Resolution;
 use ff_standard_lib::standardized_types::subscriptions::{DataSubscription, Symbol, SymbolName};
 use ff_standard_lib::StreamName;
@@ -66,12 +66,12 @@ impl VendorApiResponse for RithmicBrokerageClient {
             StrategyMode::Backtest => {
                 //todo, we need a better way to handle historical, primary data sources, we need a way to check for each symbol, which historical data is available.
                 // to achieve this this fn should be split, resolutions should also be determined by symbol name when historical data is requested, so we can check the data we actually have available.
-                resolutions.push(SubscriptionResolutionType::new(Resolution::Ticks(1), BaseDataType::Ticks));
+                resolutions.push(PrimarySubscription::new(Resolution::Ticks(1), BaseDataType::Ticks));
             }
             StrategyMode::LivePaperTrading |  StrategyMode::Live => {
-                resolutions.push(SubscriptionResolutionType::new(Resolution::Ticks(1), BaseDataType::Ticks));
-                resolutions.push(SubscriptionResolutionType::new(Resolution::Instant, BaseDataType::Quotes));
-                resolutions.push(SubscriptionResolutionType::new(Resolution::Seconds(1), BaseDataType::Candles));
+                resolutions.push(PrimarySubscription::new(Resolution::Ticks(1), BaseDataType::Ticks));
+                resolutions.push(PrimarySubscription::new(Resolution::Instant, BaseDataType::Quotes));
+                resolutions.push(PrimarySubscription::new(Resolution::Seconds(1), BaseDataType::Candles));
             }
         }
 
