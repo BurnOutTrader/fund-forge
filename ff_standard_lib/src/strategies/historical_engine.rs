@@ -280,10 +280,50 @@ fn get_day_boundary(time: DateTime<Utc>) -> DateTime<Utc> {
     Utc.from_utc_datetime(&end_of_day).max(time)
 }
 
+
 fn align_to_buffer(time: DateTime<Utc>, buffer_duration: std::time::Duration) -> DateTime<Utc> {
-    let nanos = time.timestamp_nanos_opt().unwrap() as u128;
-    let buffer_nanos = buffer_duration.as_nanos();
-    let aligned_nanos = (nanos / buffer_nanos) * buffer_nanos;
-    DateTime::<Utc>::from_timestamp_nanos(aligned_nanos as i64)
+    let nanos = time.timestamp_nanos_opt().unwrap();
+    let buffer_nanos = buffer_duration.as_nanos() as i64;
+
+    // Check if we're already on a buffer boundary
+    let remainder = nanos % buffer_nanos;
+    if remainder == 0 {
+        return time;  // Already perfectly aligned, don't modify
+    }
+
+    // If not aligned, round up to next buffer boundary
+    let aligned_nanos = nanos + (buffer_nanos - remainder);
+    DateTime::<Utc>::from_timestamp_nanos(aligned_nanos)
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::time::Duration;
+
+    #[test]
+    fn test_basic_buffer_alignment() {
+        let thirty_mins = Duration::from_secs(30 * 60);
+
+        let test_cases = vec![
+            ("01:00:00", "01:00:00"),  // Aligned - should not change
+            ("01:30:00", "01:30:00"),  // Aligned - should not change
+            ("01:29:59", "01:30:00"),  // Not aligned - should move to next 30 min
+            ("01:45:00", "02:00:00"),  // Not aligned - should move to next 30 min
+            ("02:00:00", "02:00:00"),  // Aligned - should not change
+        ];
+
+        for (input, expected) in test_cases {
+            let hour = input.split(":").next().unwrap().parse::<u32>().unwrap();
+            let min = input.split(":").nth(1).unwrap().parse::<u32>().unwrap();
+            let sec = input.split(":").nth(2).unwrap().parse::<u32>().unwrap();
+
+            let time = Utc.with_ymd_and_hms(2024, 1, 1, hour, min, sec).unwrap();
+            let aligned = align_to_buffer(time, thirty_mins);
+
+            println!("Input: {}, Aligned: {}", input, aligned.format("%H:%M:%S"));
+            assert_eq!(aligned.format("%H:%M:%S").to_string(), expected,
+                       "Failed for input: {}", input);
+        }
+    }
+}
