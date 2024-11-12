@@ -107,7 +107,7 @@ use std::collections::HashMap;
 use lazy_static::lazy_static;
 use rust_decimal::Decimal;
 use rust_decimal_macros::dec;
-use chrono::{DateTime, Datelike, NaiveTime, Utc};
+use chrono::{DateTime, Datelike, NaiveTime, Timelike, Utc, Weekday};
 use chrono_tz::Tz;
 use crate::standardized_types::enums::FuturesExchange;
 use crate::standardized_types::symbol_info::{CommissionInfo, SymbolInfo};
@@ -964,18 +964,6 @@ pub struct DaySession {
     pub close: Option<NaiveTime>,
 }
 
-#[derive(Clone, Debug)]
-pub struct TradingHours {
-    pub timezone: Tz,
-    pub sunday: DaySession,
-    pub monday: DaySession,
-    pub tuesday: DaySession,
-    pub wednesday: DaySession,
-    pub thursday: DaySession,
-    pub friday: DaySession,
-    pub saturday: DaySession,
-}
-
 impl DaySession {
     pub fn is_trading_time(&self, time: NaiveTime) -> bool {
         match (self.open, self.close) {
@@ -1001,3 +989,176 @@ impl DaySession {
     }
 }
 
+#[derive(Clone, Debug)]
+pub struct TradingHours {
+    pub timezone: Tz,
+    pub sunday: DaySession,
+    pub monday: DaySession,
+    pub tuesday: DaySession,
+    pub wednesday: DaySession,
+    pub thursday: DaySession,
+    pub friday: DaySession,
+    pub saturday: DaySession,
+}
+
+impl TradingHours {
+    pub fn seconds_until_close(&self, current_time: DateTime<Utc>) -> Option<i64> {
+        // Convert UTC time to market timezone
+        let market_time = current_time.with_timezone(&self.timezone);
+        let current_time_naive = market_time.time();
+        let current_weekday = market_time.weekday();
+
+        // Get the session for the current day
+        let current_session = match current_weekday {
+            Weekday::Sun => &self.sunday,
+            Weekday::Mon => &self.monday,
+            Weekday::Tue => &self.tuesday,
+            Weekday::Wed => &self.wednesday,
+            Weekday::Thu => &self.thursday,
+            Weekday::Fri => &self.friday,
+            Weekday::Sat => &self.saturday,
+        };
+
+        // Get next day's session for overnight handling
+        let next_session = match current_weekday {
+            Weekday::Sun => &self.monday,
+            Weekday::Mon => &self.tuesday,
+            Weekday::Tue => &self.wednesday,
+            Weekday::Wed => &self.thursday,
+            Weekday::Thu => &self.friday,
+            Weekday::Fri => &self.saturday,
+            Weekday::Sat => &self.sunday,
+        };
+
+        match (current_session.open, current_session.close) {
+            // Normal session within same day
+            (Some(open), Some(close)) if close > open => {
+                if !current_session.is_trading_time(current_time_naive) {
+                    return None;  // Not in trading hours
+                }
+                let current_secs = current_time_naive.hour() * 3600 +
+                    current_time_naive.minute() * 60 +
+                    current_time_naive.second();
+                let close_secs = close.hour() * 3600 +
+                    close.minute() * 60 +
+                    close.second();
+                Some(close_secs as i64 - current_secs as i64)
+            },
+
+            // Overnight session
+            (Some(open), Some(close)) => {
+                if !current_session.is_trading_time(current_time_naive) {
+                    return None;  // Not in trading hours
+                }
+                if current_time_naive >= open {
+                    // We're in today's portion of the session
+                    let current_secs = current_time_naive.hour() * 3600 +
+                        current_time_naive.minute() * 60 +
+                        current_time_naive.second();
+                    let secs_to_midnight = 24 * 60 * 60 - current_secs;
+                    let close_secs = close.hour() * 3600 +
+                        close.minute() * 60 +
+                        close.second();
+                    Some(secs_to_midnight as i64 + close_secs as i64)
+                } else {
+                    // We're in the morning portion of the session
+                    let current_secs = current_time_naive.hour() * 3600 +
+                        current_time_naive.minute() * 60 +
+                        current_time_naive.second();
+                    let close_secs = close.hour() * 3600 +
+                        close.minute() * 60 +
+                        close.second();
+                    Some(close_secs as i64 - current_secs as i64)
+                }
+            },
+
+            // Session that starts but doesn't end on this day
+            (Some(open), None) => {
+                if current_time_naive < open {
+                    return None;  // Before session start
+                }
+                match next_session.close {
+                    Some(next_close) => {
+                        let current_secs = current_time_naive.hour() * 3600 +
+                            current_time_naive.minute() * 60 +
+                            current_time_naive.second();
+                        let secs_to_midnight = 24 * 60 * 60 - current_secs;
+                        let close_secs = next_close.hour() * 3600 +
+                            next_close.minute() * 60 +
+                            next_close.second();
+                        Some(secs_to_midnight as i64 + close_secs as i64)
+                    },
+                    None => None,  // No defined close time
+                }
+            },
+
+            // Session that ends but didn't start on this day
+            (None, Some(close)) => {
+                if current_time_naive >= close {
+                    return None;  // After session close
+                }
+                let current_secs = current_time_naive.hour() * 3600 +
+                    current_time_naive.minute() * 60 +
+                    current_time_naive.second();
+                let close_secs = close.hour() * 3600 +
+                    close.minute() * 60 +
+                    close.second();
+                Some(close_secs as i64 - current_secs as i64)
+            },
+
+            (None, None) => None,  // No trading this day
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use chrono::NaiveTime;
+    use chrono_tz::US::Eastern;
+    use chrono::TimeZone;  // Added this import
+
+    #[test]
+    fn test_seconds_until_close() {
+        let trading_hours = TradingHours {
+            timezone: Eastern,
+            sunday: DaySession { open: None, close: None },
+            monday: DaySession {
+                open: Some(NaiveTime::from_hms_opt(9, 30, 0).unwrap()),
+                close: Some(NaiveTime::from_hms_opt(16, 0, 0).unwrap()),
+            },
+            tuesday: DaySession {
+                open: Some(NaiveTime::from_hms_opt(9, 30, 0).unwrap()),
+                close: Some(NaiveTime::from_hms_opt(16, 0, 0).unwrap()),
+            },
+            wednesday: DaySession {
+                open: Some(NaiveTime::from_hms_opt(9, 30, 0).unwrap()),
+                close: Some(NaiveTime::from_hms_opt(16, 0, 0).unwrap()),
+            },
+            thursday: DaySession {
+                open: Some(NaiveTime::from_hms_opt(9, 30, 0).unwrap()),
+                close: Some(NaiveTime::from_hms_opt(16, 0, 0).unwrap()),
+            },
+            friday: DaySession {
+                open: Some(NaiveTime::from_hms_opt(9, 30, 0).unwrap()),
+                close: Some(NaiveTime::from_hms_opt(16, 0, 0).unwrap()),
+            },
+            saturday: DaySession { open: None, close: None },
+        };
+
+        // Test normal trading day
+        let test_time = Eastern.ymd(2024, 1, 8).and_hms(14, 30, 0).with_timezone(&Utc);
+        let seconds = trading_hours.seconds_until_close(test_time);
+        assert_eq!(seconds, Some(5400)); // 1.5 hours = 5400 seconds
+
+        // Test outside trading hours
+        let test_time = Eastern.ymd(2024, 1, 8).and_hms(17, 0, 0).with_timezone(&Utc);
+        let seconds = trading_hours.seconds_until_close(test_time);
+        assert_eq!(seconds, None);
+
+        // Test weekend
+        let test_time = Eastern.ymd(2024, 1, 7).and_hms(12, 0, 0).with_timezone(&Utc);
+        let seconds = trading_hours.seconds_until_close(test_time);
+        assert_eq!(seconds, None);
+    }
+}

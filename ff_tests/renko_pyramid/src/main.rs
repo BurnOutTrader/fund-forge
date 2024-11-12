@@ -10,6 +10,7 @@ use ff_standard_lib::strategies::fund_forge_strategy::FundForgeStrategy;
 use rust_decimal_macros::dec;
 use tokio::sync::mpsc;
 use ff_standard_lib::gui_types::settings::Color;
+use ff_standard_lib::product_maps::rithmic::maps::get_futures_trading_hours;
 use ff_standard_lib::standardized_types::accounts::{Account, Currency};
 use ff_standard_lib::standardized_types::base_data::base_data_type::BaseDataType;
 use ff_standard_lib::standardized_types::broker_enum::Brokerage;
@@ -100,6 +101,8 @@ pub async fn on_data_received(
     let mut bars_since_entry = 0;
     let mut last_short_result = Result::BreakEven;
     let mut last_long_result = Result::BreakEven;
+
+    let hours = get_futures_trading_hours(&symbol_name).unwrap();
     // The engine will send a buffer of strategy events at the specified buffer interval, it will send an empty buffer if no events were buffered in the period.
     'strategy_loop: while let Some(strategy_event) = event_receiver.recv().await {
         //println!("Strategy: Buffer Received Time: {}", strategy.time_local());
@@ -121,6 +124,11 @@ pub async fn on_data_received(
 
                                 if !warmup_complete {
                                     continue;
+                                }
+
+                                if hours.seconds_until_close(strategy.time_utc()).unwrap() < 500 {
+                                    strategy.flatten_all_for(account.clone()).await;
+                                    continue 'strategy_loop;
                                 }
 
                                 if let (Some(last_block), Some(two_blocks_ago)) = (strategy.indicator_index(&renko, 1), strategy.indicator_index(&renko, 2)) {
