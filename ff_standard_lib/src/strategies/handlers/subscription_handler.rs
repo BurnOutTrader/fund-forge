@@ -77,102 +77,6 @@ impl SubscriptionHandler {
         strategy_subscriptions.clone()
     }
 
-    pub(crate) async fn subscribe_override(
-        &self,
-        new_subscription: DataSubscription,
-        warm_up_to_time: DateTime<Utc>,
-        history_to_retain: usize,
-        broadcast: bool
-    ) {
-        if !self.symbol_subscriptions.contains_key(&new_subscription.symbol) {
-            let symbol_handler = SymbolSubscriptionHandler::new(
-                new_subscription.symbol.clone(),
-            ).await;
-            self.symbol_subscriptions.insert(new_subscription.symbol.clone(), symbol_handler);
-        }
-
-        let symbol_subscriptions = self.symbol_subscriptions.get(&new_subscription.symbol).unwrap();
-        let result = symbol_subscriptions.value().subscribe_override(
-            new_subscription.clone(),
-            warm_up_to_time,
-            history_to_retain,
-        ).await;
-
-        match result {
-            Ok((window, event)) => {
-                match new_subscription.base_data_type {
-                    BaseDataType::Ticks => {
-                        self.tick_history.insert(new_subscription.clone(), RollingWindow::new(history_to_retain));
-                        if let Some(mut tick_window) = self.tick_history.get_mut(&new_subscription) {
-                            for data in window.history {
-                                match data {
-                                    BaseDataEnum::Tick(tick) => tick_window.value_mut().add(tick),
-                                    _ => {}
-                                }
-                            }
-                        }
-                    }
-                    BaseDataType::Quotes => {
-                        self.quote_history.insert(new_subscription.clone(), RollingWindow::new(history_to_retain));
-                        if let Some(mut quote_window) = self.quote_history.get_mut(&new_subscription) {
-                            for data in window.history {
-                                match data {
-                                    BaseDataEnum::Quote(quote) => quote_window.value_mut().add(quote),
-                                    _ => {}
-                                }
-                            }
-                        }
-                    }
-                    BaseDataType::QuoteBars => {
-                        self.bar_history.insert(new_subscription.clone(), RollingWindow::new(history_to_retain));
-                        if let Some(mut bar_window) = self.bar_history.get_mut(&new_subscription) {
-                            for data in window.history {
-                                match data {
-                                    BaseDataEnum::QuoteBar(quote) => bar_window.value_mut().add(quote),
-                                    _ => {}
-                                }
-                            }
-                        }
-                    }
-                    BaseDataType::Candles => {
-                        self.candle_history.insert(new_subscription.clone(), RollingWindow::new(history_to_retain));
-                        if let Some(mut candle_window) = self.candle_history.get_mut(&new_subscription) {
-                            for data in window.history {
-                                match data {
-                                    BaseDataEnum::Candle(candle) => candle_window.value_mut().add(candle),
-                                    _ => {}
-                                }
-                            }
-                        }
-                    }
-                    BaseDataType::Fundamentals => {
-                        self.fundamental_history.insert(new_subscription.clone(), RollingWindow::new(history_to_retain));
-                        if let Some(mut fundamental_window) = self.fundamental_history.get_mut(&new_subscription) {
-                            for data in window.history {
-                                match data {
-                                    BaseDataEnum::Fundamental(funda) => fundamental_window.value_mut().add(funda),
-                                    _ => {}
-                                }
-                            }
-                        }
-                    }
-                }
-
-                if broadcast {
-                    let subscriptions = self.primary_subscriptions().await;
-                    match self.primary_subscriptions_broadcaster.send(subscriptions) {
-                        Ok(_) => {}
-                        Err(_) => {}
-                    }
-                }
-                let _ = self.strategy_event_sender.send(StrategyEvent::DataSubscriptionEvent(event)).await;
-            }
-            Err(e) => {
-                let _ = self.strategy_event_sender.send(StrategyEvent::DataSubscriptionEvent(e)).await;
-            }
-        }
-    }
-
     /// Subscribes to a new data subscription
     /// 'new_subscription: DataSubscription' The new subscription to subscribe to.
     /// 'history_to_retain: usize' The number of bars to retain in the history.
@@ -787,8 +691,8 @@ impl SymbolSubscriptionHandler {
                 return Err(DataSubscriptionEvent::FailedToSubscribe(new_subscription.clone(), format!("{}: Does not support this subscription: {}", new_subscription.symbol.data_vendor, new_subscription)))
             }
             if !self.primary_subscriptions.contains_key(&primary) {
-                let new_primary = DataSubscription::new(new_subscription.symbol.name.clone(), new_subscription.symbol.data_vendor.clone(), primary.resolution, primary.base_data_type, new_subscription.market_type.clone());
                 if !self.primary_subscriptions.contains_key(&primary) {
+                    let new_primary = DataSubscription::new(new_subscription.symbol.name.clone(), new_subscription.symbol.data_vendor.clone(), primary.resolution, primary.base_data_type, new_subscription.market_type.clone());
                     self.primary_subscriptions.insert(new_primary.subscription_resolution_type(), new_primary.clone());
                     if is_warmed_up {
                         let from_time = match new_primary.resolution == Resolution::Instant {

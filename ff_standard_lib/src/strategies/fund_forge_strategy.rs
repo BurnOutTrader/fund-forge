@@ -283,11 +283,6 @@ impl FundForgeStrategy {
         )
     }
 
-    pub async fn subscribe_override(&self, subscription: DataSubscription, history_to_retain: usize) {
-        self.subscription_handler.subscribe_override(subscription, self.time_utc(), history_to_retain, true).await;
-        //todo broadcast to strategy receiver
-    }
-
     //todo[Strategy]
     pub async fn custom_order(&self, _order: Order, _order_type: OrderType) -> OrderId {
         todo!("Make a fn that takes an order and figures out what to do with it")
