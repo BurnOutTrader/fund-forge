@@ -112,7 +112,6 @@ impl HistoricalEngine {
 
     /// Feeds the historical data to the strategy, along with any events that were created.
     /// Simulates trading with a live buffer, where we catch events for x duration before forwarding to the strategy
-    #[allow(unused_assignments)]
     async fn historical_data_feed(
         &mut self,
         warm_up_start_time: DateTime<Utc>,
@@ -141,12 +140,9 @@ impl HistoricalEngine {
             println!("Historical Engine: Strategy Subscription: {}", subscription);
         }
         let mut last_time = warm_up_start_time.clone();
-        let mut first_iteration = true;
         'main_loop: while last_time <= end_time {
-            let to_time: DateTime<Utc> = {
-                let end_of_day_naive = (last_time.date_naive()).and_time(NaiveTime::from_hms_nano_opt(23, 59, 59, 999_999_999).unwrap());
-                Utc.from_utc_datetime(&end_of_day_naive).max(last_time)
-            };
+            let to_time = get_day_boundary(last_time);
+
             let mut time_slices = match get_compressed_historical_data(primary_subscriptions.clone(), last_time.clone(), to_time).await {
                 Ok(time_slices) => {
                     if time_slices.is_empty() && self.tick_over_no_data {
@@ -172,8 +168,9 @@ impl HistoricalEngine {
 
             let mut time = last_time;
             'day_loop: while time <= to_time {
-                self.notified.notified().await;
+                time = align_to_buffer(time, buffer_duration);
                 time += buffer_duration;
+                update_backtest_time(time);
                 if !warm_up_complete {
                     if time >= self.start_time {
                         eprintln!("Historical Engine: Warm up complete: {}", time);
@@ -270,11 +267,23 @@ impl HistoricalEngine {
                         Err(e) => eprintln!("Historical Engine: Failed to send event: {}", e)
                     }
                 }
-                update_backtest_time(time);
+                self.notified.notified().await;
                 last_time = time.clone();
             }
         }
     }
 }
 
+fn get_day_boundary(time: DateTime<Utc>) -> DateTime<Utc> {
+    let current_date = time.date_naive();
+    let end_of_day = current_date.and_hms_nano_opt(23, 59, 59, 999_999_999).unwrap();
+    Utc.from_utc_datetime(&end_of_day).max(time)
+}
+
+fn align_to_buffer(time: DateTime<Utc>, buffer_duration: std::time::Duration) -> DateTime<Utc> {
+    let nanos = time.timestamp_nanos_opt().unwrap() as u128;
+    let buffer_nanos = buffer_duration.as_nanos();
+    let aligned_nanos = (nanos / buffer_nanos) * buffer_nanos;
+    DateTime::<Utc>::from_timestamp_nanos(aligned_nanos as i64)
+}
 

@@ -166,7 +166,7 @@ pub async fn get_compressed_historical_data (
                 match payload {
                     DataServerResponse::CompressedHistoricalData { payload, .. } => {
                         let mut combined_data: BTreeMap<i64, TimeSlice> = BTreeMap::new();
-
+                        //eprintln!("Payload: {:?}", payload.len());
                         // Process each compressed file's data
                         for compressed_data in payload {
                             // Create a cursor for the compressed data and wrap it in a BufReader
