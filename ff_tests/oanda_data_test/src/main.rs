@@ -1,4 +1,5 @@
 use std::cmp::PartialEq;
+use std::collections::HashMap;
 use chrono::{Duration, NaiveDate};
 use chrono_tz::Australia;
 use colored::Colorize;
@@ -108,6 +109,7 @@ pub async fn on_data_received(
     let account_1 = Account::new(Brokerage::Oanda, "101-011-24767836-001".to_string());
     let mut last_side = LastSide::Flat;
 
+    let mut exit_orders = HashMap::new();
     'strategy_loop: while let Some(strategy_event) = event_receiver.recv().await {
         match strategy_event {
             StrategyEvent::TimeSlice(time_slice) => {
@@ -148,23 +150,25 @@ pub async fn on_data_received(
                                     println!("Open pnl: {}, Is_short: {}, is_long:{} ", long_pnl, is_short, is_long);
 
                                     // LONG SL+TP
-                                    if is_long && long_pnl > dec!(100.0) {
-                                        let position_size = strategy.position_size(&account_1, &qb.symbol.name);
-                                        let _exit_order_id = strategy.exit_long(&qb.symbol.name, None, &account_1, None, position_size, String::from("Exit Long Take Profit")).await;
-                                        println!("Strategy: Exit Long Take Profit, Time {}", strategy.time_local());  // Fixed message
-                                    } else if is_long
-                                        && long_pnl <= dec!(-100.0)
-                                    {
-                                        let position_size: Decimal = strategy.position_size(&account_1, &qb.symbol.name);
-                                        let _exit_order_id = strategy.exit_long(&qb.symbol.name, None, &account_1, None, position_size, String::from("Exit Long Take Loss")).await;
-                                        println!("Strategy: Exit Long Take Loss, Time {}", strategy.time_local());
+                                    if !exit_orders.contains_key(&qb.symbol.name) {
+                                        if is_long && long_pnl > dec!(100.0) {
+                                            let position_size = strategy.position_size(&account_1, &qb.symbol.name);
+                                            exit_orders.insert(qb.symbol.name.clone(), strategy.exit_long(&qb.symbol.name, None, &account_1, None, position_size, String::from("Exit Long Take Profit")).await);
+                                            println!("Strategy: Exit Long Take Profit, Time {}", strategy.time_local());  // Fixed message
+                                        } else if is_long
+                                            && long_pnl <= dec!(-100.0)
+                                        {
+                                            let position_size: Decimal = strategy.position_size(&account_1, &qb.symbol.name);
+                                            exit_orders.insert(qb.symbol.name.clone(), strategy.exit_long(&qb.symbol.name, None, &account_1, None, position_size, String::from("Exit Long Take Loss")).await);
+                                            println!("Strategy: Exit Long Take Loss, Time {}", strategy.time_local());
+                                        }
                                     }
                                 }
 
-                                /*if strategy.is_short(&account_1, &qb.symbol.name) {
+                                if strategy.is_short(&account_1, &qb.symbol.name) {
                                     println!("Short position detected");
                                     break 'strategy_loop;
-                                }*/
+                                }
                             }
                         }
 
@@ -223,10 +227,28 @@ pub async fn on_data_received(
             StrategyEvent::OrderEvents(event) => {
                 let msg = format!("Strategy: Order Event: {}, Time: {}", event, event.time_local(strategy.time_zone()));
                 match event {
-                    OrderUpdateEvent::OrderRejected { .. } | OrderUpdateEvent::OrderUpdateRejected { .. } => {
+                     OrderUpdateEvent::OrderUpdateRejected { .. } => {
                         strategy.print_ledger(event.account()).await;
                         println!("{}", msg.as_str().on_bright_magenta().on_bright_red())
                     },
+                    OrderUpdateEvent::OrderRejected { ref symbol_name, ref order_id,.. } => {
+                        strategy.print_ledger(event.account()).await;
+                        println!("{}", msg.as_str().on_bright_magenta().on_bright_red());
+                        if let Some(exit_order) = exit_orders.get(symbol_name) {
+                            if order_id == exit_order {
+                                exit_orders.remove(symbol_name);
+                            }
+                        }
+                    }
+                    OrderUpdateEvent::OrderFilled {symbol_name, order_id, ..} | OrderUpdateEvent::OrderCancelled {symbol_name, order_id, ..} => {
+                        println!("{}", msg.as_str().bright_yellow());
+                        if let Some(exit_order) = exit_orders.get(&symbol_name) {
+                            if order_id == *exit_order {
+                                exit_orders.remove(&symbol_name);
+                            }
+                        }
+                    }
+
                     _ =>  println!("{}", msg.as_str().bright_yellow())
                 }
             }
