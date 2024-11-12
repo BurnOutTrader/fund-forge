@@ -126,7 +126,7 @@ pub async fn on_data_received(
                 for base_data in time_slice.iter() {
                     match base_data {
                         BaseDataEnum::QuoteBar(qb) => {
-                            if qb.is_closed == true {
+                            if qb.is_closed == true && qb.resolution == Resolution::Hours(4) {
                                 let msg = format!("{} {} {} Close: {}, {}", qb.symbol.name, qb.resolution, qb.candle_type, qb.bid_close, qb.time_closed_local(strategy.time_zone()));
                                 if qb.bid_close == qb.bid_open {
                                     println!("{}", msg.as_str().blue())
