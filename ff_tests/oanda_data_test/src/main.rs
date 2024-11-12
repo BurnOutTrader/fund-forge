@@ -148,7 +148,7 @@ pub async fn on_data_received(
                                 //LONG CONDITIONS
                                 {
                                     // ENTER LONG
-                                    if !!entry_orders.contains_key(&qb.symbol.name) {
+                                    if !entry_orders.contains_key(&qb.symbol.name) {
                                         let is_flat = strategy.is_flat(&account_1, &qb.symbol.name);
                                         // buy AUD-CAD if consecutive green HA candles if our other account is long on EUR
                                         if is_flat
