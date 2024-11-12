@@ -143,9 +143,9 @@ impl HistoricalEngine {
         let mut last_time = warm_up_start_time.clone();
         let mut first_iteration = true;
         'main_loop: while last_time <= end_time {
-            if !first_iteration {
+           /* if !first_iteration {
                 last_time += Duration::from_nanos(1)
-            }
+            }*/
             let to_time: DateTime<Utc> = {
                 let end_of_day_naive = last_time.date_naive().and_time(NaiveTime::from_hms_nano_opt(23, 59, 59, 999_999_999).unwrap());
                 Utc.from_utc_datetime(&end_of_day_naive).max(last_time)
@@ -206,7 +206,7 @@ impl HistoricalEngine {
                     }
                     Err(_) => {}
                 }
-                update_backtest_time(time);
+
                 self.timed_event_handler.update_time(time.clone()).await;
 
                 let time_range = last_time.timestamp_nanos_opt().unwrap()..=time.timestamp_nanos_opt().unwrap();
@@ -242,8 +242,9 @@ impl HistoricalEngine {
                     strategy_time_slice.extend(time_slice);
                 }
 
+
                 if let Some(backtest_message_sender) = &self.historical_message_sender {
-                    let message = BackTestEngineMessage::Time(time);
+                    let message = BackTestEngineMessage::TickBufferTime;
                     match backtest_message_sender.send(message).await {
                         Ok(_) => {}
                         Err(e) => panic!("Market Handler: Error sending backtest message: {}", e)
@@ -255,6 +256,8 @@ impl HistoricalEngine {
                 if let Some(consolidated_data) = self.subscription_handler.update_consolidators_time(time.clone()).await {
                     strategy_time_slice.extend(consolidated_data);
                 }
+
+
 
                 if !strategy_time_slice.is_empty() {
                     // Update indicators and get_requests any generated events.
@@ -273,7 +276,7 @@ impl HistoricalEngine {
                         Err(e) => eprintln!("Historical Engine: Failed to send event: {}", e)
                     }
                 }
-
+                update_backtest_time(time);
                 last_time = time.clone();
             }
         }

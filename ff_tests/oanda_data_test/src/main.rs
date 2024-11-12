@@ -92,7 +92,7 @@ async fn main() {
 
         // Buffer Duration
         //strategy resolution in milliseconds, all data at a lower resolution will be consolidated to this resolution, if using tick data, you will want to set this at 100 or less depending on the data granularity
-        core::time::Duration::from_secs(60 * 30), //use a giant buffer since we are only using 1 hour data and not actually buffering anything
+        core::time::Duration::from_secs(60), //use a giant buffer since we are only using 1 hour data and not actually buffering anything
 
         // Enabled will launch the strategy registry handler to connect to a GUI, currently will crash if enabled
         false,
@@ -154,8 +154,8 @@ pub async fn on_data_received(
                                         if is_flat
                                             && qb.bid_close > qb.bid_open
                                         {
+                                            println!("Strategy: {} Enter Long, Time {}", qb.symbol.name, strategy.time_local());
                                             entry_orders.insert(qb.symbol.name.clone(), strategy.enter_long(&qb.symbol.name, None, &account_1, None, dec!(10000), String::from("Enter Long")).await);
-                                            println!("Strategy: Enter Long, Time {}", strategy.time_local());
                                             last_side = LastSide::Long;
                                         }
                                     }
@@ -169,15 +169,15 @@ pub async fn on_data_received(
                                     // LONG SL+TP
                                     if !exit_orders.contains_key(&qb.symbol.name) {
                                         if is_long && long_pnl > dec!(1000.0) {
+                                            println!("Strategy: {} Exit Long Take Profit, Time {}", qb.symbol.name, strategy.time_local());  // Fixed message
                                             let position_size = strategy.position_size(&account_1, &qb.symbol.name);
                                             exit_orders.insert(qb.symbol.name.clone(), strategy.exit_long(&qb.symbol.name, None, &account_1, None, position_size, String::from("Exit Long Take Profit")).await);
-                                            println!("Strategy: Exit Long Take Profit, Time {}", strategy.time_local());  // Fixed message
                                         } else if is_long
                                             && long_pnl <= dec!(-100.0)
                                         {
+                                            println!("Strategy: {} Exit Long Take Loss, Time {}", qb.symbol.name,  strategy.time_local());
                                             let position_size: Decimal = strategy.position_size(&account_1, &qb.symbol.name);
                                             exit_orders.insert(qb.symbol.name.clone(), strategy.exit_long(&qb.symbol.name, None, &account_1, None, position_size, String::from("Exit Long Take Loss")).await);
-                                            println!("Strategy: Exit Long Take Loss, Time {}", strategy.time_local());
                                         }
                                     }
                                 }

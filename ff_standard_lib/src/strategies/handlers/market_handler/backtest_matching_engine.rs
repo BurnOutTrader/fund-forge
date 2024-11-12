@@ -11,11 +11,12 @@ use crate::product_maps::rithmic::maps::get_futures_trading_hours;
 use crate::standardized_types::new_types::{Price, Volume};
 use crate::standardized_types::orders::{Order, OrderId, OrderRequest, OrderState, OrderType, OrderUpdateEvent, OrderUpdateType, TimeInForce};
 use crate::strategies::handlers::market_handler::price_service::{price_service_request_limit_fill_price_quantity, price_service_request_market_fill_price, price_service_request_market_price, PriceServiceResponse};
+use crate::strategies::historical_time::get_backtest_time;
 use crate::strategies::ledgers::ledger_service::{LedgerService};
 use crate::strategies::strategy_events::StrategyEvent;
 
 pub enum BackTestEngineMessage {
-    Time(DateTime<Utc>),
+    TickBufferTime,
     OrderRequest(DateTime<Utc>, OrderRequest)
 }
 
@@ -35,7 +36,7 @@ pub(crate) async fn backtest_matching_engine(
                     //println!("{:?}", order_request);
                     match order_request {
                         OrderRequest::Create {  .. } => {
-                            simulated_order_matching(time.clone(), &open_order_cache, &closed_order_cache, strategy_event_sender.clone(), &ledger_service).await;
+                            simulated_order_matching(&open_order_cache, &closed_order_cache, strategy_event_sender.clone(), &ledger_service).await;
                         }
                         OrderRequest::Cancel { account,order_id } => {
                             let existing_order = open_order_cache.remove(&order_id);
@@ -63,7 +64,7 @@ pub(crate) async fn backtest_matching_engine(
                                     Err(e) => eprintln!("Timed Event Handler: Failed to send event: {}", e)
                                 }
                             }
-                            simulated_order_matching(time.clone(), &open_order_cache, &closed_order_cache, strategy_event_sender.clone(), &ledger_service).await;
+                            simulated_order_matching(&open_order_cache, &closed_order_cache, strategy_event_sender.clone(), &ledger_service).await;
                         }
                         OrderRequest::Update { account, order_id, update } => {
                             if let Some((order_id, mut order)) = open_order_cache.remove(&order_id) {
@@ -100,7 +101,7 @@ pub(crate) async fn backtest_matching_engine(
                                     Err(e) => eprintln!("Timed Event Handler: Failed to send event: {}", e)
                                 }
                             }
-                            simulated_order_matching(time.clone(), &open_order_cache, &closed_order_cache, strategy_event_sender.clone(), &ledger_service).await;
+                            simulated_order_matching(&open_order_cache, &closed_order_cache, strategy_event_sender.clone(), &ledger_service).await;
                         }
                         OrderRequest::CancelAll { account } => {
                             let mut remove = vec![];
@@ -129,17 +130,17 @@ pub(crate) async fn backtest_matching_engine(
                                     closed_order_cache.insert(order_id, order);
                                 }
                             }
-                            simulated_order_matching(time.clone(), &open_order_cache, &closed_order_cache, strategy_event_sender.clone(), &ledger_service).await;
+                            simulated_order_matching(&open_order_cache, &closed_order_cache, strategy_event_sender.clone(), &ledger_service).await;
                         }
                         OrderRequest::FlattenAllFor { account} => {
                             ledger_service.flatten_all_for_paper_account(&account, time).await;
-                            simulated_order_matching(time.clone(), &open_order_cache, &closed_order_cache, strategy_event_sender.clone(), &ledger_service).await;
+                            simulated_order_matching(&open_order_cache, &closed_order_cache, strategy_event_sender.clone(), &ledger_service).await;
                         }
                     }
                 }
-                BackTestEngineMessage::Time(time) => {
+                BackTestEngineMessage::TickBufferTime => {
                     if !open_order_cache.is_empty() {
-                        simulated_order_matching(time.clone(), &open_order_cache, &closed_order_cache, strategy_event_sender.clone(), &ledger_service).await;
+                        simulated_order_matching(&open_order_cache, &closed_order_cache, strategy_event_sender.clone(), &ledger_service).await;
                     }
                 }
             }
@@ -150,12 +151,12 @@ pub(crate) async fn backtest_matching_engine(
 }
 
 pub(crate) async fn simulated_order_matching (
-    time: DateTime<Utc>,
     open_order_cache: &Arc<DashMap<OrderId, Order>>,
     closed_order_cache: &Arc<DashMap<OrderId, Order>>,
     strategy_event_sender: Sender<StrategyEvent>,
     ledger_service: &Arc<LedgerService>
 ) {
+    let time = get_backtest_time();
     let mut rejected = Vec::new();
     let mut accepted = Vec::new();
     let mut cancelled = Vec::new();
