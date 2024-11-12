@@ -238,7 +238,7 @@ impl LedgerService {
                     PositionSide::Long => OrderSide::Sell,
                     PositionSide::Short => OrderSide::Buy,
                 };
-                let market_price = match price_service_request_market_fill_price(order_side, position.symbol_name.clone(), position.quantity_open).await {
+                let market_price = match price_service_request_market_fill_price(order_side, position.symbol_name.clone(), position.symbol_code.clone(), position.quantity_open).await {
                     Ok(price) => {
                         match price.price() {
                             None =>  continue,

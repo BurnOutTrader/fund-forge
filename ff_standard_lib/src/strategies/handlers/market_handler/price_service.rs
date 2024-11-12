@@ -11,7 +11,7 @@ use crate::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use crate::standardized_types::books::BookLevel;
 use crate::standardized_types::enums::OrderSide;
 use crate::standardized_types::new_types::{Price, Volume};
-use crate::standardized_types::subscriptions::SymbolName;
+use crate::standardized_types::subscriptions::{SymbolCode, SymbolName};
 use crate::standardized_types::time_slices::TimeSlice;
 use once_cell::sync::Lazy;
 use crate::standardized_types::base_data::tick::Aggressor;
@@ -23,10 +23,10 @@ pub(crate) fn get_price_service_sender() -> mpsc::Sender<PriceServiceMessage> {
     MARKET_PRICE_SERVICE.sender.clone()
 }
 
-pub(crate) async fn price_service_request_market_price(order_side: OrderSide, symbol_name: SymbolName) -> Result<PriceServiceResponse, FundForgeError> {
+pub(crate) async fn price_service_request_market_price(order_side: OrderSide, symbol_name: SymbolName, symbol_code: SymbolCode) -> Result<PriceServiceResponse, FundForgeError> {
     let callback_id = MARKET_PRICE_SERVICE.next_id.fetch_add(1, Ordering::SeqCst);
     let (response_sender, response_receiver) = oneshot::channel();
-    let message = PriceServiceMessage::MarketPrice{callback_id, order_side, symbol_name};
+    let message = PriceServiceMessage::MarketPrice{callback_id, order_side, symbol_name, symbol_code};
 
     MARKET_PRICE_SERVICE.callbacks.insert(callback_id, response_sender);
     match MARKET_PRICE_SERVICE.sender.send(message).await {
@@ -41,10 +41,10 @@ pub(crate) async fn price_service_request_market_price(order_side: OrderSide, sy
     Ok(response)
 }
 
-pub(crate) async fn price_service_request_market_fill_price(order_side: OrderSide, symbol_name: SymbolName, volume: Volume) -> Result<PriceServiceResponse, FundForgeError> {
+pub(crate) async fn price_service_request_market_fill_price(order_side: OrderSide, symbol_name: SymbolName, symbol_code: SymbolCode, volume: Volume) -> Result<PriceServiceResponse, FundForgeError> {
     let callback_id = MARKET_PRICE_SERVICE.next_id.fetch_add(1, Ordering::SeqCst);
     let (response_sender, response_receiver) = oneshot::channel();
-    let message = PriceServiceMessage::FillPriceEstimate{callback_id, order_side, symbol_name, volume };
+    let message = PriceServiceMessage::FillPriceEstimate{callback_id, order_side, symbol_name, symbol_code, volume };
 
     MARKET_PRICE_SERVICE.callbacks.insert(callback_id, response_sender);
     match MARKET_PRICE_SERVICE.sender.send(message).await {
@@ -59,10 +59,10 @@ pub(crate) async fn price_service_request_market_fill_price(order_side: OrderSid
     Ok(response)
 }
 
-pub(crate) async fn price_service_request_limit_fill_price_quantity(order_side: OrderSide, symbol_name: SymbolName, volume: Volume, limit: Decimal) -> Result<PriceServiceResponse, FundForgeError> {
+pub(crate) async fn price_service_request_limit_fill_price_quantity(order_side: OrderSide, symbol_name: SymbolName, symbol_code: SymbolCode, volume: Volume, limit: Decimal) -> Result<PriceServiceResponse, FundForgeError> {
     let callback_id = MARKET_PRICE_SERVICE.next_id.fetch_add(1, Ordering::SeqCst);
     let (response_sender, response_receiver) = oneshot::channel();
-    let message = PriceServiceMessage::LimitFillPriceEstimate{callback_id, order_side, symbol_name, volume, limit };
+    let message = PriceServiceMessage::LimitFillPriceEstimate{callback_id, order_side, symbol_name, symbol_code, volume, limit };
 
     MARKET_PRICE_SERVICE.callbacks.insert(callback_id, response_sender);
     match MARKET_PRICE_SERVICE.sender.send(message).await {
@@ -80,9 +80,9 @@ pub(crate) async fn price_service_request_limit_fill_price_quantity(order_side: 
 #[derive(Debug)]
 pub enum PriceServiceMessage {
     TimeSliceUpdate(Arc<TimeSlice>),
-    FillPriceEstimate{callback_id: u64, order_side: OrderSide, symbol_name: SymbolName, volume: Volume},
-    LimitFillPriceEstimate{callback_id: u64, order_side: OrderSide, symbol_name: SymbolName, volume: Volume, limit: Price},
-    MarketPrice{callback_id: u64, order_side: OrderSide, symbol_name: SymbolName}
+    FillPriceEstimate{callback_id: u64, order_side: OrderSide, symbol_name: SymbolName, symbol_code: SymbolCode, volume: Volume},
+    LimitFillPriceEstimate{callback_id: u64, order_side: OrderSide, symbol_name: SymbolName, symbol_code: SymbolCode, volume: Volume, limit: Price},
+    MarketPrice{callback_id: u64, order_side: OrderSide, symbol_name: SymbolName, symbol_code: SymbolCode},
 }
 
 /// Returned values to be rounded to symbol decimal accuracy
@@ -225,11 +225,22 @@ impl MarketPriceService {
                         }
                     }
                 }
-                PriceServiceMessage::FillPriceEstimate { callback_id, order_side, symbol_name, volume } => {
+                PriceServiceMessage::FillPriceEstimate { callback_id, order_side, symbol_name, symbol_code, volume } => {
                     if let Some((_, callback_sender)) = callbacks.remove(&callback_id) {
                         let order_book = match order_side {
-                            OrderSide::Buy => ask_books.get(&symbol_name),
-                            OrderSide::Sell => bid_books.get(&symbol_name)
+                            OrderSide::Buy => {
+                                match ask_books.get(&symbol_code) {
+                                    Some(book) => Some(book),
+                                    None => ask_books.get(&symbol_name)
+                                }
+
+                            },
+                            OrderSide::Sell => {
+                                match bid_books.get(&symbol_code) {
+                                    Some(book) => Some(book),
+                                    None => bid_books.get(&symbol_name)
+                                }
+                            }
                         };
 
                         if let Some(book_price_volume_map) = order_book {
@@ -292,11 +303,22 @@ impl MarketPriceService {
                         }
                     }
                 }
-                PriceServiceMessage::LimitFillPriceEstimate { callback_id, order_side, symbol_name, volume, limit } => {
+                PriceServiceMessage::LimitFillPriceEstimate { callback_id, order_side, symbol_name, symbol_code, volume, limit } => {
                     if let Some((_, callback_sender)) = callbacks.remove(&callback_id) {
                         let order_book = match order_side {
-                            OrderSide::Buy => ask_books.get(&symbol_name),
-                            OrderSide::Sell => bid_books.get(&symbol_name)
+                            OrderSide::Buy => {
+                                match ask_books.get(&symbol_code) {
+                                    Some(book) => Some(book),
+                                    None => ask_books.get(&symbol_name)
+                                }
+
+                            },
+                            OrderSide::Sell => {
+                                match bid_books.get(&symbol_code) {
+                                    Some(book) => Some(book),
+                                    None => bid_books.get(&symbol_name)
+                                }
+                            }
                         };
 
                         if let Some(book_price_volume_map) = order_book {
@@ -367,11 +389,22 @@ impl MarketPriceService {
                         }
                     }
                 }
-                PriceServiceMessage::MarketPrice { callback_id, order_side, symbol_name } => {
+                PriceServiceMessage::MarketPrice { callback_id, order_side, symbol_name, symbol_code } => {
                     if let Some((_, callback_sender)) = callbacks.remove(&callback_id) {
                         let order_book = match order_side {
-                            OrderSide::Buy => ask_books.get(&symbol_name),
-                            OrderSide::Sell => bid_books.get(&symbol_name)
+                            OrderSide::Buy => {
+                                match ask_books.get(&symbol_code) {
+                                    Some(book) => Some(book),
+                                    None => ask_books.get(&symbol_name)
+                                }
+
+                            },
+                            OrderSide::Sell => {
+                                match bid_books.get(&symbol_code) {
+                                    Some(book) => Some(book),
+                                    None => bid_books.get(&symbol_name)
+                                }
+                            }
                         };
 
                         if let Some(symbol_book) = order_book {

@@ -240,9 +240,10 @@ impl FundForgeStrategy {
         &self,
         order_side: OrderSide,
         symbol_name: &SymbolName,
+        symbol_code: &SymbolCode,
         volume: Volume,
     ) -> Option<Price> {
-        match price_service_request_market_fill_price(order_side, symbol_name.clone(), volume).await {
+        match price_service_request_market_fill_price(order_side, symbol_name.clone(),  symbol_code.clone(), volume).await {
             Ok(price) => price.price(),
             Err(_) => None
         }
@@ -253,24 +254,25 @@ impl FundForgeStrategy {
         &self,
         order_side: OrderSide,
         symbol_name: &SymbolName,
+        symbol_code: &SymbolCode
     ) -> Option<Price> {
-        match price_service_request_market_price(order_side, symbol_name.clone()).await {
+        match price_service_request_market_price(order_side, symbol_name.clone(), symbol_code.clone(),).await {
             Ok(price) => price.price(),
             Err(_) => None
         }
     }
 
     /// true if long, false if flat or short.
-    pub fn is_long(&self, account: &Account, symbol_name: &SymbolName) -> bool {
-        self.ledger_service.is_long(account, symbol_name)
+    pub fn is_long(&self, account: &Account, name: &String) -> bool {
+        self.ledger_service.is_long(account, name)
     }
 
-    pub fn is_flat(&self, account: &Account, symbol_name: &SymbolName) -> bool {
-        self.ledger_service.is_flat(account, symbol_name)
+    pub fn is_flat(&self, account: &Account, name: &String) -> bool {
+        self.ledger_service.is_flat(account, name)
     }
 
-    pub fn is_short(&self, account: &Account, symbol_name: &SymbolName) -> bool {
-        self.ledger_service.is_short(account, symbol_name)
+    pub fn is_short(&self, account: &Account, name: &String) -> bool {
+        self.ledger_service.is_short(account, name)
     }
 
     async fn order_id(
