@@ -148,14 +148,16 @@ pub async fn on_data_received(
                                 //LONG CONDITIONS
                                 {
                                     // ENTER LONG
-                                    let is_flat = strategy.is_flat(&account_1, &qb.symbol.name);
-                                    // buy AUD-CAD if consecutive green HA candles if our other account is long on EUR
-                                    if is_flat && !entry_orders.contains_key(&qb.symbol.name)
-                                        && qb.bid_close > qb.bid_open
-                                    {
-                                        entry_orders.insert(qb.symbol.name.clone(), strategy.enter_long(&qb.symbol.name, None, &account_1, None, dec!(10000), String::from("Enter Long")).await);
-                                        println!("Strategy: Enter Long, Time {}", strategy.time_local());
-                                        last_side = LastSide::Long;
+                                    if !!entry_orders.contains_key(&qb.symbol.name) {
+                                        let is_flat = strategy.is_flat(&account_1, &qb.symbol.name);
+                                        // buy AUD-CAD if consecutive green HA candles if our other account is long on EUR
+                                        if is_flat
+                                            && qb.bid_close > qb.bid_open
+                                        {
+                                            entry_orders.insert(qb.symbol.name.clone(), strategy.enter_long(&qb.symbol.name, None, &account_1, None, dec!(10000), String::from("Enter Long")).await);
+                                            println!("Strategy: Enter Long, Time {}", strategy.time_local());
+                                            last_side = LastSide::Long;
+                                        }
                                     }
 
                                     // ADD LONG
