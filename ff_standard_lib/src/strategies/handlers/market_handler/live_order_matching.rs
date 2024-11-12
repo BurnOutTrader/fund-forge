@@ -28,7 +28,7 @@ pub(crate) fn live_order_handler(
                         //println!("{}", order_update_event);
                         {
                             order.value_mut().state = OrderState::Accepted;
-                            order.symbol_code = Some(symbol_code.clone());
+                            order.symbol_code = symbol_code.clone();
                         }
                         match strategy_event_sender.send(StrategyEvent::OrderEvents(order_update_event.clone())).await {
                             Ok(_) => {}
@@ -39,7 +39,7 @@ pub(crate) fn live_order_handler(
                 OrderUpdateEvent::OrderFilled { account, symbol_name, symbol_code, order_id, price, quantity, tag, time, side } => {
                     #[allow(unused)]
                      if let Some((order_id, mut order)) = open_order_cache.remove(order_id) {
-                         order.symbol_code = Some(symbol_code.clone());
+                         order.symbol_code = symbol_code.clone();
                          order.state = OrderState::Filled;
 
                          // todo, if we have problems change this to use the order filled quantity, but i think this makes more sense.
@@ -61,7 +61,7 @@ pub(crate) fn live_order_handler(
                    if let Some(mut order) = open_order_cache.get_mut(order_id) {
                        //println!("{}", order_update_event);
                        order.state = OrderState::PartiallyFilled;
-                       order.symbol_code = Some(symbol_code.clone());
+                       order.symbol_code = symbol_code.clone();
                        order.quantity_filled += quantity;
                        order.quantity_open -= quantity;
                        order.time_filled_utc = Some(time.clone());
@@ -80,7 +80,7 @@ pub(crate) fn live_order_handler(
                     if let Some((order_id, mut order)) = open_order_cache.remove(order_id) {
                         order.state = OrderState::Cancelled;
                         order.quantity_open = dec!(0);
-                        order.symbol_code = Some(symbol_code.clone());
+                        order.symbol_code = symbol_code.clone();
                         closed_order_cache.insert(order_id.clone(), order);
                         match strategy_event_sender.send(StrategyEvent::OrderEvents(order_update_event.clone())).await {
                             Ok(_) => {}
@@ -91,7 +91,7 @@ pub(crate) fn live_order_handler(
                 OrderUpdateEvent::OrderRejected {symbol_code, order_id,reason, .. } => {
                     if let Some((order_id, mut order)) = open_order_cache.remove(order_id) {
                         order.state = OrderState::Rejected(reason.clone());
-                        order.symbol_code = Some(symbol_code.clone());
+                        order.symbol_code = symbol_code.clone();
                         order.quantity_open = dec!(0);
                         closed_order_cache.insert(order_id.clone(), order);
                         match strategy_event_sender.send(StrategyEvent::OrderEvents(order_update_event.clone())).await {
@@ -102,7 +102,7 @@ pub(crate) fn live_order_handler(
                 }
                 OrderUpdateEvent::OrderUpdated { order_id, symbol_code, update_type,.. } => {
                     if let Some(mut order) = open_order_cache.get_mut(order_id) {
-                        order.symbol_code = Some(symbol_code.clone());
+                        order.symbol_code = symbol_code.clone();
                         match &update_type {
                             OrderUpdateType::LimitPrice(price) => order.limit_price = Some(price.clone()),
                             OrderUpdateType::TriggerPrice(price) => order.trigger_price = Some(price.clone()),

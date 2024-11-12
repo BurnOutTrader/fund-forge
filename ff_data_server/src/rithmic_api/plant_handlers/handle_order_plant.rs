@@ -240,7 +240,7 @@ pub async fn match_order_plant_id(
                     if let Some(account_map) = client.open_orders.get_mut(account_id) {
                         if let Some(mut open_order) = account_map.get_mut(&order_id) {
                             open_order.state = OrderState::Accepted;
-                            open_order.symbol_code = Some(symbol_code.clone());
+                            open_order.symbol_code = symbol_code.clone();
                         }
                     }
                     // on sim accounts we don't need to do this, not sure about live.
@@ -602,7 +602,7 @@ pub async fn match_order_plant_id(
                             if let Some(account_map) = client.open_orders.get(&account_id) {
                                 if let Some(mut open_order) = account_map.get_mut(&order_id) {
                                     open_order.state = OrderState::Accepted;
-                                    open_order.symbol_code = Some(symbol_code.clone());
+                                    open_order.symbol_code = symbol_code.clone();
                                 }
                             }
                         },

@@ -2,7 +2,6 @@ use std::collections::BTreeMap;
 use std::ops::Deref;
 use std::sync::{Arc};
 use ahash::AHashMap;
-use async_std::task::block_on;
 use crate::strategies::consolidators::consolidator_enum::{ConsolidatedData, ConsolidatorEnum};
 use crate::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use crate::standardized_types::base_data::base_data_type::BaseDataType;
@@ -614,51 +613,6 @@ impl SymbolSubscriptionHandler {
         }
     }
 
-    pub(crate) async fn subscribe_override(
-        &self,
-        new_subscription: DataSubscription,
-        warm_up_to_time: DateTime<Utc>,
-        history_to_retain: usize,
-    ) -> Result<(RollingWindow<BaseDataEnum>, DataSubscriptionEvent), DataSubscriptionEvent> {
-        if let Some(subscription) = self.primary_subscriptions.get(&new_subscription.subscription_resolution_type()) {
-            if *subscription.value() == new_subscription {
-                return Err(DataSubscriptionEvent::FailedToSubscribe(new_subscription.clone(), format!("{}: Already subscribed: {}", new_subscription.symbol.data_vendor, new_subscription.symbol.name)))
-            }
-        }
-        let is_warmed_up =   is_warmup_complete();
-        if is_warmed_up {
-            let from_time = match new_subscription.resolution == Resolution::Instant {
-                true => {
-                    let subtract_duration: Duration = Duration::seconds(1) * history_to_retain as i32;
-                    warm_up_to_time - subtract_duration - Duration::days(3)
-                }
-                false => {
-                    let subtract_duration: Duration = new_subscription.resolution.as_duration() * history_to_retain as i32;
-                    warm_up_to_time - subtract_duration - Duration::days(3)
-                }
-            };
-            let data = block_on(get_compressed_historical_data(vec![new_subscription.clone()], from_time, warm_up_to_time)).unwrap_or_else(|_e| BTreeMap::new());
-            let mut history = RollingWindow::new(history_to_retain);
-            for (_, slice) in data {
-                for data in slice.iter() {
-                    history.add(data.clone());
-                }
-            }
-            return Ok((history, DataSubscriptionEvent::Subscribed(new_subscription)))
-        }
-        self.primary_subscriptions.insert(new_subscription.subscription_resolution_type(), new_subscription.clone());
-        Ok((RollingWindow::new(history_to_retain), DataSubscriptionEvent::Subscribed(new_subscription)))
-    }
-
-
-    //todo, add a fn to DataVendor Server Side, to return the correct primary resolution for a subscription, this way we can handle on a vendor by vendor basis.
-    /// Currently This function works in 1 of 2 ways,
-    /// 1. Backtesting, it will try to subscribe directly to any historical data directly available from the data server, the downside to this would be that you will not have open bars for that subscription as they will always be closed.
-    /// The advantage is backetest speed. we should todo, we should also check here that we don't have a subscription of a lower resolution we can use, its pointless to use serialized bars in this case, might as well consolidate
-    /// 2. Live or Live paper, it will subscribe to the most appropriate lowest resolution for the new subscription.
-    /// Example for Live: if you subscribed to 1 min QuoteBars, it will try to subscribe to quote data, if that fails it will try to subscribe to the lowest res quotebar data.
-    /// for consolidating candles it will try to get_requests tick data, failing that it will try to get_requests quotes and failing that it will try to get_requests other candles, as a last resort it will try to get_requests quote bars.
-    /// todo simplify live subscribing by just sending base subscription request to data server, and await callback for primary feed.
     async fn subscribe(
         &self,
         primary_source: Option<PrimarySubscription>,

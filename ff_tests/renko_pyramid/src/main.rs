@@ -3,7 +3,6 @@ use chrono_tz::Australia;
 use colored::Colorize;
 use ff_standard_lib::apis::rithmic::rithmic_systems::RithmicSystem;
 use rust_decimal::Decimal;
-use ff_standard_lib::standardized_types::base_data::traits::BaseData;
 use ff_standard_lib::standardized_types::enums::{FuturesExchange, MarketType, OrderSide, PositionSide, StrategyMode};
 use ff_standard_lib::strategies::strategy_events::{StrategyEvent};
 use ff_standard_lib::standardized_types::subscriptions::{DataSubscription, SymbolCode, SymbolName};
@@ -37,11 +36,11 @@ async fn main() {
     );
 
     let strategy = FundForgeStrategy::initialize(
-        StrategyMode::Live,
+        StrategyMode::Backtest,
         dec!(100000),
         Currency::USD,
-        NaiveDate::from_ymd_opt(2024, 6, 5).unwrap().and_hms_opt(0, 0, 0).unwrap(),
-        NaiveDate::from_ymd_opt(2024, 6, 15).unwrap().and_hms_opt(0, 0, 0).unwrap(),
+        NaiveDate::from_ymd_opt(2019, 6, 5).unwrap().and_hms_opt(0, 0, 0).unwrap(),
+        NaiveDate::from_ymd_opt(2019, 10, 1).unwrap().and_hms_opt(0, 0, 0).unwrap(),
         Australia::Sydney,
         Duration::hours(1),
         vec![
@@ -50,7 +49,7 @@ async fn main() {
         false,
         100,
         strategy_event_sender,
-        core::time::Duration::from_millis(5),
+        core::time::Duration::from_millis(50),
         false,
         false,
         false,
@@ -70,13 +69,13 @@ async fn main() {
 // 6. It will cancel the take profit order if the position is closed.
 
 const RENKO_RANGE: Decimal = dec!(5);
-const MAX_SIZE: Decimal = dec!(40);
-const SIZE: Decimal = dec!(10);
+const MAX_SIZE: Decimal = dec!(20);
+const SIZE: Decimal = dec!(5);
 const INCREMENTAL_SCALP_PNL: Decimal = dec!(150);
 const LIMIT_ORDER_EXPIRE_IN_SECS: i64 = 60;
 const TRADING_LONG: bool = true;
 const TRADING_SHORT: bool = false;
-const MOMENTUM: bool = true; //if true we will enter on 2 blocks (2 bull blocks for bull entry), if false we will enter on reversal (1 bear block then 2 bull blocks)
+const MOMENTUM: bool = false; //if true we will enter on 2 blocks (2 bull blocks for bull entry), if false we will enter on reversal (1 bear block then 2 bull blocks)
 
 #[allow(clippy::const_err)]
 pub async fn on_data_received(
@@ -143,7 +142,7 @@ pub async fn on_data_received(
                                             && (is_long == false || strategy.pnl(&account, &symbol_code) > INCREMENTAL_SCALP_PNL / dec!(3)) {
                                             let quantity = strategy.position_size(&account, &symbol_code);
                                             if !strategy.is_long(&account, &symbol_code) && quantity < MAX_SIZE {
-                                                entry_order_id = Some(strategy.enter_long(&symbol_name, None, &account, None, SIZE, String::from("Enter Long")).await);
+                                                entry_order_id = Some(strategy.enter_long(&symbol_name, Some(symbol_code.clone()), &account, None, SIZE, String::from("Enter Long")).await);
                                                 no_entry = false;
                                             }
                                         }
@@ -151,7 +150,7 @@ pub async fn on_data_received(
                                             //tp on 2 bearish renko blocks
                                             if last_close < last_open && block_close.value < block_open.value && no_exit && exit_order_id == None {
                                                 let quantity = strategy.position_size(&account, &symbol_code);
-                                                exit_order_id = Some(strategy.exit_long(&symbol_name, None, &account, None, quantity, String::from("Exit Long")).await);
+                                                exit_order_id = Some(strategy.exit_long(&symbol_name, Some(symbol_code.clone()), &account, None, quantity, String::from("Exit Long")).await);
                                                 no_exit = false;
                                             }
 
@@ -159,7 +158,7 @@ pub async fn on_data_received(
                                             let quantity = strategy.position_size(&account, &symbol_code);
                                             if profit > INCREMENTAL_SCALP_PNL && quantity == MAX_SIZE && exit_order_id == None && tp_id == None {
                                                 let tif = TimeInForce::Time((Utc::now() + Duration::seconds(LIMIT_ORDER_EXPIRE_IN_SECS)).timestamp());
-                                                tp_id = Some(strategy.limit_order(&symbol_name, None, &account, None, SIZE, OrderSide::Sell, last_close + RENKO_RANGE * dec!(4), tif, String::from("Partial TP Long")).await);
+                                                tp_id = Some(strategy.limit_order(&symbol_name, Some(symbol_code.clone()), &account, None, SIZE, OrderSide::Sell, last_close + RENKO_RANGE * dec!(4), tif, String::from("Partial TP Long")).await);
                                                 no_exit = false;
                                             }
                                         }
@@ -177,7 +176,7 @@ pub async fn on_data_received(
                                             && (is_short == false || strategy.pnl(&account, &symbol_code) > INCREMENTAL_SCALP_PNL / dec!(3)) {
                                             let quantity = strategy.position_size(&account, &symbol_code);
                                             if !strategy.is_long(&account, &symbol_code) && quantity < MAX_SIZE {
-                                                entry_order_id = Some(strategy.enter_short(&symbol_name, None, &account, None, SIZE, String::from("Enter Short")).await);
+                                                entry_order_id = Some(strategy.enter_short(&symbol_name, Some(symbol_code.clone()), &account, None, SIZE, String::from("Enter Short")).await);
                                                 no_entry = false;
                                             }
                                         }
@@ -185,7 +184,7 @@ pub async fn on_data_received(
                                             //tp on 2 bullish renko blocks
                                             if last_close > last_open && block_close.value > block_open.value && no_exit && exit_order_id == None {
                                                 let quantity = strategy.position_size(&account, &symbol_code);
-                                                exit_order_id = Some(strategy.exit_short(&symbol_name, None, &account, None, quantity, String::from("Exit Short")).await);
+                                                exit_order_id = Some(strategy.exit_short(&symbol_name, Some(symbol_code.clone()), &account, None, quantity, String::from("Exit Short")).await);
                                                 no_exit = false;
                                             }
 
@@ -193,7 +192,7 @@ pub async fn on_data_received(
                                             let quantity = strategy.position_size(&account, &symbol_code);
                                             if profit > INCREMENTAL_SCALP_PNL && quantity == MAX_SIZE && exit_order_id == None && tp_id == None {
                                                 let tif = TimeInForce::Time((Utc::now() + Duration::seconds(LIMIT_ORDER_EXPIRE_IN_SECS)).timestamp());
-                                                tp_id = Some(strategy.limit_order(&symbol_name, None, &account, None, SIZE, OrderSide::Buy, last_close - RENKO_RANGE * dec!(4), tif, String::from("Partial TP Short")).await);
+                                                tp_id = Some(strategy.limit_order(&symbol_name, Some(symbol_code.clone()), &account, None, SIZE, OrderSide::Buy, last_close - RENKO_RANGE * dec!(4), tif, String::from("Partial TP Short")).await);
                                                 no_exit = false;
                                             }
                                         }
@@ -209,7 +208,17 @@ pub async fn on_data_received(
                     _ => {}
                 }
             }
-            StrategyEvent::TimeSlice(_) => {}
+            StrategyEvent::TimeSlice(slice) => {
+                /*for data in slice.iter() {
+                    match data {
+                        BaseDataEnum::Tick(tick) => {
+                            let msg = format!("Ticks: Time: {}, Price: {}", strategy.time_local(), tick.price);
+                            println!("{}", msg.as_str().bright_cyan());
+                        }
+                        _ => {}
+                    }
+                }*/
+            }
             StrategyEvent::ShutdownEvent(event) => {
                 strategy.flatten_all_for(account).await;
                 let msg = format!("{}",event);

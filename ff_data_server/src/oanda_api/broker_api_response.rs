@@ -607,7 +607,7 @@ impl BrokerApiResponse for OandaClient {
                     trigger_price: None,
                     time_in_force: TimeInForce::FOK,
                     tag,
-                    symbol_code: None,
+                    symbol_code: position.symbol_name.clone(),
                     exchange: None,
                 };
                 let _ = self.other_orders(0, StrategyMode::Live, exit_order).await;

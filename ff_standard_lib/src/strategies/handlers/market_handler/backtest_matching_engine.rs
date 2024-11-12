@@ -539,7 +539,7 @@ pub(crate) async fn simulated_order_matching (
                     }
                     Err(_) => continue
                 };
-                if ledger_service.is_short(&order.account, &order.symbol_name) {
+                if ledger_service.is_short(&order.account, &order.symbol_code) {
                     match ledger_service.paper_exit_position(&order.account,  &order.symbol_name, time, market_fill_price, String::from("Force Exit By Enter Long")).await {
                         Some(event) => {
                             events.push(StrategyEvent::PositionEvents(event));
@@ -557,7 +557,7 @@ pub(crate) async fn simulated_order_matching (
                     }
                     Err(_) => continue,
                 };
-                if ledger_service.is_long(&order.account, &order.symbol_name) {
+                if ledger_service.is_long(&order.account, &order.symbol_code) {
                     match ledger_service.paper_exit_position(&order.account,  &order.symbol_name, time, market_fill_price, String::from("Force Exit By Enter Short")).await {
                         Some(event) => {
                             events.push(StrategyEvent::PositionEvents(event));
@@ -568,8 +568,8 @@ pub(crate) async fn simulated_order_matching (
                 filled.push((order.id.clone(), market_fill_price));
             }
             OrderType::ExitLong => {
-                let long_quantity = ledger_service.position_size(&order.account, &order.symbol_name);
-                let is_long = ledger_service.is_long(&order.account, &order.symbol_name);
+                let long_quantity = ledger_service.position_size(&order.account, &order.symbol_code);
+                let is_long = ledger_service.is_long(&order.account, &order.symbol_code);
                 if long_quantity <= dec!(0.0) || !is_long {
                     let reason = "No Long Position To Exit".to_string();
                     rejected.push((order.id.clone(), reason));
@@ -590,8 +590,8 @@ pub(crate) async fn simulated_order_matching (
                 filled.push((order.id.clone(), market_fill_price));
             }
             OrderType::ExitShort => {
-                let short_quantity = ledger_service.position_size(&order.account, &order.symbol_name);
-                let is_short = ledger_service.is_short(&order.account, &order.symbol_name);
+                let short_quantity = ledger_service.position_size(&order.account, &order.symbol_code);
+                let is_short = ledger_service.is_short(&order.account, &order.symbol_code);
                 if short_quantity <= dec!(0.0) || !is_short {
                     let reason = "No Short Position To Exit".to_string();
                     rejected.push((order.id.clone(), reason));
@@ -645,15 +645,10 @@ async fn fill_order(
     ledger_service: &Arc<LedgerService>
 ) {
     if let Some((_, mut order)) = open_order_cache.remove(order_id) {  // Remove the order here
-        let symbol_code = match &order.symbol_code {
-            None => order.symbol_name.clone(),
-            Some(code) => code.clone()
-        };
-
         order.quantity_filled = order.quantity_open;
         order.quantity_open = dec!(0);
 
-        match ledger_service.update_or_create_paper_position(&order.account, order.symbol_name.clone(), symbol_code.clone(), order_id.clone(), order.quantity_filled.clone(), order.side.clone(), time.clone(), market_price, order.tag.clone()).await {
+        match ledger_service.update_or_create_paper_position(&order.account, order.symbol_name.clone(), order.symbol_code.clone(), order_id.clone(), order.quantity_filled.clone(), order.side.clone(), time.clone(), market_price, order.tag.clone()).await {
             Ok(events) => {
 
                 if order.state != OrderState::Accepted && order.state != OrderState::Filled && order.state != OrderState::PartiallyFilled {
@@ -678,7 +673,7 @@ async fn fill_order(
                 let order_event = StrategyEvent::OrderEvents(OrderUpdateEvent::OrderFilled {
                     account: order.account.clone(),
                     symbol_name: order.symbol_name.clone(),
-                    symbol_code: symbol_code,
+                    symbol_code: order.symbol_code.clone(),
                     order_id: order.id.clone(),
                     price: market_price,
                     quantity: order.quantity_filled.clone(),
@@ -718,11 +713,6 @@ async fn partially_fill_order(
     ledger_service: &Arc<LedgerService>
 ) {
     if let Some((_, mut order)) = open_order_cache.remove(order_id) {
-        let symbol_code = match &order.symbol_code {
-            None => order.symbol_name.clone(),
-            Some(code) => code.clone()
-        };
-
         order.quantity_open -= fill_volume;
         let is_fully_filled = order.quantity_open <= dec!(0);
 
@@ -752,7 +742,7 @@ async fn partially_fill_order(
             }
         };
 
-        match ledger_service.update_or_create_paper_position(&order.account, order.symbol_name.clone(), symbol_code, order_id.clone(), fill_volume, order.side.clone(), time, fill_price, order.tag.clone()).await {
+        match ledger_service.update_or_create_paper_position(&order.account, order.symbol_name.clone(),  order.symbol_code.clone(), order_id.clone(), fill_volume, order.side.clone(), time, fill_price, order.tag.clone()).await {
             Ok(events) => {
                 if let Some(order_event) = Some(order_event) {
                     if order.state != OrderState::Accepted && order.state != OrderState::Filled && order.state != OrderState::PartiallyFilled {

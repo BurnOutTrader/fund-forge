@@ -144,7 +144,7 @@ pub enum OrderState {
 #[archive_attr(derive(Debug))]
 pub struct Order {
     pub symbol_name: SymbolName,
-    pub symbol_code: Option<SymbolCode>,
+    pub symbol_code: SymbolCode,
     pub account: Account,
     pub quantity_open: Volume,
     pub quantity_filled: Volume,
@@ -182,7 +182,10 @@ impl Order {
         tif: TimeInForce,
         exchange: Option<String>
     ) -> Self {
-
+        let symbol_code = match symbol_code {
+            Some(code) => code,
+            None => symbol_name.clone()
+        };
         Self {
             symbol_name,
             symbol_code,
@@ -219,6 +222,10 @@ impl Order {
         tif: TimeInForce,
         exchange: Option<String>
     ) -> Self {
+        let symbol_code = match symbol_code {
+            Some(code) => code,
+            None => symbol_name.clone()
+        };
         Self {
             symbol_name,
             symbol_code,
@@ -255,6 +262,10 @@ impl Order {
         tif: TimeInForce,
         exchange: Option<String>
     ) -> Self {
+        let symbol_code = match symbol_code {
+            Some(code) => code,
+            None => symbol_name.clone()
+        };
         Self {
             symbol_name,
             symbol_code,
@@ -292,6 +303,10 @@ impl Order {
         tif: TimeInForce,
         exchange: Option<String>
     ) -> Self {
+        let symbol_code = match symbol_code {
+            Some(code) => code,
+            None => symbol_name.clone()
+        };
         Self {
             symbol_name,
             symbol_code,
@@ -326,6 +341,10 @@ impl Order {
         time: DateTime<Utc>,
         exchange: Option<String>
     ) -> Self {
+        let symbol_code = match symbol_code {
+            Some(code) => code,
+            None => symbol_name.clone()
+        };
         Order {
             id:order_id,
             symbol_name,
@@ -359,6 +378,10 @@ impl Order {
         time: DateTime<Utc>,
         exchange: Option<String>
     ) -> Self {
+        let symbol_code = match symbol_code {
+            Some(code) => code,
+            None => symbol_name.clone()
+        };
         Order {
             id: order_id,
             symbol_name,
@@ -392,6 +415,10 @@ impl Order {
         time: DateTime<Utc>,
         exchange: Option<String>
     ) -> Self {
+        let symbol_code = match symbol_code {
+            Some(code) => code,
+            None => symbol_name.clone()
+        };
         Order {
             id: order_id,
             symbol_name,
@@ -425,6 +452,10 @@ impl Order {
         time: DateTime<Utc>,
         exchange: Option<String>
     ) -> Self {
+        let symbol_code = match symbol_code {
+            Some(code) => code,
+            None => symbol_name.clone()
+        };
         Order {
             id: order_id,
             symbol_name,
@@ -458,6 +489,10 @@ impl Order {
         time: DateTime<Utc>,
         exchange: Option<String>
     ) -> Self {
+        let symbol_code = match symbol_code {
+            Some(code) => code,
+            None => symbol_name.clone()
+        };
         Order {
             id: order_id,
             symbol_name,

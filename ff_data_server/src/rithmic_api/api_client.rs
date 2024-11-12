@@ -583,16 +583,16 @@ impl RithmicBrokerageClient {
                             }
                         }
                     };
-                    match &order.symbol_code {
-                        None => {
+                    match order.symbol_code == order.symbol_name {
+                        true => {
                             let front_month = match self.front_month(stream_name, order.symbol_name.clone(), exchange.clone()).await {
                                 Ok(info) => info,
                                 Err(e) => return Err(RithmicBrokerageClient::reject_order(&order, format!("{}", e)))
                             };
                             (front_month.symbol_code, exchange)
                         }
-                        Some(code) => {
-                            (code.clone(), exchange)
+                        false => {
+                            (order.symbol_code.clone(), exchange)
                         }
                     }
                 }

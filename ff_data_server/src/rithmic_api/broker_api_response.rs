@@ -468,7 +468,7 @@ impl BrokerApiResponse for RithmicBrokerageClient {
                     ib_id: self.ib_id.clone(),
                     account_id: Some(account.account_id),
                     basket_id: Some(basket_id),
-                    symbol: order.symbol_code.clone(),
+                    symbol: Some(order.symbol_code.clone()),
                     exchange: order.exchange.clone(),
                     quantity: quantity,
                     price: limit_price,
