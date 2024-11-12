@@ -178,6 +178,7 @@ impl HistoricalEngine {
 
             let mut time = last_time;
             'day_loop: while time <= to_time {
+                self.notified.notified().await;
                 time += buffer_duration;
                 if !warm_up_complete {
                     if time >= self.start_time {
@@ -249,7 +250,6 @@ impl HistoricalEngine {
                         Ok(_) => {}
                         Err(e) => panic!("Market Handler: Error sending backtest message: {}", e)
                     }
-                    self.notified.notified().await;
                 }
 
                 // update the consolidators time and see if that generates new data, in case we didn't have primary data to update with.
