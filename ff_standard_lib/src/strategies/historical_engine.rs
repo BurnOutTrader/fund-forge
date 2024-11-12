@@ -88,13 +88,9 @@ impl HistoricalEngine {
             // Run the engine logic on a dedicated OS thread
             tokio::runtime::Runtime::new().unwrap().block_on(async {
                 let warm_up_start_time = self.start_time - self.warmup_duration;
-                let end_time = match self.mode {
-                    StrategyMode::Backtest => self.end_time,
-                    StrategyMode::Live | StrategyMode::LivePaperTrading => self.start_time
-                };
 
                 match self.mode {
-                    StrategyMode::Backtest => self.historical_data_feed(warm_up_start_time, end_time, self.buffer_resolution, self.mode).await,
+                    StrategyMode::Backtest => self.historical_data_feed(warm_up_start_time, self.end_time, self.buffer_resolution, self.mode).await,
                     StrategyMode::Live | StrategyMode::LivePaperTrading  => panic!("Incorrect engine for Live modes"),
                 }
 
@@ -185,6 +181,7 @@ impl HistoricalEngine {
                 time += buffer_duration;
                 if !warm_up_complete {
                     if time >= self.start_time {
+                        eprintln!("Historical Engine: Warm up complete: {}", time);
                         warm_up_complete = true;
                         set_warmup_complete();
                         let event = StrategyEvent::WarmUpComplete;

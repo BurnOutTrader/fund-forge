@@ -457,7 +457,7 @@ impl VendorApiResponse for RithmicBrokerageClient {
 
             combined_data.extend(data_map);
 
-            if combined_data.len() >= 100000 {
+            if combined_data.len() >= 200000 {
                 let save_data: Vec<BaseDataEnum> = combined_data.clone().into_values().collect();
                 if let Err(e) = data_storage.save_data_bulk(save_data, is_bulk_download).await {
                     progress_bar.set_message(format!("Failed to save data for: {} - {}, {}", window_start, window_end, e));
