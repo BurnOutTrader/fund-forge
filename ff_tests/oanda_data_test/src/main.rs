@@ -65,6 +65,20 @@ async fn main() {
                 BaseDataType::QuoteBars,
                 MarketType::Forex
             ),
+            DataSubscription::new(
+                SymbolName::from("EUR-JPY"),
+                DataVendor::Oanda,
+                Resolution::Hours(1),
+                BaseDataType::QuoteBars,
+                MarketType::Forex
+            ),
+            DataSubscription::new(
+                SymbolName::from("AUD-JPY"),
+                DataVendor::Oanda,
+                Resolution::Hours(1),
+                BaseDataType::QuoteBars,
+                MarketType::Forex
+            ),
         ],
 
         //fill forward
@@ -110,6 +124,7 @@ pub async fn on_data_received(
     let mut last_side = LastSide::Flat;
 
     let mut exit_orders = HashMap::new();
+    let mut entry_orders = HashMap::new();
     'strategy_loop: while let Some(strategy_event) = event_receiver.recv().await {
         match strategy_event {
             StrategyEvent::TimeSlice(time_slice) => {
@@ -135,10 +150,10 @@ pub async fn on_data_received(
                                     // ENTER LONG
                                     let is_flat = strategy.is_flat(&account_1, &qb.symbol.name);
                                     // buy AUD-CAD if consecutive green HA candles if our other account is long on EUR
-                                    if is_flat
+                                    if is_flat && !entry_orders.contains_key(&qb.symbol.name)
                                         && qb.bid_close > qb.bid_open
                                     {
-                                        let _entry_order_id = strategy.enter_long(&qb.symbol.name, None, &account_1, None, dec!(10000), String::from("Enter Long")).await;
+                                        entry_orders.insert(qb.symbol.name.clone(), strategy.enter_long(&qb.symbol.name, None, &account_1, None, dec!(10000), String::from("Enter Long")).await);
                                         println!("Strategy: Enter Long, Time {}", strategy.time_local());
                                         last_side = LastSide::Long;
                                     }
@@ -240,12 +255,22 @@ pub async fn on_data_received(
                                 exit_orders.remove(symbol_name);
                             }
                         }
+                        if let Some(entry_order) = entry_orders.get(symbol_name) {
+                            if *order_id == *entry_order {
+                                entry_orders.remove(symbol_name);
+                            }
+                        }
                     }
                     OrderUpdateEvent::OrderFilled {symbol_name, order_id, ..} | OrderUpdateEvent::OrderCancelled {symbol_name, order_id, ..} => {
                         println!("{}", msg.as_str().bright_yellow());
                         if let Some(exit_order) = exit_orders.get(&symbol_name) {
                             if order_id == *exit_order {
                                 exit_orders.remove(&symbol_name);
+                            }
+                        }
+                        if let Some(entry_order) = entry_orders.get(&symbol_name) {
+                            if *order_id == *entry_order {
+                                entry_orders.remove(&symbol_name);
                             }
                         }
                     }
