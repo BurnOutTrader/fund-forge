@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 use std::sync::Arc;
-use chrono::{DateTime, Duration as ChronoDuration, NaiveTime, TimeZone, Utc};
+use chrono::{DateTime, Duration as ChronoDuration, NaiveTime, TimeZone, Timelike, Utc};
 use crate::strategies::client_features::server_connections::{set_warmup_complete};
 use crate::standardized_types::base_data::history::{get_compressed_historical_data};
 use crate::standardized_types::enums::StrategyMode;
@@ -143,16 +143,10 @@ impl HistoricalEngine {
         let mut last_time = warm_up_start_time.clone();
         let mut first_iteration = true;
         'main_loop: while last_time <= end_time {
-           /* if !first_iteration {
-                last_time += Duration::from_nanos(1)
-            }*/
             let to_time: DateTime<Utc> = {
-                let end_of_day_naive = last_time.date_naive().and_time(NaiveTime::from_hms_nano_opt(23, 59, 59, 999_999_999).unwrap());
+                let end_of_day_naive = (last_time.date_naive()).and_time(NaiveTime::from_hms_nano_opt(23, 59, 59, 999_999_999).unwrap());
                 Utc.from_utc_datetime(&end_of_day_naive).max(last_time)
             };
-            if first_iteration {
-                first_iteration = false;
-            }
             let mut time_slices = match get_compressed_historical_data(primary_subscriptions.clone(), last_time.clone(), to_time).await {
                 Ok(time_slices) => {
                     if time_slices.is_empty() && self.tick_over_no_data {

@@ -142,9 +142,9 @@ pub(crate) async fn backtest_matching_engine(
                     if !open_order_cache.is_empty() {
                         simulated_order_matching(&open_order_cache, &closed_order_cache, strategy_event_sender.clone(), &ledger_service).await;
                     }
+                    notify.notify_one();
                 }
             }
-            notify.notify_one();
         }
     });
     sender
