@@ -170,7 +170,6 @@ impl HistoricalEngine {
             'day_loop: while time <= to_time {
                 time = align_to_buffer(time, buffer_duration);
                 time += buffer_duration;
-                update_backtest_time(time);
                 if !warm_up_complete {
                     if time >= self.start_time {
                         eprintln!("Historical Engine: Warm up complete: {}", time);
@@ -248,8 +247,7 @@ impl HistoricalEngine {
                     strategy_time_slice.extend(consolidated_data);
                 }
 
-
-
+                update_backtest_time(time);
                 if !strategy_time_slice.is_empty() {
                     // Update indicators and get_requests any generated events.
                     if let Some(events) = self.indicator_handler.update_time_slice(&strategy_time_slice).await {
@@ -274,6 +272,7 @@ impl HistoricalEngine {
     }
 }
 
+//these functions could be removed if I made a historical data request that just asks for files for 1 day at a time.
 fn get_day_boundary(time: DateTime<Utc>) -> DateTime<Utc> {
     let current_date = time.date_naive();
     let end_of_day = current_date.and_hms_nano_opt(23, 59, 59, 999_999_999).unwrap();
