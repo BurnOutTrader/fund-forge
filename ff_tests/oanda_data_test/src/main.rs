@@ -168,7 +168,7 @@ pub async fn on_data_received(
 
                                     // LONG SL+TP
                                     if !exit_orders.contains_key(&qb.symbol.name) {
-                                        if is_long && long_pnl > dec!(100.0) {
+                                        if is_long && long_pnl > dec!(1000.0) {
                                             let position_size = strategy.position_size(&account_1, &qb.symbol.name);
                                             exit_orders.insert(qb.symbol.name.clone(), strategy.exit_long(&qb.symbol.name, None, &account_1, None, position_size, String::from("Exit Long Take Profit")).await);
                                             println!("Strategy: Exit Long Take Profit, Time {}", strategy.time_local());  // Fixed message
