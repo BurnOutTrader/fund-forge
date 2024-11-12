@@ -165,6 +165,7 @@ pub async fn on_data_received(
                                     }
                                 }
 
+                                //crash the strategy if short order is detected
                                 if strategy.is_short(&account_1, &qb.symbol.name) {
                                     println!("Short position detected");
                                     break 'strategy_loop;
