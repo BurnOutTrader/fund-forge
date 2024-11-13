@@ -14,7 +14,8 @@ use crate::strategies::client_features::other_requests::get_exchange_rate;
 
 impl Ledger {
     pub(crate) async fn charge_commission(&self, symbol_name: &SymbolName, contracts: Volume, exchange_rate: Decimal) {
-        //todo, this fn get_futures_commissions_info() will need to be a more dynamic / generic function to cover all brokerages
+        //todo, this fn get_futures_commissions_info() will need to be a more dynamic / generic function to cover all brokerages, we also need to use
+        // commission info to get the exchange rate, for example pnl currency will not be exchange rate currency
         if let Ok(commission_info) = get_futures_commissions_info(&symbol_name) {
             let commission = contracts * commission_info.per_side * exchange_rate;
             let mut cash_available = self.cash_available.lock().await;
