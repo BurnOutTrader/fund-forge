@@ -11,7 +11,7 @@ use crate::standardized_types::subscriptions::{SymbolCode, SymbolName};
 use crate::strategies::client_features::other_requests::get_exchange_rate;
 
 impl Ledger {
-    pub(crate) async fn release_margin_used(&self, symbol_name: &SymbolName) {
+    pub(crate) async fn release_margin_used(&self, symbol_name: &SymbolCode) {
         // First get_requests the margin amount without removing it
         if let Some((_,margin_used)) = self.margin_used.remove(symbol_name) {
             let margin_amount = margin_used;
@@ -28,7 +28,7 @@ impl Ledger {
         }
     }
 
-    pub(crate) async fn commit_margin(&self, symbol_name: &SymbolName, quantity: Volume, market_price: Price, time: DateTime<Utc>, side: OrderSide, base_currency: Option<Currency>, position_currency: Currency) -> Result<(), FundForgeError> {
+    pub(crate) async fn commit_margin(&self, symbol_name: &SymbolName, symbol_code: &SymbolCode, quantity: Volume, market_price: Price, time: DateTime<Utc>, side: OrderSide, base_currency: Option<Currency>, position_currency: Currency) -> Result<(), FundForgeError> {
         let rate = if position_currency == self.currency {
             dec!(1)
         } else {
@@ -58,10 +58,7 @@ impl Ledger {
         }
 
         // Update margin tracking before updating cash
-        self.margin_used
-            .entry(symbol_name.clone())
-            .and_modify(|existing| *existing += margin)
-            .or_insert(margin);
+        self.margin_used.insert(symbol_code.clone(), margin);
 
         // Update cash values
         {
@@ -79,16 +76,16 @@ impl Ledger {
 
     pub(crate) async fn paper_exit_position(
         &self,
-        symbol_name: &SymbolName,
+        symbol_code: &SymbolCode,
         time: DateTime<Utc>,
         market_price: Price,
         tag: String
     ) -> Option<PositionUpdateEvent> {
-        if let Some((symbol_name, mut existing_position)) = self.positions.remove(symbol_name) {
+        if let Some((symbol_name, mut existing_position)) = self.positions.remove(symbol_code) {
             // Mark the position as closed
             existing_position.is_closed = true;
             {
-                self.release_margin_used(&symbol_name).await;
+                self.release_margin_used(&symbol_code).await;
             }
             let exchange_rate = if self.currency != existing_position.symbol_info.pnl_currency {
                 let side = match existing_position.side {
@@ -176,11 +173,11 @@ impl Ledger {
                 };
                 let event = existing_position.reduce_position_size(market_fill_price, quantity, self.currency,exchange_rate, time, tag.clone()).await;
 
-                self.release_margin_used(&symbol_name).await;
+                self.release_margin_used(&symbol_code).await;
 
                 match &event {
                     PositionUpdateEvent::PositionReduced { booked_pnl, .. } => {
-                        self.commit_margin(&symbol_name, existing_position.quantity_open, existing_position.average_price, time, side, existing_position.symbol_info.base_currency, existing_position.symbol_info.pnl_currency).await.unwrap();
+                        self.commit_margin(&symbol_name, &symbol_code, existing_position.quantity_open, existing_position.average_price, time, side, existing_position.symbol_info.base_currency, existing_position.symbol_info.pnl_currency).await.unwrap();
                         self.positions.insert(symbol_code.clone(), existing_position);
 
                         self.symbol_closed_pnl
@@ -230,7 +227,7 @@ impl Ledger {
 
                 updates.push(event);
             } else {
-                match self.commit_margin(&symbol_name, quantity, market_fill_price, time, side, existing_position.symbol_info.base_currency, existing_position.symbol_info.pnl_currency).await {
+                match self.commit_margin(&symbol_name, &symbol_code, quantity, market_fill_price, time, side, existing_position.symbol_info.base_currency, existing_position.symbol_info.pnl_currency).await {
                     Ok(_) => {}
                     Err(e) => {
                         //todo this now gets added directly to buffer
@@ -262,7 +259,7 @@ impl Ledger {
         }
         if remaining_quantity > dec!(0.0) {
             let info = self.symbol_info(self.account.brokerage, &symbol_name).await;
-            match self.commit_margin(&symbol_name, quantity, market_fill_price, time, side, info.base_currency, info.pnl_currency).await {
+            match self.commit_margin(&symbol_name, &symbol_code, quantity, market_fill_price, time, side, info.base_currency, info.pnl_currency).await {
                 Ok(_) => {}
                 Err(e) => {
                     let event = OrderUpdateEvent::OrderRejected {
