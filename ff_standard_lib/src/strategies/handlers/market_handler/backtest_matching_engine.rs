@@ -246,12 +246,13 @@ pub(crate) async fn simulated_order_matching (
                 let cancel_time = match DateTime::<Utc>::from_timestamp(*cancel_time, 0) {
                     Some(time) => time,
                     None => {
+                        //eprintln!("Backtest Matching Engine: Invalid TimeInForce::Time value");
                         let reason = "Time In Force Expired: TimeInForce::Time".to_string();
                         rejected.push((order.id.clone(), reason));
                         continue;
                     }
                 };
-                if Utc::now() >= cancel_time {
+                if time >= cancel_time {
                     let reason = "Time In Force Expired: TimeInForce::Time".to_string();
                     cancelled.push((order.id.clone(), reason));
                     continue
