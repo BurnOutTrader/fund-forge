@@ -126,9 +126,11 @@ pub async fn on_data_received(
                                     continue;
                                 }
 
-                                if hours.seconds_until_close(strategy.time_utc()).unwrap() < 500 {
-                                    strategy.flatten_all_for(account.clone()).await;
-                                    continue 'strategy_loop;
+                                if let Some(seconds_until_close) = hours.seconds_until_close(strategy.time_utc()) {
+                                    if seconds_until_close < 500 {
+                                        strategy.flatten_all_for(account.clone()).await;
+                                        continue;
+                                    }
                                 }
 
                                 if let (Some(last_block), Some(two_blocks_ago)) = (strategy.indicator_index(&renko, 1), strategy.indicator_index(&renko, 2)) {
