@@ -186,7 +186,6 @@ impl HistoricalEngine {
 
             let mut time = last_time;
             'day_loop: while time <= to_time {
-                time = align_to_buffer(time, buffer_duration);
                 time += buffer_duration;
                 if !warm_up_complete {
                     if time >= self.start_time {
@@ -287,65 +286,6 @@ impl HistoricalEngine {
                 self.notified.notified().await;
                 last_time = time.clone();
             }
-        }
-    }
-}
-
-
-fn move_to_next_day(time: DateTime<Utc>) -> DateTime<Utc> {
-    DateTime::<Utc>::from_utc(
-        time.date_naive()
-            .succ_opt()
-            .expect("Should handle valid dates only")
-            .and_time(NaiveTime::from_hms_opt(0, 0, 0).expect("Valid time")),
-        Utc,
-    )
-}
-
-
-fn align_to_buffer(time: DateTime<Utc>, buffer_duration: std::time::Duration) -> DateTime<Utc> {
-    let nanos = time.timestamp_nanos_opt().unwrap();
-    let buffer_nanos = buffer_duration.as_nanos() as i64;
-
-    // Check if we're already on a buffer boundary
-    let remainder = nanos % buffer_nanos;
-    if remainder == 0 {
-        return time;  // Already perfectly aligned, don't modify
-    }
-
-    // If not aligned, round up to next buffer boundary
-    let aligned_nanos = nanos + (buffer_nanos - remainder);
-    DateTime::<Utc>::from_timestamp_nanos(aligned_nanos)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use std::time::Duration;
-
-    #[test]
-    fn test_basic_buffer_alignment() {
-        let thirty_mins = Duration::from_secs(30 * 60);
-
-        let test_cases = vec![
-            ("01:00:00", "01:00:00"),  // Aligned - should not change
-            ("01:30:00", "01:30:00"),  // Aligned - should not change
-            ("01:29:59", "01:30:00"),  // Not aligned - should move to next 30 min
-            ("01:45:00", "02:00:00"),  // Not aligned - should move to next 30 min
-            ("02:00:00", "02:00:00"),  // Aligned - should not change
-        ];
-
-        for (input, expected) in test_cases {
-            let hour = input.split(":").next().unwrap().parse::<u32>().unwrap();
-            let min = input.split(":").nth(1).unwrap().parse::<u32>().unwrap();
-            let sec = input.split(":").nth(2).unwrap().parse::<u32>().unwrap();
-
-            let time = Utc.with_ymd_and_hms(2024, 1, 1, hour, min, sec).unwrap();
-            let aligned = align_to_buffer(time, thirty_mins);
-
-            println!("Input: {}, Aligned: {}", input, aligned.format("%H:%M:%S"));
-            assert_eq!(aligned.format("%H:%M:%S").to_string(), expected,
-                       "Failed for input: {}", input);
         }
     }
 }
