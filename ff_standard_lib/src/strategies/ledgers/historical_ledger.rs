@@ -23,6 +23,8 @@ impl Ledger {
             *balance -= commission;
             let mut commission_paid = self.commissions_paid.lock().await;
             *commission_paid += commission;
+            let mut booked_pnl = self.total_booked_pnl.lock().await;
+            *booked_pnl -= commission;
         }
     }
 
