@@ -1,7 +1,9 @@
 use crate::strategies::ledgers::ledger::Ledger;
 use chrono::{DateTime, Utc};
+use rust_decimal::Decimal;
 use rust_decimal_macros::dec;
 use crate::messages::data_server_messaging::FundForgeError;
+use crate::product_maps::rithmic::maps::get_futures_commissions_info;
 use crate::standardized_types::accounts::Currency;
 use crate::standardized_types::enums::{OrderSide, PositionSide, StrategyMode};
 use crate::standardized_types::new_types::{Price, Volume};
@@ -11,6 +13,19 @@ use crate::standardized_types::subscriptions::{SymbolCode, SymbolName};
 use crate::strategies::client_features::other_requests::get_exchange_rate;
 
 impl Ledger {
+    pub(crate) async fn charge_commission(&self, symbol_name: &SymbolName, contracts: Volume, exchange_rate: Decimal) {
+        //todo, this fn get_futures_commissions_info() will need to be a more dynamic / generic function to cover all brokerages
+        if let Ok(commission_info) = get_futures_commissions_info(&symbol_name) {
+            let commission = contracts * commission_info.per_side * exchange_rate;
+            let mut cash_available = self.cash_available.lock().await;
+            *cash_available -= commission;
+            let mut balance = self.cash_value.lock().await;
+            *balance -= commission;
+            let mut commission_paid = self.commissions_paid.lock().await;
+            *commission_paid += commission;
+        }
+    }
+
     pub(crate) async fn release_margin_used(&self, symbol_name: &SymbolCode) {
         // First get_requests the margin amount without removing it
         if let Some((_,margin_used)) = self.margin_used.remove(symbol_name) {
@@ -102,6 +117,7 @@ impl Ledger {
             } else {
                 dec!(1.0)
             };
+            self.charge_commission(&symbol_name, existing_position.quantity_open, exchange_rate).await;
             let event = existing_position.reduce_position_size(market_price, existing_position.quantity_open, self.currency, exchange_rate, time, tag).await;
             let mut cash_available = self.cash_available.lock().await;
             let mut total_booked_pnl = self.total_booked_pnl.lock().await;
@@ -171,6 +187,7 @@ impl Ledger {
                 } else {
                     dec!(1.0)
                 };
+                self.charge_commission(&symbol_name, existing_position.quantity_open, exchange_rate).await;
                 let event = existing_position.reduce_position_size(market_fill_price, quantity, self.currency,exchange_rate, time, tag.clone()).await;
 
                 self.release_margin_used(&symbol_code).await;
@@ -294,6 +311,8 @@ impl Ledger {
                 dec!(1.0)
             };
 
+            //todo, we only need to do this for certain brokerages, I will need a better pattern..
+            self.charge_commission(&symbol_name, remaining_quantity, exchange_rate).await;
             if symbol_name != symbol_code && !self.symbol_code_map.contains_key(&symbol_name) {
                 self.symbol_code_map.insert(symbol_name.clone(), vec![]);
             };

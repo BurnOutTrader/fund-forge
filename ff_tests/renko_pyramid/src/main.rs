@@ -50,7 +50,7 @@ async fn main() {
         false,
         100,
         strategy_event_sender,
-        core::time::Duration::from_millis(50),
+        core::time::Duration::from_millis(200),
         false,
         false,
         false,
