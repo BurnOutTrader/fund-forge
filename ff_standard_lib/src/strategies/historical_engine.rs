@@ -147,7 +147,7 @@ impl HistoricalEngine {
             // Assuming `last_time` is a `DateTime<Utc>`
             if !early_return && last_time.date_naive() == last_date {
                 // Adjust `last_time` to the start of the next day in `Utc`
-                last_time = DateTime::<Utc>::from_utc(
+                last_time = DateTime::<Utc>::from_naive_utc_and_offset (
                     last_time
                         .date_naive()
                         .succ_opt() // Move to the next day
@@ -164,7 +164,6 @@ impl HistoricalEngine {
                     if time_slices.is_empty() && self.tick_over_no_data {
                         println!("Historical Engine: No data period, weekend or holiday: ticking through at buffering resolution, data will resume shortly");
                     } else if time_slices.is_empty() && !self.tick_over_no_data {
-                        last_time = to_time;
                         continue 'main_loop
                     }
                     time_slices
@@ -173,7 +172,6 @@ impl HistoricalEngine {
                     if self.tick_over_no_data {
                         println!("Historical Engine: Error getting data: {}", e);
                     } else if !self.tick_over_no_data {
-                        last_time = to_time;
                         continue 'main_loop
                     }
                     BTreeMap::new()
