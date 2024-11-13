@@ -140,14 +140,19 @@ impl HistoricalEngine {
             println!("Historical Engine: Strategy Subscription: {}", subscription);
         }
         let mut last_time = warm_up_start_time.clone();
+        let mut first_run = true;
         'main_loop: while last_time <= end_time {
-            let to_time = get_day_boundary(last_time);
+            if !first_run {
+                last_time += ChronoDuration::nanoseconds(1);
+            }
+            let end_of_day = last_time.date_naive().and_hms_nano_opt(23, 59, 59, 999_999_999).unwrap();
+            let to_time = Utc.from_utc_datetime(&end_of_day);
 
             let mut time_slices = match get_compressed_historical_data(primary_subscriptions.clone(), last_time.clone(), to_time).await {
                 Ok(time_slices) => {
                     if time_slices.is_empty() && self.tick_over_no_data {
                         println!("Historical Engine: No data period, weekend or holiday: ticking through at buffering resolution, data will resume shortly");
-                    } else if time_slices.is_empty()  {
+                    } else if time_slices.is_empty() && !self.tick_over_no_data {
                         last_time = to_time;
                         continue 'main_loop
                     }
@@ -163,6 +168,8 @@ impl HistoricalEngine {
                     BTreeMap::new()
                 }
             };
+
+            first_run = false;
 
             //eprintln!("Time Slices: {:?}", time_slices);
 
