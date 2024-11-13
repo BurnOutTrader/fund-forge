@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 use std::sync::Arc;
-use chrono::{DateTime, Duration as ChronoDuration, TimeZone, Utc};
+use chrono::{DateTime, Duration as ChronoDuration, NaiveTime, TimeZone, Utc};
 use crate::strategies::client_features::server_connections::{set_warmup_complete};
 use crate::standardized_types::base_data::history::{get_compressed_historical_data};
 use crate::standardized_types::enums::StrategyMode;
@@ -139,11 +139,22 @@ impl HistoricalEngine {
         for subscription in &strategy_subscriptions {
             println!("Historical Engine: Strategy Subscription: {}", subscription);
         }
+
         let mut last_time = warm_up_start_time.clone();
-        let mut first_run = true;
+        let mut early_return = false;
+        let mut last_date = last_time.date_naive();
         'main_loop: while last_time <= end_time {
-            if !first_run {
-                last_time += ChronoDuration::nanoseconds(1);
+            // Assuming `last_time` is a `DateTime<Utc>`
+            if !early_return && last_time.date_naive() == last_date {
+                // Adjust `last_time` to the start of the next day in `Utc`
+                last_time = DateTime::<Utc>::from_utc(
+                    last_time
+                        .date_naive()
+                        .succ_opt() // Move to the next day
+                        .unwrap()
+                        .and_time(NaiveTime::from_hms_opt(0, 0, 0).unwrap()), // Set to 00:00:00 of the next day
+                    Utc,
+                );
             }
             let end_of_day = last_time.date_naive().and_hms_nano_opt(23, 59, 59, 999_999_999).unwrap();
             let to_time = Utc.from_utc_datetime(&end_of_day);
@@ -168,8 +179,8 @@ impl HistoricalEngine {
                     BTreeMap::new()
                 }
             };
-
-            first_run = false;
+            last_date = last_time.date_naive();
+            early_return = false;
 
             //eprintln!("Time Slices: {:?}", time_slices);
 
@@ -199,6 +210,7 @@ impl HistoricalEngine {
                     Ok(updates) => {
                         if updates != primary_subscriptions {
                             primary_subscriptions = updates;
+                            early_return = true;
                             break 'day_loop
                         }
                     }
@@ -279,11 +291,15 @@ impl HistoricalEngine {
     }
 }
 
-//these functions could be removed if I made a historical data request that just asks for files for 1 day at a time.
-fn get_day_boundary(time: DateTime<Utc>) -> DateTime<Utc> {
-    let current_date = time.date_naive();
-    let end_of_day = current_date.and_hms_nano_opt(23, 59, 59, 999_999_999).unwrap();
-    Utc.from_utc_datetime(&end_of_day).max(time)
+
+fn move_to_next_day(time: DateTime<Utc>) -> DateTime<Utc> {
+    DateTime::<Utc>::from_utc(
+        time.date_naive()
+            .succ_opt()
+            .expect("Should handle valid dates only")
+            .and_time(NaiveTime::from_hms_opt(0, 0, 0).expect("Valid time")),
+        Utc,
+    )
 }
 
 
