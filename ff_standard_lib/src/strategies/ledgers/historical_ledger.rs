@@ -18,15 +18,22 @@ impl Ledger {
         // commission info to get the exchange rate, for example pnl currency will not be exchange rate currency
         if let Ok(commission_info) = get_futures_commissions_info(&symbol_name) {
             let commission = contracts * commission_info.per_side * exchange_rate;
-            let mut cash_available = self.cash_available.lock().await;
-            let mut booked_pnl = self.total_booked_pnl.lock().await;
-            let mut balance = self.cash_value.lock().await;
-            let mut commission_paid = self.commissions_paid.lock().await;
-
-            *cash_available -= commission;
-            *balance -= commission;
-            *commission_paid += commission;
-            *booked_pnl -= commission;
+            {
+                let mut cash_available = self.cash_available.lock().await;
+                *cash_available -= commission;
+            }
+            {
+                let mut booked_pnl = self.total_booked_pnl.lock().await;
+                *booked_pnl -= commission;
+            }
+            {
+                let mut balance = self.cash_value.lock().await;
+                *balance -= commission;
+            }
+            {
+                let mut commission_paid = self.commissions_paid.lock().await;
+                *commission_paid += commission;
+            }
         }
     }
 
