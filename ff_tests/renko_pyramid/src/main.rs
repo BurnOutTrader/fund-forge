@@ -129,6 +129,7 @@ pub async fn on_data_received(
                                             strategy.flatten_all_for(account.clone()).await;
                                             println!("Flattening all positions for {} due to market close", symbol_code);
                                         }
+                                        println!("Market is closing soon, waiting for next day: Time: {}", strategy.time_local());
                                         continue;
                                     }
                                 }
@@ -200,7 +201,7 @@ pub async fn on_data_received(
                         }
                         let pnl = strategy.pnl(&account, &symbol_code);
                         let quantity = strategy.position_size(&account, &symbol_code);
-                        let msg = format!("{} Strategy: PNL: {}, Quantity: {}", symbol_code, pnl, quantity);
+                        let msg = format!("{} Strategy: Open pnl: {}, Quantity: {}", symbol_code, pnl, quantity);
                         println!("{}", msg.as_str().bright_blue());
                     }
                     _ => {}
