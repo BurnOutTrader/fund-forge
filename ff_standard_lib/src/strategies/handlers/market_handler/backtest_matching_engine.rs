@@ -324,21 +324,38 @@ pub(crate) async fn backtest_matching_engine(
                                 continue
                             }
 
+                            // Insert order into cache
                             order.state = OrderState::Accepted;
                             open_order_cache.insert(order.id.clone(), order.clone());
-                            let accept_event = StrategyEvent::OrderEvents(OrderUpdateEvent::OrderAccepted {
-                                account: account.clone(),
-                                symbol_name: order.symbol_name.clone(),
-                                symbol_code: order.symbol_code.clone(),
-                                order_id: order.id.clone(),
-                                tag: order.tag.clone(),
-                                time: time.to_string()
-                            });
-                            match strategy_event_sender.send(accept_event).await {
-                                Ok(_) => {}
-                                Err(e) => eprintln!("Timed Event Handler: Failed to send event: {}", e)
+
+                            // Drop any locks by scoping
+                            {
+                                let accept_event = StrategyEvent::OrderEvents(OrderUpdateEvent::OrderAccepted {
+                                    account: account.clone(),
+                                    symbol_name: order.symbol_name.clone(),
+                                    symbol_code: order.symbol_code.clone(),
+                                    order_id: order.id.clone(),
+                                    tag: order.tag.clone(),
+                                    time: time.to_string()
+                                });
+
+                                match strategy_event_sender.send(accept_event).await {
+                                    Ok(_) => {}
+                                    Err(e) => eprintln!("Timed Event Handler: Failed to send event: {}", e)
+                                }
                             }
-                            simulated_order_matching(&open_order_cache, &closed_order_cache, strategy_event_sender.clone(), &ledger_service).await;
+
+                            // Now do matching in a separate scope and await it
+                            tokio::task::spawn({
+                                let open_order_cache = open_order_cache.clone();
+                                let closed_order_cache = closed_order_cache.clone();
+                                let strategy_event_sender = strategy_event_sender.clone();
+                                let ledger_service = ledger_service.clone();
+
+                                async move {
+                                    simulated_order_matching(&open_order_cache, &closed_order_cache, strategy_event_sender, &ledger_service).await;
+                                }
+                            }).await.unwrap();
                         }
                         OrderRequest::Cancel { account,order_id } => {
                             let existing_order = open_order_cache.remove(&order_id);
