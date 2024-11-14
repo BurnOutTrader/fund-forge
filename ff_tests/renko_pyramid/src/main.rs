@@ -145,7 +145,7 @@ pub async fn on_data_received(
                                         let pnl = strategy.pnl(&account, &symbol_code);
 
                                         // Buy on 2 bullish renko blocks
-                                        if block_close.value > block_open.value && last_close < last_open && entry_order_id == None && (!is_long || pnl > INCREMENTAL_SCALP_PNL) {
+                                        if two_blocks_ago_close < two_blocks_ago_open && block_close.value > block_open.value && last_close > last_open && entry_order_id == None && (!is_long || pnl > INCREMENTAL_SCALP_PNL) {
                                             let quantity = strategy.position_size(&account, &symbol_code);
                                             if quantity < MAX_SIZE {
                                                 let tif = TimeInForce::Time((strategy.time_utc() + Duration::seconds(LIMIT_ORDER_EXPIRE_IN_SECS)).timestamp());
@@ -173,7 +173,7 @@ pub async fn on_data_received(
                                         let pnl = strategy.pnl(&account, &symbol_code);
 
                                         // Buy on 2 bearish renko blocks
-                                        if block_close.value < block_open.value && last_close > last_open && entry_order_id == None && (!is_short || pnl > INCREMENTAL_SCALP_PNL) {
+                                        if two_blocks_ago_close > two_blocks_ago_open && block_close.value < block_open.value && last_close < last_open && entry_order_id == None && (!is_short || pnl > INCREMENTAL_SCALP_PNL) {
                                             let quantity = strategy.position_size(&account, &symbol_code);
                                             if quantity < MAX_SIZE {
                                                 let tif = TimeInForce::Time((strategy.time_utc() + Duration::seconds(LIMIT_ORDER_EXPIRE_IN_SECS)).timestamp());
