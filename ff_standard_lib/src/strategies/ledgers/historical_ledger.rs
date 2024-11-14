@@ -19,7 +19,7 @@ impl Ledger {
         if let Ok(commission_info) = get_futures_commissions_info(&symbol_name) {
             let commission = contracts * commission_info.per_side * exchange_rate;
             {
-                let mut balance = self.cash_value.lock().await;
+                let mut balance = self.cash_available.lock().await;
                 *balance -= commission;
             }
             {
