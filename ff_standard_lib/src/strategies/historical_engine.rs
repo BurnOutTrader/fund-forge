@@ -183,7 +183,7 @@ impl HistoricalEngine {
             last_date = last_time.date_naive();
             early_return = false;
 
-            //eprintln!("Time Slices: {:?}", time_slices);
+            eprintln!("Time Slices: {}", time_slices.len());
 
             let mut time = last_time;
             'day_loop: while time <= to_time {
