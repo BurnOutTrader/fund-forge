@@ -325,7 +325,9 @@ pub(crate) async fn backtest_matching_engine(
                             }
 
                             order.state = OrderState::Accepted;
-                            open_order_cache.insert(order.id.clone(), order.clone());
+                            {
+                                open_order_cache.insert(order.id.clone(), order.clone());
+                            }
                             let accept_event = StrategyEvent::OrderEvents(OrderUpdateEvent::OrderAccepted {
                                 account: account.clone(),
                                 symbol_name: order.symbol_name.clone(),
