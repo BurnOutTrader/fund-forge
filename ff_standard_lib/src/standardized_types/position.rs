@@ -348,8 +348,6 @@ impl Position {
             panic!("Something wrong with logic, ledger should know this not to be possible")
         }
 
-        self.exchange_rate_multiplier = exchange_rate;
-
         // Calculate booked PnL
         let booked_pnl = calculate_theoretical_pnl(
             self.account.brokerage,
