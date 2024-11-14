@@ -44,7 +44,7 @@ async fn main() {
         vec![
             // Since we only have quote level test data, the 2 subscriptions will be created by consolidating the quote feed. Quote data will automatically be subscribed as primary data source.
             (None, DataSubscription::new(
-                SymbolName::from("MNQ"),
+                SymbolName::from("NAS100-USD"),
                 DataVendor::Oanda,
                 Resolution::Seconds(5),
                 BaseDataType::QuoteBars,
@@ -144,7 +144,7 @@ pub async fn on_data_received(
                                     continue;
                                 }
 
-                                if quotebar.resolution == Resolution::Seconds(5) && quotebar.symbol.name == "EUR-USD"  {
+                                if quotebar.resolution == Resolution::Seconds(5) && quotebar.symbol.name == "NAS100-USD"  {
                                     // We are using a limit order to enter here, so we will manage our order differently. there are a number of ways to do this, this is probably not the best way.
                                     // Using Option<OrderId> for entry order as an alternative to is_long()
                                     if entry_order_id.is_some() {
