@@ -88,7 +88,7 @@ async fn main() {
 
         // Buffer Duration
         //strategy resolution in milliseconds, all data at a lower resolution will be consolidated to this resolution, if using tick data, you will want to set this at 100 or less depending on the data granularity
-        core::time::Duration::from_secs(60 * 15), //use a giant buffer since we are only using 1 hour data and not actually buffering anything
+        core::time::Duration::from_secs(60), //use a giant buffer since we are only using 1 hour data and not actually buffering anything
 
         // Enabled will launch the strategy registry handler to connect to a GUI, currently will crash if enabled
         false,
@@ -232,10 +232,8 @@ pub async fn on_data_received(
                         strategy.print_ledger(event.account()).await
                     },
                 }
-                let quantity = strategy.position_size(&account_1, &"NAS100-USD".to_string());
                 let msg = format!("{}, Time Local: {}", event, event.time_local(strategy.time_zone()));
                 println!("{}", msg.as_str().purple());
-                println!("Strategy: Open Quantity: {}", quantity);
             }
             StrategyEvent::OrderEvents(event) => {
                 let msg = format!("Strategy: Order Event: {}, Time: {}", event, event.time_local(strategy.time_zone()));
