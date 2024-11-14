@@ -158,7 +158,7 @@ pub async fn on_data_received(
                                             let quantity = strategy.position_size(&account, &symbol_code);
                                             if quantity < MAX_SIZE {
                                                 let tif = TimeInForce::Time((strategy.time_utc() + Duration::seconds(LIMIT_ORDER_EXPIRE_IN_SECS)).timestamp());
-                                                entry_order_id = Some(strategy.limit_order(&symbol_name, Some(symbol_code.clone()), &account, None, SIZE, OrderSide::Buy, last_open, tif, String::from("Enter Long")).await);
+                                                entry_order_id = Some(strategy.limit_order(&symbol_name, Some(symbol_code.clone()), &account, None, SIZE, OrderSide::Buy, block_close.value, tif, String::from("Enter Long")).await);
                                             }
                                         }
                                         if is_long {
@@ -186,7 +186,7 @@ pub async fn on_data_received(
                                             let quantity = strategy.position_size(&account, &symbol_code);
                                             if quantity < MAX_SIZE {
                                                 let tif = TimeInForce::Time((strategy.time_utc() + Duration::seconds(LIMIT_ORDER_EXPIRE_IN_SECS)).timestamp());
-                                                entry_order_id = Some(strategy.limit_order(&symbol_name, Some(symbol_code.clone()), &account, None, SIZE, OrderSide::Sell, last_open, tif, String::from("Enter Short")).await);
+                                                entry_order_id = Some(strategy.limit_order(&symbol_name, Some(symbol_code.clone()), &account, None, SIZE, OrderSide::Sell, block_close.value, tif, String::from("Enter Short")).await);
                                             }
                                         }
                                         if is_short {
