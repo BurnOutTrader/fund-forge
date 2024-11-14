@@ -95,8 +95,6 @@ impl Ledger {
             let mut account_cash_available = self.cash_available.lock().await;
             *account_cash_available -= margin;
         }
-
-        let margin_used = self.margin_used.get(symbol_code).unwrap().value().clone();
         //println!("Margin Used: {}", margin_used);
 
         Ok(())
