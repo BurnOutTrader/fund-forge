@@ -36,7 +36,7 @@ This step will be done slowly by testing strategies under live and historical co
 
 ### Initial Setup
 1. Install [rust](https://www.rust-lang.org/tools/install).
-2. You can download some data I have already parsed [here](https://1drv.ms/f/s!AllvRPz1aHoThKQU2hQbLEBqZyQ5RA?e=nzilot), or you need to set up a [Rithmic account](ff_data_server/src/rithmic_api/RITHMIC_SETUP.md) or [Oanda account](ff_data_server/src/oanda_api/OANDA_SETUP.md). [Free Historical Data](#historical-data)
+2. You need to set up a [Rithmic account](ff_data_server/src/rithmic_api/RITHMIC_SETUP.md) or [Oanda account](ff_data_server/src/oanda_api/OANDA_SETUP.md). [Free Historical Data](#historical-data), currently to run a backtest, you need one of these api's active on the server.
 3. Put the test data into the correct directory. [instructions below](#file-and-folder-structure)
 4. Navigate to [ff_data_server](./ff_data_server) directory and `cargo build` then `cargo run` (don't run the server in your IDE, it will have issues (more issues than normal :) )
     - to run the server with rithmic apis connected use `cargo run -- --rithmic "0"`.
