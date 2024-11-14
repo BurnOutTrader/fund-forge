@@ -442,6 +442,7 @@ impl Ledger {
         let cash_used = self.cash_used.lock().await.clone();
         let cash_available = self.cash_available.lock().await.clone();
         let commission_paid = self.commissions_paid.lock().await.clone();
+        let pnl = self.total_booked_pnl.lock().await.clone();
         format!("Account: {}, Balance: {} {}, Win Rate: {}%, Average Risk Reward: {}, Profit Factor {}, Total profit: {}, Total Wins: {}, Total Losses: {}, Break Even: {}, Total Trades: {}, Open Positions: {}, Cash Used: {}, Cash Available: {}, Commission Paid: {}",
                 self.account, cash_value.round_dp(2), self.currency, win_rate.round_dp(2), risk_reward.round_dp(2), profit_factor.round_dp(2), pnl.round_dp(2), wins, losses, break_even, total_trades, self.positions.len(), cash_used.round_dp(2), cash_available.round_dp(2), commission_paid)
     }
