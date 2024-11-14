@@ -15,7 +15,7 @@ use ff_standard_lib::standardized_types::accounts::{Account, Currency};
 use ff_standard_lib::standardized_types::base_data::base_data_type::BaseDataType;
 use ff_standard_lib::standardized_types::broker_enum::Brokerage;
 use ff_standard_lib::standardized_types::datavendor_enum::DataVendor;
-use ff_standard_lib::standardized_types::orders::{OrderUpdateEvent, TimeInForce};
+use ff_standard_lib::standardized_types::orders::{OrderId, OrderUpdateEvent, TimeInForce};
 use ff_standard_lib::standardized_types::position::PositionUpdateEvent;
 use ff_standard_lib::standardized_types::resolution::Resolution;
 use ff_standard_lib::strategies::indicators::built_in::renko::Renko;
@@ -94,9 +94,9 @@ pub async fn on_data_received(
     let open = "open".to_string();
     let close = "close".to_string();
     let mut warmup_complete = false;
-    let mut entry_order_id = None;
-    let mut exit_order_id = None;
-    let mut tp_id = None;
+    let mut entry_order_id: Option<OrderId> = None;
+    let mut exit_order_id: Option<OrderId> = None;
+    let mut tp_id: Option<OrderId> = None;
     let mut last_short_result = Result::BreakEven;
     let mut last_long_result = Result::BreakEven;
 
@@ -124,6 +124,15 @@ pub async fn on_data_received(
 
                                 if let Some(seconds_until_close) = hours.seconds_until_close(strategy.time_utc()) {
                                     if seconds_until_close < 500 {
+                                        if let Some(entry_order_id) = &entry_order_id {
+                                            strategy.cancel_order(entry_order_id.clone()).await;
+                                        }
+                                        if let Some(exit_order_id) = &exit_order_id {
+                                            strategy.cancel_order(exit_order_id.clone()).await;
+                                        }
+                                        if let Some(tp_id) = &tp_id {
+                                            strategy.cancel_order(tp_id.clone()).await;
+                                        }
                                         if !strategy.is_flat(&account, &symbol_code) {
                                             strategy.flatten_all_for(account.clone()).await;
                                             println!("Flattening all positions for {} due to market close", symbol_code);
