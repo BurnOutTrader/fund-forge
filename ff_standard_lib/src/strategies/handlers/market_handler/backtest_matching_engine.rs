@@ -435,8 +435,30 @@ pub(crate) async fn backtest_matching_engine(
                             simulated_order_matching(&open_order_cache, &closed_order_cache, strategy_event_sender.clone(), &ledger_service).await;
                         }
                         OrderRequest::FlattenAllFor { account} => {
+                            let orders_to_remove: Vec<_> = open_order_cache.iter()
+                                .filter(|order| order.account == account)
+                                .map(|order| order.id.clone())
+                                .collect();
+
+                            for order_id in orders_to_remove {
+                                let  (order_id, mut order) = open_order_cache.remove(&order_id).unwrap();
+                                order.state = OrderState::Cancelled;
+                                let event = StrategyEvent::OrderEvents(OrderUpdateEvent::OrderCancelled {
+                                    account: account.clone(),
+                                    symbol_name: order.symbol_name.clone(),
+                                    symbol_code: order.symbol_code.clone(),
+                                    order_id,
+                                    reason: "Flatten All".to_string(),
+                                    tag: order.tag.clone(),
+                                    time: time.to_string(),
+                                });
+                                match strategy_event_sender.send(event).await {
+                                    Ok(_) => {}
+                                    Err(e) => eprintln!("Timed Event Handler: Failed to send event: {}", e)
+                                }
+                                closed_order_cache.insert(order.id.clone(), order);
+                            }
                             ledger_service.flatten_all_for_paper_account(&account, time).await;
-                            simulated_order_matching(&open_order_cache, &closed_order_cache, strategy_event_sender.clone(), &ledger_service).await;
                         }
                     }
                 }
