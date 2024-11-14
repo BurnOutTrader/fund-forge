@@ -158,6 +158,7 @@ impl HistoricalEngine {
             }
             let end_of_day = last_time.date_naive().and_hms_nano_opt(23, 59, 59, 999_999_999).unwrap();
             let to_time = Utc.from_utc_datetime(&end_of_day);
+            eprintln!("Historical Engine: Processing data from {} to {}", last_time, to_time);
 
             let mut time_slices = match get_compressed_historical_data(primary_subscriptions.clone(), last_time.clone(), to_time).await {
                 Ok(time_slices) => {
