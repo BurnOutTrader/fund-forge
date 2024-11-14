@@ -127,6 +127,7 @@ pub async fn on_data_received(
                                     if seconds_until_close < 500 {
                                         if !strategy.is_flat(&account, &symbol_code) {
                                             strategy.flatten_all_for(account.clone()).await;
+                                            println!("Flattening all positions for {} due to market close", symbol_code);
                                         }
                                         continue;
                                     }
@@ -148,7 +149,7 @@ pub async fn on_data_received(
                                             let quantity = strategy.position_size(&account, &symbol_code);
                                             if quantity < MAX_SIZE {
                                                 let tif = TimeInForce::Time((strategy.time_utc() + Duration::seconds(LIMIT_ORDER_EXPIRE_IN_SECS)).timestamp());
-                                                entry_order_id = Some(strategy.enter_long(&symbol_name, Some(symbol_code.clone()), &account, None, SIZE, String::from("Enter Long")).await);//Some(strategy.limit_order(&symbol_name, Some(symbol_code.clone()), &account, None, SIZE, OrderSide::Buy, last_open, tif, String::from("Enter Long")).await);
+                                                entry_order_id = Some(strategy.limit_order(&symbol_name, Some(symbol_code.clone()), &account, None, SIZE, OrderSide::Buy, last_open, tif, String::from("Enter Long")).await);
                                             }
                                         }
                                         if is_long {
@@ -263,7 +264,6 @@ pub async fn on_data_received(
                 let quantity = strategy.position_size(&account, &symbol_code);
                 let msg = format!("{}, Time Local: {}", event, event.time_local(strategy.time_zone()));
                 println!("{}", msg.as_str().purple());
-                println!("Strategy: Open Quantity: {}", quantity);
             }
             StrategyEvent::OrderEvents(event) => {
                 let msg = format!("Strategy: Order Event: {}, Time: {}", event, event.time_local(strategy.time_zone()));
