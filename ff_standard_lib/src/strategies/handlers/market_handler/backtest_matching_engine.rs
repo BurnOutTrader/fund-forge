@@ -865,12 +865,10 @@ async fn fill_order(
     ledger_service: &Arc<LedgerService>
 ) {
     if let Some((_, mut order)) = open_order_cache.remove(order_id) {  // Remove the order here
-        order.quantity_filled += order.quantity_open;
-        order.quantity_open = dec!(0);
-
-        match ledger_service.update_or_create_paper_position(&order.account, order.symbol_name.clone(), order.symbol_code.clone(), order_id.clone(), order.quantity_filled.clone(), order.side.clone(), time.clone(), market_price, order.tag.clone()).await {
+        match ledger_service.update_or_create_paper_position(&order.account, order.symbol_name.clone(), order.symbol_code.clone(), order_id.clone(), order.quantity_open.clone(), order.side.clone(), time.clone(), market_price, order.tag.clone()).await {
             Ok(events) => {
-
+                order.quantity_filled += order.quantity_open;
+                order.quantity_open = dec!(0);
                 //todo, need to send an accepted event first if the order state != accepted
                 let order_event = StrategyEvent::OrderEvents(OrderUpdateEvent::OrderFilled {
                     account: order.account.clone(),
@@ -916,6 +914,7 @@ async fn partially_fill_order(
 ) {
     if let Some((_, mut order)) = open_order_cache.remove(order_id) {
         order.quantity_open -= fill_volume;
+        order.quantity_filled += fill_volume;
         let is_fully_filled = order.quantity_open <= dec!(0);
 
         let order_event = if is_fully_filled {
