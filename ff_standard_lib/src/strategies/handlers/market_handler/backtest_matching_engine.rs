@@ -17,7 +17,7 @@ use crate::strategies::strategy_events::StrategyEvent;
 
 pub enum BackTestEngineMessage {
     TickBufferTime,
-    OrderRequest(DateTime<Utc>, OrderRequest)
+    OrderRequest(OrderRequest)
 }
 
 pub(crate) async fn backtest_matching_engine(
@@ -32,10 +32,312 @@ pub(crate) async fn backtest_matching_engine(
        notify.notify_one();
         while let Some(backtest_message) = receiver.recv().await {
             match backtest_message {
-                BackTestEngineMessage::OrderRequest(time, order_request) => {
+                BackTestEngineMessage::OrderRequest(order_request) => {
                     //println!("{:?}", order_request);
+                    let time = get_backtest_time();
                     match order_request {
-                        OrderRequest::Create {  .. } => {
+                        OrderRequest::Create { account, mut order, .. } => {
+                            let market_price = match price_service_request_market_price(order.side, order.symbol_name.clone(), order.symbol_code.clone()).await {
+                                Ok(price) => match price.price() {
+                                    None => panic!("No market price found"),
+                                    Some(price) => price
+                                }
+                                Err(_) => panic!("No market price found")
+                            };
+                            if order.quantity_open <= dec!(0) {
+                                open_order_cache.remove(&order.id);
+                                let fail_event = StrategyEvent::OrderEvents(OrderUpdateEvent::OrderRejected {
+                                    account,
+                                    symbol_name: order.symbol_name,
+                                    symbol_code: order.symbol_code,
+                                    order_id: order.id.clone(), reason: String::from("Order Quantity Must Be Greater Than Zero"),
+                                    tag: order.tag,
+                                    time: time.to_string()
+                                });
+                                match strategy_event_sender.send(fail_event).await {
+                                    Ok(_) => {}
+                                    Err(e) => eprintln!("Timed Event Handler: Failed to send event: {}", e)
+                                }
+                                continue
+                            }
+                            if order.order_type == OrderType::Limit && order.side == OrderSide::Sell && order.limit_price.unwrap() < market_price {
+                                let fail_event = StrategyEvent::OrderEvents(OrderUpdateEvent::OrderRejected {
+                                    account,
+                                    symbol_name: order.symbol_name,
+                                    symbol_code: order.symbol_code,
+                                    order_id: order.id.clone(), reason: String::from("Sell Limit Price Must Be At or Above Market Price"),
+                                    tag: order.tag,
+                                    time: time.to_string()
+                                });
+                                match strategy_event_sender.send(fail_event).await {
+                                    Ok(_) => {}
+                                    Err(e) => eprintln!("Timed Event Handler: Failed to send event: {}", e)
+                                }
+                                continue
+                            }
+                            if order.order_type == OrderType::Limit && order.side == OrderSide::Buy && order.limit_price.unwrap() > market_price {
+                                let fail_event = StrategyEvent::OrderEvents(OrderUpdateEvent::OrderRejected {
+                                    account,
+                                    symbol_name: order.symbol_name,
+                                    symbol_code: order.symbol_code,
+                                    order_id: order.id.clone(), reason: String::from("Buy Limit Price Must Be At or Below Market Price"),
+                                    tag: order.tag,
+                                    time: time.to_string()
+                                });
+                                match strategy_event_sender.send(fail_event).await {
+                                    Ok(_) => {}
+                                    Err(e) => eprintln!("Timed Event Handler: Failed to send event: {}", e)
+                                }
+                                continue
+                            }
+                            if order.order_type == OrderType::StopMarket && order.side == OrderSide::Sell && order.trigger_price.unwrap() >= market_price {
+                                let fail_event = StrategyEvent::OrderEvents(OrderUpdateEvent::OrderRejected {
+                                    account,
+                                    symbol_name: order.symbol_name,
+                                    symbol_code: order.symbol_code,
+                                    order_id: order.id.clone(), reason: String::from("Sell Stop Price Must Be Below Market Price"),
+                                    tag: order.tag,
+                                    time: time.to_string()
+                                });
+                                match strategy_event_sender.send(fail_event).await {
+                                    Ok(_) => {}
+                                    Err(e) => eprintln!("Timed Event Handler: Failed to send event: {}", e)
+                                }
+                                continue
+                            }
+                            if order.order_type == OrderType::StopMarket && order.side == OrderSide::Buy && order.trigger_price.unwrap() <= market_price {
+                                let fail_event = StrategyEvent::OrderEvents(OrderUpdateEvent::OrderRejected {
+                                    account,
+                                    symbol_name: order.symbol_name,
+                                    symbol_code: order.symbol_code,
+                                    order_id: order.id.clone(), reason: String::from("Buy Stop Price Must Be Above Market Price"),
+                                    tag: order.tag,
+                                    time: time.to_string()
+                                });
+                                match strategy_event_sender.send(fail_event).await {
+                                    Ok(_) => {}
+                                    Err(e) => eprintln!("Timed Event Handler: Failed to send event: {}", e)
+                                }
+                                continue
+                            }
+                            if order.order_type == OrderType::StopLimit && order.side == OrderSide::Sell && order.trigger_price.unwrap() >= market_price {
+                                let fail_event = StrategyEvent::OrderEvents(OrderUpdateEvent::OrderRejected {
+                                    account,
+                                    symbol_name: order.symbol_name,
+                                    symbol_code: order.symbol_code,
+                                    order_id: order.id.clone(), reason: String::from("Sell Stop Price Must Be Below Market Price"),
+                                    tag: order.tag,
+                                    time: time.to_string()
+                                });
+                                match strategy_event_sender.send(fail_event).await {
+                                    Ok(_) => {}
+                                    Err(e) => eprintln!("Timed Event Handler: Failed to send event: {}", e)
+                                }
+                                continue
+                            }
+                            if order.order_type == OrderType::StopLimit && order.side == OrderSide::Buy && order.trigger_price.unwrap() <= market_price {
+                                open_order_cache.remove(&order.id);
+                                let fail_event = StrategyEvent::OrderEvents(OrderUpdateEvent::OrderRejected {
+                                    account,
+                                    symbol_name: order.symbol_name,
+                                    symbol_code: order.symbol_code,
+                                    order_id: order.id.clone(), reason: String::from("Buy Stop Price Must Be Above Market Price"),
+                                    tag: order.tag,
+                                    time: time.to_string()
+                                });
+                                match strategy_event_sender.send(fail_event).await {
+                                    Ok(_) => {}
+                                    Err(e) => eprintln!("Timed Event Handler: Failed to send event: {}", e)
+                                }
+                                continue
+                            }
+                            if order.order_type == OrderType::StopLimit && order.side == OrderSide::Sell && order.limit_price.unwrap() < market_price {
+                                let fail_event = StrategyEvent::OrderEvents(OrderUpdateEvent::OrderRejected {
+                                    account,
+                                    symbol_name: order.symbol_name,
+                                    symbol_code: order.symbol_code,
+                                    order_id: order.id.clone(), reason: String::from("Sell Limit Price Must Be At or Above Market Price"),
+                                    tag: order.tag,
+                                    time: time.to_string()
+                                });
+                                match strategy_event_sender.send(fail_event).await {
+                                    Ok(_) => {}
+                                    Err(e) => eprintln!("Timed Event Handler: Failed to send event: {}", e)
+                                }
+                                continue
+                            }
+                            if order.order_type == OrderType::StopLimit && order.side == OrderSide::Buy && order.limit_price.unwrap() > market_price {
+                                open_order_cache.remove(&order.id);
+                                let fail_event = StrategyEvent::OrderEvents(OrderUpdateEvent::OrderRejected {
+                                    account,
+                                    symbol_name: order.symbol_name,
+                                    symbol_code: order.symbol_code,
+                                    order_id: order.id.clone(), reason: String::from("Buy Limit Price Must Be At or Below Market Price"),
+                                    tag: order.tag,
+                                    time: time.to_string()
+                                });
+                                match strategy_event_sender.send(fail_event).await {
+                                    Ok(_) => {}
+                                    Err(e) => eprintln!("Timed Event Handler: Failed to send event: {}", e)
+                                }
+                                continue
+                            }
+                            if order.order_type == OrderType::MarketIfTouched && order.side == OrderSide::Sell && order.trigger_price.unwrap() >= market_price {
+                                open_order_cache.remove(&order.id);
+                                let fail_event = StrategyEvent::OrderEvents(OrderUpdateEvent::OrderRejected {
+                                    account,
+                                    symbol_name: order.symbol_name,
+                                    symbol_code: order.symbol_code,
+                                    order_id: order.id.clone(), reason: String::from("Sell MIT Price Must Be Below Market Price"),
+                                    tag: order.tag,
+                                    time: time.to_string()
+                                });
+                                match strategy_event_sender.send(fail_event).await {
+                                    Ok(_) => {}
+                                    Err(e) => eprintln!("Timed Event Handler: Failed to send event: {}", e)
+                                }
+                                continue
+                            }
+                            if order.order_type == OrderType::MarketIfTouched && order.side == OrderSide::Buy && order.trigger_price.unwrap() <= market_price {
+                                open_order_cache.remove(&order.id);
+                                let fail_event = StrategyEvent::OrderEvents(OrderUpdateEvent::OrderRejected {
+                                    account,
+                                    symbol_name: order.symbol_name,
+                                    symbol_code: order.symbol_code,
+                                    order_id: order.id.clone(), reason: String::from("Buy MIT Price Must Be Above Market Price"),
+                                    tag: order.tag,
+                                    time: time.to_string()
+                                });
+                                match strategy_event_sender.send(fail_event).await {
+                                    Ok(_) => {}
+                                    Err(e) => eprintln!("Timed Event Handler: Failed to send event: {}", e)
+                                }
+                                continue
+                            }
+                            if order.order_type == OrderType::MarketIfTouched && order.side == OrderSide::Sell && order.trigger_price.unwrap () < market_price {
+                                let fail_event = StrategyEvent::OrderEvents(OrderUpdateEvent::OrderRejected {
+                                    account,
+                                    symbol_name: order.symbol_name,
+                                    symbol_code: order.symbol_code,
+                                    order_id: order.id.clone(), reason: String::from("Sell MIT Price Must Be Below Market Price"),
+                                    tag: order.tag,
+                                    time: time.to_string()
+                                });
+                                match strategy_event_sender.send(fail_event).await {
+                                    Ok(_) => {}
+                                    Err(e) => eprintln!("Timed Event Handler: Failed to send event: {}", e)
+                                }
+                                continue
+                            }
+                            if order.order_type == OrderType::MarketIfTouched && order.side == OrderSide::Buy && order.trigger_price.unwrap() > market_price {
+                                let fail_event = StrategyEvent::OrderEvents(OrderUpdateEvent::OrderRejected {
+                                    account,
+                                    symbol_name: order.symbol_name,
+                                    symbol_code: order.symbol_code,
+                                    order_id: order.id.clone(), reason: String::from("Buy MIT Price Must Be Above Market Price"),
+                                    tag: order.tag,
+                                    time: time.to_string()
+                                });
+                                match strategy_event_sender.send(fail_event).await {
+                                    Ok(_) => {}
+                                    Err(e) => eprintln!("Timed Event Handler: Failed to send event: {}", e)
+                                }
+                                continue
+                            }
+                            if order.order_type == OrderType::MarketIfTouched && order.side == OrderSide::Sell && order.trigger_price.unwrap() < market_price {
+                                let fail_event = StrategyEvent::OrderEvents(OrderUpdateEvent::OrderRejected {
+                                    account,
+                                    symbol_name: order.symbol_name,
+                                    symbol_code: order.symbol_code,
+                                    order_id: order.id.clone(), reason: String::from("Sell MIT Price Must Be Below Market Price"),
+                                    tag: order.tag,
+                                    time: time.to_string()
+                                });
+                                match strategy_event_sender.send(fail_event).await {
+                                    Ok(_) => {}
+                                    Err(e) => eprintln!("Timed Event Handler: Failed to send event: {}", e)
+                                }
+                                continue
+                            }
+
+                            if (order.order_type == OrderType::StopLimit || order.order_type == OrderType::StopMarket) &&  order.side == OrderSide::Buy && order.limit_price.unwrap() < market_price {
+                                let fail_event = StrategyEvent::OrderEvents(OrderUpdateEvent::OrderRejected {
+                                    account,
+                                    symbol_name: order.symbol_name,
+                                    symbol_code: order.symbol_code,
+                                    order_id: order.id.clone(), reason: String::from("Buy Limit Price Must Be At or Below Market Price"),
+                                    tag: order.tag,
+                                    time: time.to_string()
+                                });
+                                match strategy_event_sender.send(fail_event).await {
+                                    Ok(_) => {}
+                                    Err(e) => eprintln!("Timed Event Handler: Failed to send event: {}", e)
+                                }
+                                continue
+                            }
+
+                            if (order.order_type == OrderType::StopLimit || order.order_type == OrderType::StopMarket) && order.side == OrderSide::Sell && order.limit_price.unwrap() > market_price {
+                                let fail_event = StrategyEvent::OrderEvents(OrderUpdateEvent::OrderRejected {
+                                    account,
+                                    symbol_name: order.symbol_name,
+                                    symbol_code: order.symbol_code,
+                                    order_id: order.id.clone(), reason: String::from("Sell Limit Price Must Be At or Below Market Price"),
+                                    tag: order.tag,
+                                    time: time.to_string()
+                                });
+                                match strategy_event_sender.send(fail_event).await {
+                                    Ok(_) => {}
+                                    Err(e) => eprintln!("Timed Event Handler: Failed to send event: {}", e)
+                                }
+                                continue
+                            }
+
+                            if order.order_type == OrderType::ExitLong && !ledger_service.is_long(&account, &order.symbol_code) {
+                                let fail_event = StrategyEvent::OrderEvents(OrderUpdateEvent::OrderRejected {
+                                    account,
+                                    symbol_name: order.symbol_name,
+                                    symbol_code: order.symbol_code,
+                                    order_id: order.id.clone(), reason: String::from("No Long Position To Exit"),
+                                    tag: order.tag,
+                                    time: time.to_string()
+                                });
+                                match strategy_event_sender.send(fail_event).await {
+                                    Ok(_) => {}
+                                    Err(e) => eprintln!("Timed Event Handler: Failed to send event: {}", e)
+                                }
+                                continue
+                            }
+
+                            if order.order_type == OrderType::ExitShort && !ledger_service.is_short(&account, &order.symbol_code) {
+                                let fail_event = StrategyEvent::OrderEvents(OrderUpdateEvent::OrderRejected {
+                                    account,
+                                    symbol_name: order.symbol_name,
+                                    symbol_code: order.symbol_code,
+                                    order_id: order.id.clone(), reason: String::from("No Short Position To Exit"),
+                                    tag: order.tag,
+                                    time: time.to_string()
+                                });
+                                match strategy_event_sender.send(fail_event).await {
+                                    Ok(_) => {}
+                                    Err(e) => eprintln!("Timed Event Handler: Failed to send event: {}", e)
+                                }
+                                continue
+                            }
+
+                            order.state = OrderState::Accepted;
+                            open_order_cache.insert(order.id.clone(), order.clone());
+                            let accept_event = StrategyEvent::OrderEvents(OrderUpdateEvent::OrderAccepted {
+                                account: account.clone(),
+                                symbol_name: order.symbol_name.clone(),
+                                symbol_code: order.symbol_code.clone(),
+                                order_id: order.id.clone(),
+                                tag: order.tag.clone(),
+                                time: time.to_string()
+                            });
+                            match strategy_event_sender.send(accept_event).await {
+                                Ok(_) => {}
+                                Err(e) => eprintln!("Timed Event Handler: Failed to send event: {}", e)
+                            }
                             simulated_order_matching(&open_order_cache, &closed_order_cache, strategy_event_sender.clone(), &ledger_service).await;
                         }
                         OrderRequest::Cancel { account,order_id } => {
@@ -44,7 +346,7 @@ pub(crate) async fn backtest_matching_engine(
                                 let cancel_event = StrategyEvent::OrderEvents(OrderUpdateEvent::OrderCancelled {
                                     account,
                                     symbol_name: order.symbol_name.clone(),
-                                    symbol_code: order.symbol_name.clone(),
+                                    symbol_code: order.symbol_code.clone(),
                                     order_id: existing_order_id,
                                     tag: order.tag.clone(), 
                                     time: time.to_string(),
@@ -117,7 +419,7 @@ pub(crate) async fn backtest_matching_engine(
                                         OrderUpdateEvent::OrderCancelled {
                                             account: account.clone(),
                                             symbol_name: order.symbol_name.clone(),
-                                            symbol_code: order.symbol_name.clone(),
+                                            symbol_code: order.symbol_code.clone(),
                                             order_id: order.id.clone(),
                                             reason: "OrderRequest::CancelAll".to_string(),
                                             tag: order.tag.clone(),
@@ -158,7 +460,6 @@ pub(crate) async fn simulated_order_matching (
 ) {
     let time = get_backtest_time();
     let mut rejected = Vec::new();
-    let mut accepted = Vec::new();
     let mut cancelled = Vec::new();
     let mut filled = Vec::new();
     let mut events= vec![];
@@ -246,7 +547,7 @@ pub(crate) async fn simulated_order_matching (
                 let cancel_time = match DateTime::<Utc>::from_timestamp(*cancel_time, 0) {
                     Some(time) => time,
                     None => {
-                        //eprintln!("Backtest Matching Engine: Invalid TimeInForce::Time value");
+                        eprintln!("Backtest Matching Engine: Invalid TimeInForce::Time value");
                         let reason = "Time In Force Expired: TimeInForce::Time".to_string();
                         rejected.push((order.id.clone(), reason));
                         continue;
@@ -270,37 +571,11 @@ pub(crate) async fn simulated_order_matching (
                     Err(_) => continue
                 };
 
-                let limit_price = order.limit_price.unwrap();
-                match order.side {
-                    // Buy Stop Limit logic
-                    OrderSide::Buy => {
-                        if limit_price > market_price {// todo double check this logic
-                            rejected.push((
-                                String::from("Invalid Price: Buy Limit Price Must Be At or Below Market Price"),
-                                order.id.clone(),
-                            ));
-                            continue;
-                        }
-                        // No need to compare market price vs limit price before triggering, only after the stop is triggered
-                    }
-
-                    // Sell Stop Limit logic
-                    OrderSide::Sell => {
-                        if limit_price < market_price {
-                            rejected.push((
-                                String::from("Invalid Price: Sell Limit Price Must Be At or Above Market Price"),
-                                order.id.clone(),
-                            ));
-                            continue;
-                        }
-                        // No need to compare market price vs limit price before triggering, only after the stop is triggered
-                    }
-                }
                 let is_fill_triggered = match order.side {
                     OrderSide::Buy => market_price <= order.limit_price.unwrap(),
                     OrderSide::Sell => market_price >= order.limit_price.unwrap()
                 };
-                let (market_price, volume_filled) = match price_service_request_limit_fill_price_quantity(order.side, order.symbol_name.clone(), order.symbol_code.clone(), order.quantity_open, limit_price).await {
+                let (market_price, volume_filled) = match price_service_request_limit_fill_price_quantity(order.side, order.symbol_name.clone(), order.symbol_code.clone(), order.quantity_open, order.limit_price.unwrap()).await {
                     Ok(price_volume) => {
                         match price_volume {
                             PriceServiceResponse::LimitFillPriceEstimate { fill_price, fill_volume } => {
@@ -320,8 +595,6 @@ pub(crate) async fn simulated_order_matching (
                         true => filled.push((order.id.clone(),  market_price)),
                         false => partially_filled.push((order.id.clone(),  market_price, volume_filled))
                     }
-                } else if order.state == OrderState::Created {
-                    accepted.push((order.id.clone(), time))
                 }
             }
             OrderType::Market => {
@@ -345,31 +618,8 @@ pub(crate) async fn simulated_order_matching (
                     }
                     Err(_) => continue
                 };
+
                 let trigger_price = order.trigger_price.unwrap();
-
-                match order.side {
-                    OrderSide::Buy => {// todo double check this logic
-                        // Buy Stop Market: trigger price must be ABOVE market price to avoid instant fill
-                        if trigger_price <= market_price {
-                            rejected.push((
-                                String::from("Invalid Price: Buy Stop Price Must Be Above Market Price"),
-                                order.id.clone(),
-                            ));
-                            continue;
-                        }
-                    }
-                    OrderSide::Sell => {
-                        // Sell Stop Market: trigger price must be BELOW market price to avoid instant fill
-                        if trigger_price >= market_price {
-                            rejected.push((
-                                String::from("Invalid Price: Sell Stop Price Must Be Below Market Price"),
-                                order.id.clone(),
-                            ));
-                            continue;
-                        }
-                    }
-                }
-
                 let is_fill_triggered = match order.side {
                     OrderSide::Buy => market_price >= trigger_price,
                     OrderSide::Sell => market_price <= trigger_price,
@@ -385,8 +635,6 @@ pub(crate) async fn simulated_order_matching (
 
                 if is_fill_triggered {
                     filled.push((order.id.clone(), market_fill_price));
-                } else if order.state == OrderState::Created {
-                    accepted.push((order.id.clone(), time));
                 }
             }
 
@@ -439,8 +687,6 @@ pub(crate) async fn simulated_order_matching (
 
                 if is_fill_triggered {
                     filled.push((order.id.clone(), market_fill_price));
-                } else if order.state == OrderState::Created {
-                    accepted.push((order.id.clone(), time));
                 }
             }
             OrderType::StopLimit => {
@@ -451,64 +697,12 @@ pub(crate) async fn simulated_order_matching (
                     }
                     Err(_) => continue
                 };
-                let trigger_price = order.trigger_price.unwrap();
-                let limit_price = order.limit_price.unwrap();
 
-                match order.side { // todo double check this logic
-                    // Buy Stop Limit logic
-                    OrderSide::Buy => {
-                        if market_price >= trigger_price {
-                            rejected.push((
-                                String::from("Invalid Price: Buy Stop Price Must Be Above Market Price"),
-                                order.id.clone(),
-                            ));
-                            continue;
-                        } else if limit_price < trigger_price {
-                            rejected.push((
-                                String::from("Invalid Price: Buy Limit Price Must Be At or Above Trigger Price"),
-                                order.id.clone(),
-                            ));
-                            continue;
-                        } else if limit_price > market_price {
-                            rejected.push((
-                                String::from("Invalid Price: Buy Limit Price Must Be At or Below Market Price"),
-                                order.id.clone(),
-                            ));
-                            continue;
-                        }
-                    }
-
-                    // Sell Stop Limit logic todo double check this logic
-                    OrderSide::Sell => {
-                        // Would result in immediate trigger
-                        if market_price <= trigger_price {
-                            rejected.push((
-                                String::from("Invalid Price: Sell Stop Price Must Be Below Market Price"),
-                                order.id.clone(),
-                            ));
-                            continue;
-                            // Would not make sense as limiting positive slippage
-                        } else if limit_price > trigger_price {
-                            rejected.push((
-                                String::from("Invalid Price: Sell Limit Price Must Be At or Below Trigger Price"),
-                                order.id.clone(),
-                            ));
-                            continue;
-                            // would immediatly fill as a market order
-                        } else if limit_price < market_price {
-                            rejected.push((
-                                String::from("Invalid Price: Sell Limit Price Must Be At or Above Market Price"),
-                                order.id.clone(),
-                            ));
-                            continue;
-                        }
-                    }
-                }
                 let is_fill_triggered = match order.side {
                     OrderSide::Buy => market_price <= order.trigger_price.unwrap() && market_price > order.limit_price.unwrap(),
                     OrderSide::Sell => market_price >= order.trigger_price.unwrap() && market_price < order.limit_price.unwrap()
                 };
-                let (market_price, volume_filled) = match price_service_request_limit_fill_price_quantity(order.side, order.symbol_name.clone(), order.symbol_code.clone(), order.quantity_open, limit_price).await {
+                let (market_price, volume_filled) = match price_service_request_limit_fill_price_quantity(order.side, order.symbol_name.clone(), order.symbol_code.clone(), order.quantity_open, order.limit_price.unwrap()).await {
                     Ok(price_volume) => {
                         match price_volume {
                             PriceServiceResponse::LimitFillPriceEstimate { fill_price, fill_volume } => {
@@ -528,8 +722,6 @@ pub(crate) async fn simulated_order_matching (
                         true => filled.push((order.id.clone(),  market_price)),
                         false => partially_filled.push((order.id.clone(),  market_price, volume_filled))
                     }
-                } else if order.state == OrderState::Created {
-                    accepted.push((order.id.clone(), time))
                 }
             },
             OrderType::EnterLong => {
@@ -617,9 +809,6 @@ pub(crate) async fn simulated_order_matching (
     for (order_id, reason) in rejected {
         reject_order(reason, &order_id, time, &open_order_cache, closed_order_cache, &strategy_event_sender).await;
     }
-    for (order_id , time)in accepted {
-        accept_order(&order_id, time, &open_order_cache, &strategy_event_sender).await;
-    }
     for (order_id, price) in filled {
         fill_order(&order_id, time, price, &open_order_cache, &closed_order_cache, &strategy_event_sender, &ledger_service).await;
     }
@@ -646,29 +835,11 @@ async fn fill_order(
     ledger_service: &Arc<LedgerService>
 ) {
     if let Some((_, mut order)) = open_order_cache.remove(order_id) {  // Remove the order here
-        order.quantity_filled = order.quantity_open;
+        order.quantity_filled += order.quantity_open;
         order.quantity_open = dec!(0);
 
         match ledger_service.update_or_create_paper_position(&order.account, order.symbol_name.clone(), order.symbol_code.clone(), order_id.clone(), order.quantity_filled.clone(), order.side.clone(), time.clone(), market_price, order.tag.clone()).await {
             Ok(events) => {
-
-                if order.state != OrderState::Accepted && order.state != OrderState::Filled && order.state != OrderState::PartiallyFilled {
-                    order.state = OrderState::Accepted;
-                    order.time_created_utc = time.to_string();
-
-                    let event = StrategyEvent::OrderEvents(OrderUpdateEvent::OrderAccepted {
-                        order_id: order.id.clone(),
-                        account: order.account.clone(),
-                        symbol_name: order.symbol_name.clone(),
-                        tag: order.tag.clone(),
-                        time: time.to_string(),
-                        symbol_code: order.symbol_name.clone(),
-                    });
-                    match strategy_event_sender.send(event).await {
-                        Ok(_) => {}
-                        Err(e) => eprintln!("Backtest Matching Engine: Failed to send event: {}", e)
-                    }
-                }
 
                 //todo, need to send an accepted event first if the order state != accepted
                 let order_event = StrategyEvent::OrderEvents(OrderUpdateEvent::OrderFilled {
@@ -724,7 +895,7 @@ async fn partially_fill_order(
                 symbol_name: order.symbol_name.clone(),
                 tag: order.tag.clone(),
                 time: time.to_string(),
-                symbol_code: order.symbol_name.clone(),
+                symbol_code: order.symbol_code.clone(),
                 quantity: fill_volume,
                 price: fill_price,
                 side: order.side.clone(),
@@ -736,7 +907,7 @@ async fn partially_fill_order(
                 symbol_name: order.symbol_name.clone(),
                 tag: order.tag.clone(),
                 time: time.to_string(),
-                symbol_code: order.symbol_name.clone(),
+                symbol_code: order.symbol_code.clone(),
                 quantity: fill_volume,
                 price: fill_price,
                 side: order.side.clone(),
@@ -745,28 +916,9 @@ async fn partially_fill_order(
 
         match ledger_service.update_or_create_paper_position(&order.account, order.symbol_name.clone(),  order.symbol_code.clone(), order_id.clone(), fill_volume, order.side.clone(), time, fill_price, order.tag.clone()).await {
             Ok(events) => {
-                if let Some(order_event) = Some(order_event) {
-                    if order.state != OrderState::Accepted && order.state != OrderState::Filled && order.state != OrderState::PartiallyFilled {
-                        order.state = OrderState::Accepted;
-                        order.time_created_utc = time.to_string();
-
-                        let event = StrategyEvent::OrderEvents(OrderUpdateEvent::OrderAccepted {
-                            order_id: order.id.clone(),
-                            account: order.account.clone(),
-                            symbol_name: order.symbol_name.clone(),
-                            tag: order.tag.clone(),
-                            time: time.to_string(),
-                            symbol_code: order.symbol_name.clone(),
-                        });
-                        match strategy_event_sender.send(event).await {
-                            Ok(_) => {}
-                            Err(e) => eprintln!("Backtest Matching Engine: Failed to send event: {}", e)
-                        }
-                    }
-                    match strategy_event_sender.send(StrategyEvent::OrderEvents(order_event)).await {
-                        Ok(_) => {}
-                        Err(e) => eprintln!("Backtest Matching Engine: Failed to send event: {}", e)
-                    }
+                match strategy_event_sender.send(StrategyEvent::OrderEvents(order_event)).await {
+                    Ok(_) => {}
+                    Err(e) => eprintln!("Backtest Matching Engine: Failed to send event: {}", e)
                 }
                 for event in events {
                     match strategy_event_sender.send(StrategyEvent::PositionEvents(event)).await {
@@ -810,7 +962,7 @@ async fn reject_order(
                 reason,
                 tag: order.tag.clone(),
                 time: time.to_string(),
-                symbol_code: order.symbol_name.clone(),
+                symbol_code: order.symbol_code.clone(),
             });
         closed_order_cache.insert(order.id.clone(), order.clone());
         match strategy_event_sender.send(event).await {
@@ -839,34 +991,9 @@ async fn cancel_order(
             reason,
             tag: order.tag.clone(),
             time: time.to_string(),
-            symbol_code: order.symbol_name.clone(),
+            symbol_code: order.symbol_code.clone(),
         });
         closed_order_cache.insert(order.id.clone(), order.clone());
-        match strategy_event_sender.send(event).await {
-            Ok(_) => {}
-            Err(e) => eprintln!("Backtest Matching Engine: Failed to send event: {}", e)
-        }
-    }
-}
-
-async fn accept_order(
-    order_id: &OrderId,
-    time: DateTime<Utc>,
-    open_order_cache: &Arc<DashMap<OrderId, Order>>,
-    strategy_event_sender: &Sender<StrategyEvent>
-) {
-    if let Some(mut order) = open_order_cache.get_mut(order_id) {
-        order.state = OrderState::Accepted;
-        order.time_created_utc = time.to_string();
-
-        let event = StrategyEvent::OrderEvents(OrderUpdateEvent::OrderAccepted {
-                order_id: order.id.clone(),
-                account: order.account.clone(),
-                symbol_name: order.symbol_name.clone(),
-                tag: order.tag.clone(),
-                time: time.to_string(),
-                symbol_code: order.symbol_name.clone(),
-        });
         match strategy_event_sender.send(event).await {
             Ok(_) => {}
             Err(e) => eprintln!("Backtest Matching Engine: Failed to send event: {}", e)

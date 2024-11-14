@@ -313,14 +313,14 @@ impl FundForgeStrategy {
             exchange
         );
         let order_request = OrderRequest::Create{ account: account.clone(), order: order.clone(), order_type: OrderType::EnterLong };
-        self.open_order_cache.insert(order_id.clone(), order.clone());
         if self.mode == StrategyMode::Live {
+            self.open_order_cache.insert(order_id.clone(), order.clone());
             let connection_type = ConnectionType::Broker(order_request.brokerage());
             let request = StrategyRequest::OneWay(connection_type, DataServerRequest::OrderRequest { request: order_request });
             send_request(request).await;
         } else {
             if let Some(historical_message_sender) = &self.historical_message_sender {
-                historical_message_sender.send(BackTestEngineMessage::OrderRequest(get_backtest_time(), order_request)).await.unwrap();
+                historical_message_sender.send(BackTestEngineMessage::OrderRequest(order_request)).await.unwrap();
             }
         }
         order_id
@@ -348,14 +348,14 @@ impl FundForgeStrategy {
             exchange
         );
         let order_request = OrderRequest::Create{ account: account.clone(), order: order.clone(), order_type: OrderType::EnterShort};
-        self.open_order_cache.insert(order_id.clone(), order.clone());
         if self.mode == StrategyMode::Live {
+            self.open_order_cache.insert(order_id.clone(), order.clone());
             let connection_type = ConnectionType::Broker(order_request.brokerage());
             let request = StrategyRequest::OneWay(connection_type, DataServerRequest::OrderRequest { request: order_request });
             send_request(request).await;
         } else {
             if let Some(historical_message_sender) = &self.historical_message_sender {
-                historical_message_sender.send(BackTestEngineMessage::OrderRequest(get_backtest_time(), order_request)).await.unwrap();
+                historical_message_sender.send(BackTestEngineMessage::OrderRequest(order_request)).await.unwrap();
             }
         }
         order_id
@@ -383,14 +383,14 @@ impl FundForgeStrategy {
             exchange
         );
         let order_request = OrderRequest::Create{ account: account.clone(), order: order.clone(), order_type: OrderType::ExitLong};
-        self.open_order_cache.insert(order_id.clone(), order.clone());
         if self.mode == StrategyMode::Live {
+            self.open_order_cache.insert(order_id.clone(), order.clone());
             let connection_type = ConnectionType::Broker(order_request.brokerage());
             let request = StrategyRequest::OneWay(connection_type, DataServerRequest::OrderRequest { request: order_request });
             send_request(request).await;
         } else {
             if let Some(historical_message_sender) = &self.historical_message_sender {
-                historical_message_sender.send(BackTestEngineMessage::OrderRequest(get_backtest_time(), order_request)).await.unwrap();
+                historical_message_sender.send(BackTestEngineMessage::OrderRequest(order_request)).await.unwrap();
             }
         }
         order_id
@@ -418,14 +418,14 @@ impl FundForgeStrategy {
             exchange
         );
         let order_request = OrderRequest::Create{ account: account.clone(), order: order.clone(), order_type: OrderType::ExitShort};
-        self.open_order_cache.insert(order_id.clone(), order.clone());
         if self.mode == StrategyMode::Live {
+            self.open_order_cache.insert(order_id.clone(), order.clone());
             let connection_type = ConnectionType::Broker(order_request.brokerage());
             let request = StrategyRequest::OneWay(connection_type, DataServerRequest::OrderRequest { request: order_request });
             send_request(request).await;
         } else {
             if let Some(historical_message_sender) = &self.historical_message_sender {
-                historical_message_sender.send(BackTestEngineMessage::OrderRequest(get_backtest_time(), order_request)).await.unwrap();
+                historical_message_sender.send(BackTestEngineMessage::OrderRequest(order_request)).await.unwrap();
             }
         }
         order_id
@@ -454,15 +454,15 @@ impl FundForgeStrategy {
             exchange
         );
         let order_request = OrderRequest::Create{ account: account.clone(), order: order.clone(), order_type: OrderType::Market};
-        self.open_order_cache.insert(order_id.clone(), order.clone());
 
         if self.mode == StrategyMode::Live {
+            self.open_order_cache.insert(order_id.clone(), order.clone());
             let connection_type = ConnectionType::Broker(order_request.brokerage());
             let request = StrategyRequest::OneWay(connection_type, DataServerRequest::OrderRequest { request: order_request });
             send_request(request).await;
         } else {
             if let Some(historical_message_sender) = &self.historical_message_sender {
-                historical_message_sender.send(BackTestEngineMessage::OrderRequest(get_backtest_time(), order_request)).await.unwrap();
+                historical_message_sender.send(BackTestEngineMessage::OrderRequest(order_request)).await.unwrap();
             }
         }
         order_id
@@ -491,14 +491,14 @@ impl FundForgeStrategy {
             exchange
         );
         let order_request = OrderRequest::Create{ account: account.clone(), order: order.clone(), order_type: OrderType::Market};
-        self.open_order_cache.insert(order_id.clone(), order.clone());
         if self.mode == StrategyMode::Live {
+            self.open_order_cache.insert(order_id.clone(), order.clone());
             let connection_type = ConnectionType::Broker(order_request.brokerage());
             let request = StrategyRequest::OneWay(connection_type, DataServerRequest::OrderRequest { request: order_request });
             send_request(request).await;
         } else {
             if let Some(historical_message_sender) = &self.historical_message_sender {
-                historical_message_sender.send(BackTestEngineMessage::OrderRequest(get_backtest_time(), order_request)).await.unwrap();
+                historical_message_sender.send(BackTestEngineMessage::OrderRequest(order_request)).await.unwrap();
             }
         }
         order_id
@@ -520,14 +520,14 @@ impl FundForgeStrategy {
         let order_id = self.order_id().await;
         let order = Order::limit_order(symbol_name.clone(), symbol_code, account, quantity, side, tag, order_id.clone(), self.time_utc(), limit_price, tif, exchange);
         let order_request = OrderRequest::Create{ account: account.clone(), order: order.clone(), order_type: OrderType::Limit};
-        self.open_order_cache.insert(order_id.clone(), order.clone());
         if self.mode == StrategyMode::Live {
+            self.open_order_cache.insert(order_id.clone(), order.clone());
             let connection_type = ConnectionType::Broker(order_request.brokerage());
             let request = StrategyRequest::OneWay(connection_type, DataServerRequest::OrderRequest { request: order_request });
             send_request(request).await;
         } else {
             if let Some(historical_message_sender) = &self.historical_message_sender {
-                historical_message_sender.send(BackTestEngineMessage::OrderRequest(get_backtest_time(), order_request)).await.unwrap();
+                historical_message_sender.send(BackTestEngineMessage::OrderRequest(order_request)).await.unwrap();
             }
         }
         order_id
@@ -549,14 +549,14 @@ impl FundForgeStrategy {
         let order_id = self.order_id().await;
         let order = Order::market_if_touched(symbol_name.clone(), symbol_code, account, quantity, side, tag, order_id.clone(), self.time_utc(),trigger_price, tif, exchange);
         let order_request = OrderRequest::Create{ account: account.clone(), order: order.clone(), order_type: OrderType::MarketIfTouched};
-        self.open_order_cache.insert(order_id.clone(), order.clone());
         if self.mode == StrategyMode::Live {
+            self.open_order_cache.insert(order_id.clone(), order.clone());
             let connection_type = ConnectionType::Broker(order_request.brokerage());
             let request = StrategyRequest::OneWay(connection_type, DataServerRequest::OrderRequest { request: order_request });
             send_request(request).await;
         } else {
             if let Some(historical_message_sender) = &self.historical_message_sender {
-                historical_message_sender.send(BackTestEngineMessage::OrderRequest(get_backtest_time(), order_request)).await.unwrap();
+                historical_message_sender.send(BackTestEngineMessage::OrderRequest(order_request)).await.unwrap();
             }
         }
         order_id
@@ -578,14 +578,14 @@ impl FundForgeStrategy {
         let order_id = self.order_id().await;
         let order = Order::stop(symbol_name.clone(), symbol_code, account, quantity, side, tag, order_id.clone(), self.time_utc(),trigger_price, tif, exchange);
         let order_request = OrderRequest::Create{ account: account.clone(), order: order.clone(), order_type: OrderType::StopMarket};
-        self.open_order_cache.insert(order_id.clone(), order.clone());
         if self.mode == StrategyMode::Live {
+            self.open_order_cache.insert(order_id.clone(), order.clone());
             let connection_type = ConnectionType::Broker(order_request.brokerage());
             let request = StrategyRequest::OneWay(connection_type, DataServerRequest::OrderRequest { request: order_request });
             send_request(request).await;
         } else {
             if let Some(historical_message_sender) = &self.historical_message_sender {
-                historical_message_sender.send(BackTestEngineMessage::OrderRequest(get_backtest_time(), order_request)).await.unwrap();
+                historical_message_sender.send(BackTestEngineMessage::OrderRequest(order_request)).await.unwrap();
             }
         }
         order_id
@@ -608,14 +608,14 @@ impl FundForgeStrategy {
         let order_id = self.order_id().await;
         let order = Order::stop_limit(symbol_name.clone(), symbol_code, account, quantity, side, tag, order_id.clone(), self.time_utc(),limit_price, trigger_price, tif, exchange);
         let order_request = OrderRequest::Create{ account: account.clone(), order: order.clone(), order_type: OrderType::StopLimit};
-        self.open_order_cache.insert(order_id.clone(), order.clone());
         if self.mode == StrategyMode::Live {
+            self.open_order_cache.insert(order_id.clone(), order.clone());
             let connection_type = ConnectionType::Broker(order_request.brokerage());
             let request = StrategyRequest::OneWay(connection_type, DataServerRequest::OrderRequest { request: order_request });
             send_request(request).await;
         } else {
             if let Some(historical_message_sender) = &self.historical_message_sender {
-                historical_message_sender.send(BackTestEngineMessage::OrderRequest(get_backtest_time(), order_request)).await.unwrap();
+                historical_message_sender.send(BackTestEngineMessage::OrderRequest(order_request)).await.unwrap();
             }
         }
         order_id
@@ -642,7 +642,7 @@ impl FundForgeStrategy {
             send_request(request).await;
         } else {
             if let Some(historical_message_sender) = &self.historical_message_sender {
-                historical_message_sender.send(BackTestEngineMessage::OrderRequest(get_backtest_time(), order_request)).await.unwrap();
+                historical_message_sender.send(BackTestEngineMessage::OrderRequest(order_request)).await.unwrap();
             }
         }
     }
@@ -669,7 +669,7 @@ impl FundForgeStrategy {
             send_request(request).await;
         } else {
             if let Some(historical_message_sender) = &self.historical_message_sender {
-                historical_message_sender.send(BackTestEngineMessage::OrderRequest(get_backtest_time(), order_request)).await.unwrap();
+                historical_message_sender.send(BackTestEngineMessage::OrderRequest(order_request)).await.unwrap();
             }
         }
     }
@@ -712,7 +712,7 @@ impl FundForgeStrategy {
         } else {
             let order_request = OrderRequest::FlattenAllFor {account};
             if let Some(historical_message_sender) = &self.historical_message_sender {
-                historical_message_sender.send(BackTestEngineMessage::OrderRequest(get_backtest_time(), order_request)).await.unwrap();
+                historical_message_sender.send(BackTestEngineMessage::OrderRequest(order_request)).await.unwrap();
             }
         }
     }

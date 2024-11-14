@@ -19,34 +19,35 @@ impl Ledger {
         if let Ok(commission_info) = get_futures_commissions_info(&symbol_name) {
             let commission = contracts * commission_info.per_side * exchange_rate;
             let mut cash_available = self.cash_available.lock().await;
-            *cash_available -= commission;
-            let mut balance = self.cash_value.lock().await;
-            *balance -= commission;
-            let mut commission_paid = self.commissions_paid.lock().await;
-            *commission_paid += commission;
             let mut booked_pnl = self.total_booked_pnl.lock().await;
+            let mut balance = self.cash_value.lock().await;
+            let mut commission_paid = self.commissions_paid.lock().await;
+
+            *cash_available -= commission;
+            *balance -= commission;
+            *commission_paid += commission;
             *booked_pnl -= commission;
         }
     }
 
-    pub(crate) async fn release_margin_used(&self, symbol_name: &SymbolCode) {
+    pub(crate) async fn release_margin_used(&self, symbol_code: &SymbolCode) {
         // First get_requests the margin amount without removing it
-        if let Some((_,margin_used)) = self.margin_used.remove(symbol_name) {
-            let margin_amount = margin_used;
-
+        if let Some((_,margin_used)) = self.margin_used.remove(symbol_code) {
+            //eprintln!("release_margin_used: {}", symbol_code);
             // Update cash values first
             {
                 let mut account_cash_used = self.cash_used.lock().await;
-                *account_cash_used -= margin_amount;
+                *account_cash_used -= margin_used;
             }
             {
                 let mut account_cash_available = self.cash_available.lock().await;
-                *account_cash_available += margin_amount;
+                *account_cash_available += margin_used;
             }
         }
     }
 
     pub(crate) async fn commit_margin(&self, symbol_name: &SymbolName, symbol_code: &SymbolCode, quantity: Volume, market_price: Price, time: DateTime<Utc>, side: OrderSide, base_currency: Option<Currency>, position_currency: Currency) -> Result<(), FundForgeError> {
+        //eprintln!("commit_margin: {}", symbol_code);
         let rate = if position_currency == self.currency {
             dec!(1)
         } else {
@@ -59,7 +60,7 @@ impl Ledger {
                 }
             }
         };
-       //eprintln!("Account Currency: {}, Position Currency: {}, Rate: {}", self.currency, position_currency, rate);
+
         let margin = self.account.brokerage.intraday_margin_required(symbol_name, quantity, market_price, self.currency, base_currency, position_currency, rate).await?
             .unwrap_or_else(|| quantity * market_price * rate);
 
@@ -76,7 +77,13 @@ impl Ledger {
         }
 
         // Update margin tracking before updating cash
-        self.margin_used.insert(symbol_code.clone(), margin);
+        // Add to existing margin instead of replacing
+        let total_margin = if let Some(existing_margin) = self.margin_used.get(symbol_code) {
+            margin + existing_margin.value()
+        } else {
+            margin
+        };
+        self.margin_used.insert(symbol_code.clone(), total_margin);
 
         // Update cash values
         {
@@ -88,6 +95,9 @@ impl Ledger {
             let mut account_cash_available = self.cash_available.lock().await;
             *account_cash_available -= margin;
         }
+
+        let margin_used = self.margin_used.get(symbol_code).unwrap().value().clone();
+        //println!("Margin Used: {}", margin_used);
 
         Ok(())
     }
@@ -102,9 +112,7 @@ impl Ledger {
         if let Some((symbol_name, mut existing_position)) = self.positions.remove(symbol_code) {
             // Mark the position as closed
             existing_position.is_closed = true;
-            {
-                self.release_margin_used(&symbol_code).await;
-            }
+            self.release_margin_used(&symbol_code).await;
             let exchange_rate = if self.currency != existing_position.symbol_info.pnl_currency {
                 let side = match existing_position.side {
                     PositionSide::Long => OrderSide::Buy,
@@ -169,11 +177,12 @@ impl Ledger {
         if self.mode == StrategyMode::Live {
             panic!("Incorrect mode for update_or_create_position()");
         }
+        //eprintln!("quantity: {}, side: {:?}, time: {}, market_fill_price: {}, tag: {}", quantity, side, time, market_fill_price, tag);
         //todo it is possible I might want to use the last updates time to prevent duplicate updates or out of order updates
         let mut updates = vec![];
         // Check if there's an existing position for the given symbol
         let mut remaining_quantity = quantity;
-        if let Some((symbol_name, mut existing_position)) = self.positions.remove(&symbol_code) {
+        if let Some((_, mut existing_position)) = self.positions.remove(&symbol_code) {
             let is_reducing = (existing_position.side == PositionSide::Long && side == OrderSide::Sell)
                 || (existing_position.side == PositionSide::Short && side == OrderSide::Buy);
 
@@ -193,10 +202,11 @@ impl Ledger {
                 self.charge_commission(&symbol_name, existing_position.quantity_open, exchange_rate).await;
                 let event = existing_position.reduce_position_size(market_fill_price, quantity, self.currency,exchange_rate, time, tag.clone()).await;
 
-                self.release_margin_used(&symbol_code).await;
+               // eprintln!("symbol_code: {}, existing_position: {:?}", symbol_code, existing_position);
 
                 match &event {
                     PositionUpdateEvent::PositionReduced { booked_pnl, .. } => {
+                        self.release_margin_used(&symbol_code).await;
                         self.commit_margin(&symbol_name, &symbol_code, existing_position.quantity_open, existing_position.average_price, time, side, existing_position.symbol_info.base_currency, existing_position.symbol_info.pnl_currency).await.unwrap();
                         self.positions.insert(symbol_code.clone(), existing_position);
 
@@ -214,6 +224,7 @@ impl Ledger {
                         //println!("Reduced Position: {}", symbol_name);
                     }
                     PositionUpdateEvent::PositionClosed { booked_pnl, .. } => {
+                        self.release_margin_used(&symbol_code).await;
                         self.symbol_closed_pnl
                             .entry(symbol_code.clone())
                             .and_modify(|pnl| *pnl += booked_pnl)
@@ -330,7 +341,7 @@ impl Ledger {
             let id = self.generate_id(position_side);
             // Create a new position
             let position = Position::new(
-                symbol_code.clone(),
+                symbol_name.clone(),
                 symbol_code.clone(),
                 self.account.clone(),
                 position_side.clone(),

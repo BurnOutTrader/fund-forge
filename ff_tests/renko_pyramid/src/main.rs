@@ -1,4 +1,4 @@
-use chrono::{Duration, NaiveDate, Utc};
+use chrono::{Duration, NaiveDate};
 use chrono_tz::Australia;
 use colored::Colorize;
 use ff_standard_lib::apis::rithmic::rithmic_systems::RithmicSystem;
@@ -62,7 +62,7 @@ async fn main() {
 
 // This strategy is designed to pyramid into strong trends using renko. It will not work trading mean reverting markets or trading in both directions.
 // It is a tool to help manage positions in fast trending markets. In the current state fund forge strategies should not be run without monitoring. It is possible strategies can lose sync with the actual broker account state.
-// 1. MOMO MODE: It enters 2 bullish bars. opposite for short. REVERSAL MODE: It if we have 2 bars but 3 bars ago was reversal against the trend (assuming we are with the trend).
+// 1. MOMO MODE: It enters 2 bullish bars. opposite for short. REVERSAL MODE: It if we have 2 bars but 3 bars ago was reversal against the trend (assuming we are with the trend). Both modes enter with limit order at prior bar open.
 // 2. It exits after 2 bearish renko bars. opposite for short.
 // 3. It adds on repeat signals up to 4 times, only if it is in profit.
 // 4. It takes profit after a certain amount of profit is made if it is at max size. It will do this with limit orders that expire in X seconds.
@@ -73,7 +73,7 @@ const RENKO_RANGE: Decimal = dec!(5);
 const MAX_SIZE: Decimal = dec!(20);
 const SIZE: Decimal = dec!(5);
 const INCREMENTAL_SCALP_PNL: Decimal = dec!(150);
-const LIMIT_ORDER_EXPIRE_IN_SECS: i64 = 60;
+const LIMIT_ORDER_EXPIRE_IN_SECS: i64 = 60 * 5;
 const TRADING_LONG: bool = true;
 const TRADING_SHORT: bool = false;
 const MOMENTUM: bool = false; //if true we will enter on 2 blocks (2 bull blocks for bull entry), if false we will enter on reversal (1 bear block then 2 bull blocks)
@@ -98,7 +98,6 @@ pub async fn on_data_received(
     let mut entry_order_id = None;
     let mut exit_order_id = None;
     let mut tp_id = None;
-    let mut bars_since_entry = 0;
     let mut last_short_result = Result::BreakEven;
     let mut last_long_result = Result::BreakEven;
 
@@ -111,8 +110,6 @@ pub async fn on_data_received(
             StrategyEvent::IndicatorEvent(event) => {
                 match event {
                     IndicatorEvents::IndicatorTimeSlice(slice) => {
-                        let mut no_entry = true;
-                        let mut no_exit = true;
                         for renko_value in slice {
                             if let (Some(block_open), Some(block_close)) = (renko_value.get_plot(&open), renko_value.get_plot(&close)) {
                                 let msg = format!("Renko: Open: {}, Close: {} @ {}", block_open.value, block_close.value, strategy.time_local());
@@ -128,7 +125,9 @@ pub async fn on_data_received(
 
                                 if let Some(seconds_until_close) = hours.seconds_until_close(strategy.time_utc()) {
                                     if seconds_until_close < 500 {
-                                        strategy.flatten_all_for(account.clone()).await;
+                                        if !strategy.is_flat(&account, &symbol_code) {
+                                            strategy.flatten_all_for(account.clone()).await;
+                                        }
                                         continue;
                                     }
                                 }
@@ -142,68 +141,56 @@ pub async fn on_data_received(
                                     #[allow(clippy::const_err)]
                                     if TRADING_LONG {
                                         let is_long = strategy.is_long(&account, &symbol_code);
-
-                                        if is_long {
-                                            bars_since_entry += 1;
-                                        }
+                                        let pnl = strategy.pnl(&account, &symbol_code);
 
                                         // Buy on 2 bullish renko blocks
-                                        if block_close.value > block_open.value && last_close > last_open && (MOMENTUM || !MOMENTUM && two_blocks_ago_close < two_blocks_ago_open) && no_entry && entry_order_id == None
-                                            && (is_long == false || strategy.pnl(&account, &symbol_code) > INCREMENTAL_SCALP_PNL / dec!(3)) {
+                                        if block_close.value > block_open.value && last_close < last_open && entry_order_id == None && (!is_long || pnl > INCREMENTAL_SCALP_PNL) {
                                             let quantity = strategy.position_size(&account, &symbol_code);
-                                            if !strategy.is_long(&account, &symbol_code) && quantity < MAX_SIZE {
-                                                entry_order_id = Some(strategy.enter_long(&symbol_name, Some(symbol_code.clone()), &account, None, SIZE, String::from("Enter Long")).await);
-                                                no_entry = false;
+                                            if quantity < MAX_SIZE {
+                                                let tif = TimeInForce::Time((strategy.time_utc() + Duration::seconds(LIMIT_ORDER_EXPIRE_IN_SECS)).timestamp());
+                                                entry_order_id = Some(strategy.enter_long(&symbol_name, Some(symbol_code.clone()), &account, None, SIZE, String::from("Enter Long")).await);//Some(strategy.limit_order(&symbol_name, Some(symbol_code.clone()), &account, None, SIZE, OrderSide::Buy, last_open, tif, String::from("Enter Long")).await);
                                             }
                                         }
                                         if is_long {
                                             //tp on 2 bearish renko blocks
-                                            if last_close < last_open && block_close.value < block_open.value && no_exit && exit_order_id == None {
+                                            if last_close < last_open && block_close.value < block_open.value && exit_order_id == None {
                                                 let quantity = strategy.position_size(&account, &symbol_code);
                                                 exit_order_id = Some(strategy.exit_long(&symbol_name, Some(symbol_code.clone()), &account, None, quantity, String::from("Exit Long")).await);
-                                                no_exit = false;
                                             }
 
                                             let profit = strategy.pnl(&account, &symbol_code);
                                             let quantity = strategy.position_size(&account, &symbol_code);
                                             if profit > INCREMENTAL_SCALP_PNL && quantity == MAX_SIZE && exit_order_id == None && tp_id == None {
-                                                let tif = TimeInForce::Time((Utc::now() + Duration::seconds(LIMIT_ORDER_EXPIRE_IN_SECS)).timestamp());
+                                                let tif = TimeInForce::Time((strategy.time_utc() + Duration::seconds(LIMIT_ORDER_EXPIRE_IN_SECS)).timestamp());
                                                 tp_id = Some(strategy.limit_order(&symbol_name, Some(symbol_code.clone()), &account, None, SIZE, OrderSide::Sell, last_close + RENKO_RANGE * dec!(4), tif, String::from("Partial TP Long")).await);
-                                                no_exit = false;
                                             }
                                         }
                                     }
                                     #[allow(clippy::const_err)]
                                     if TRADING_SHORT {
                                         let is_short = strategy.is_short(&account, &symbol_code);
-
-                                        if is_short {
-                                            bars_since_entry += 1;
-                                        }
+                                        let pnl = strategy.pnl(&account, &symbol_code);
 
                                         // Buy on 2 bearish renko blocks
-                                        if block_close.value < block_open.value && last_close < last_open && (MOMENTUM || !MOMENTUM && two_blocks_ago_close > two_blocks_ago_open) && no_entry && entry_order_id == None
-                                            && (is_short == false || strategy.pnl(&account, &symbol_code) > INCREMENTAL_SCALP_PNL / dec!(3)) {
+                                        if block_close.value < block_open.value && last_close > last_open && entry_order_id == None && (!is_short || pnl > INCREMENTAL_SCALP_PNL) {
                                             let quantity = strategy.position_size(&account, &symbol_code);
-                                            if !strategy.is_long(&account, &symbol_code) && quantity < MAX_SIZE {
-                                                entry_order_id = Some(strategy.enter_short(&symbol_name, Some(symbol_code.clone()), &account, None, SIZE, String::from("Enter Short")).await);
-                                                no_entry = false;
+                                            if quantity < MAX_SIZE {
+                                                let tif = TimeInForce::Time((strategy.time_utc() + Duration::seconds(LIMIT_ORDER_EXPIRE_IN_SECS)).timestamp());
+                                                entry_order_id = Some(strategy.limit_order(&symbol_name, Some(symbol_code.clone()), &account, None, SIZE, OrderSide::Sell, last_open, tif, String::from("Enter Short")).await);
                                             }
                                         }
                                         if is_short {
                                             //tp on 2 bullish renko blocks
-                                            if last_close > last_open && block_close.value > block_open.value && no_exit && exit_order_id == None {
+                                            if last_close > last_open && block_close.value > block_open.value && exit_order_id == None {
                                                 let quantity = strategy.position_size(&account, &symbol_code);
                                                 exit_order_id = Some(strategy.exit_short(&symbol_name, Some(symbol_code.clone()), &account, None, quantity, String::from("Exit Short")).await);
-                                                no_exit = false;
                                             }
 
                                             let profit = strategy.pnl(&account, &symbol_code);
                                             let quantity = strategy.position_size(&account, &symbol_code);
                                             if profit > INCREMENTAL_SCALP_PNL && quantity == MAX_SIZE && exit_order_id == None && tp_id == None {
-                                                let tif = TimeInForce::Time((Utc::now() + Duration::seconds(LIMIT_ORDER_EXPIRE_IN_SECS)).timestamp());
+                                                let tif = TimeInForce::Time((strategy.time_utc() + Duration::seconds(LIMIT_ORDER_EXPIRE_IN_SECS)).timestamp());
                                                 tp_id = Some(strategy.limit_order(&symbol_name, Some(symbol_code.clone()), &account, None, SIZE, OrderSide::Buy, last_close - RENKO_RANGE * dec!(4), tif, String::from("Partial TP Short")).await);
-                                                no_exit = false;
                                             }
                                         }
                                     }
@@ -282,7 +269,7 @@ pub async fn on_data_received(
                 let msg = format!("Strategy: Order Event: {}, Time: {}", event, event.time_local(strategy.time_zone()));
                 match event {
                     OrderUpdateEvent::OrderRejected { .. } => {
-                        strategy.print_ledger(event.account()).await;
+                        //strategy.print_ledger(event.account()).await;
                         println!("{}", msg.as_str().on_bright_magenta().on_bright_red());
                         if let Some(order_id) = &entry_order_id {
                             if event.order_id() == order_id {
@@ -301,7 +288,7 @@ pub async fn on_data_received(
                         }
                     },
                     OrderUpdateEvent::OrderCancelled { .. }  => {
-                        strategy.print_ledger(event.account()).await;
+                        //strategy.print_ledger(event.account()).await;
                         println!("{}", msg.as_str().on_bright_magenta().on_bright_yellow());
                         if let Some(order_id) = &entry_order_id {
                             if event.order_id() == order_id {
@@ -320,31 +307,23 @@ pub async fn on_data_received(
                         }
                     },
                     OrderUpdateEvent::OrderFilled {..} => {
-                        strategy.print_ledger(event.account()).await;
                         println!("{}", msg.as_str().on_bright_magenta().on_bright_yellow());
                         if let Some(order_id) = &entry_order_id {
                             if event.order_id() == order_id {
                                 entry_order_id = None;
-                                bars_since_entry = 0;
                             }
                         }
                         if let Some(order_id) = &exit_order_id {
                             if event.order_id() == order_id {
                                 exit_order_id = None;
-                                if let Some(order_id) = &tp_id {
-                                    strategy.cancel_order(order_id.clone()).await;
-                                }
-                                if !strategy.is_long(&account, &symbol_code) {
-                                    bars_since_entry = 0;
+                                if let Some(tp_order_id) = &tp_id {
+                                    strategy.cancel_order(tp_order_id.clone()).await;
                                 }
                             }
                         }
                         if let Some(order_id) = &tp_id {
                             if event.order_id() == order_id {
                                 tp_id = None;
-                            }
-                            if !strategy.is_long(&account, &symbol_code) {
-                                bars_since_entry = 0;
                             }
                         }
                     },
