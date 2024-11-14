@@ -232,26 +232,49 @@ impl LedgerService {
             .unwrap_or(false)
     }
 
-    pub async fn flatten_all_for_paper_account(&self, account: &Account, time: DateTime<Utc>) {
+    pub async fn flatten_all_for_paper_account(&self, account: &Account, time: DateTime<Utc>) -> Vec<PositionUpdateEvent> {
+        let mut events = Vec::new();
         if let Some(ledger) = self.ledgers.get(account) {
-            for position in ledger.positions.iter() {
-                let order_side = match position.side {
+            // First collect all positions to close
+            let positions_to_close: Vec<_> = ledger.positions.iter()
+                .map(|position| {
+                    (
+                        position.key().clone(),  // symbol_code
+                        position.side,
+                        position.symbol_name.clone(),
+                        position.quantity_open
+                    )
+                })
+                .collect();
+
+            // Then close each position
+            for (symbol_code, side, symbol_name, quantity) in positions_to_close {
+                let order_side = match side {
                     PositionSide::Long => OrderSide::Sell,
                     PositionSide::Short => OrderSide::Buy,
                 };
-                let market_price = match price_service_request_market_fill_price(order_side, position.symbol_name.clone(), position.symbol_code.clone(), position.quantity_open).await {
-                    Ok(price) => {
-                        match price.price() {
-                            None =>  continue,
-                            Some(price) => price
-                        }
+
+                let market_price = match price_service_request_market_fill_price(
+                    order_side,
+                    symbol_name.clone(),
+                    symbol_code.clone(),
+                    quantity
+                ).await {
+                    Ok(price) => match price.price() {
+                        None => continue,
+                        Some(price) => price
                     },
                     Err(_) => continue
                 };
+
                 let tag = "Flatten All".to_string();
-                let _ = ledger.paper_exit_position(position.key(), time, market_price, tag).await;
+                match ledger.paper_exit_position(&symbol_code, time, market_price, tag).await {
+                    Some(event) => events.push(event),
+                    None => continue
+                }
             }
         }
+        events
     }
 }
 

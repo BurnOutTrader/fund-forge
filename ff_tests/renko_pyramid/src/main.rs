@@ -62,7 +62,7 @@ async fn main() {
 
 // This strategy is designed to pyramid into strong trends using renko. It will not work trading mean reverting markets or trading in both directions.
 // It is a tool to help manage positions in fast trending markets. In the current state fund forge strategies should not be run without monitoring. It is possible strategies can lose sync with the actual broker account state.
-// 1. MOMO MODE: It enters 2 bullish bars. opposite for short. REVERSAL MODE: It if we have 2 bars but 3 bars ago was reversal against the trend (assuming we are with the trend). Both modes enter with limit order at prior bar open.
+// 1. enter if 1 bars ago was reversal against the trend and current bar is with the trend (assuming we are trading with the trend). Both modes enter with limit order at prior bar open.
 // 2. It exits after 2 bearish renko bars. opposite for short.
 // 3. It adds on repeat signals up to 4 times, only if it is in profit.
 // 4. It takes profit after a certain amount of profit is made if it is at max size. It will do this with limit orders that expire in X seconds.
@@ -76,7 +76,6 @@ const INCREMENTAL_SCALP_PNL: Decimal = dec!(150);
 const LIMIT_ORDER_EXPIRE_IN_SECS: i64 = 60 * 5;
 const TRADING_LONG: bool = true;
 const TRADING_SHORT: bool = false;
-const MOMENTUM: bool = false; //if true we will enter on 2 blocks (2 bull blocks for bull entry), if false we will enter on reversal (1 bear block then 2 bull blocks)
 
 #[allow(clippy::const_err)]
 pub async fn on_data_received(
@@ -87,7 +86,7 @@ pub async fn on_data_received(
     symbol_name: SymbolName,
     account: Account
 ) {
-    println!("Starting Renko Pyramid Strategy with parameters: Renko Range: {}, Max Size: {}, Size: {}, Incremental Scalp PNL: {}, Limit Order Expire in Secs: {}, Trading Long: {}, Trading Short: {}, Is Momentum: {}", RENKO_RANGE, MAX_SIZE, SIZE, INCREMENTAL_SCALP_PNL, LIMIT_ORDER_EXPIRE_IN_SECS, TRADING_LONG, TRADING_SHORT, MOMENTUM);
+    println!("Starting Renko Pyramid Strategy with parameters: Renko Range: {}, Max Size: {}, Size: {}, Incremental Scalp PNL: {}, Limit Order Expire in Secs: {}, Trading Long: {}, Trading Short: {}", RENKO_RANGE, MAX_SIZE, SIZE, INCREMENTAL_SCALP_PNL, LIMIT_ORDER_EXPIRE_IN_SECS, TRADING_LONG, TRADING_SHORT);
 
     let renko = "renko".to_string();
     let renko_indicator = IndicatorEnum::Renko(Renko::new(renko.clone(), subscription.clone(), RENKO_RANGE, Color::new(0, 128, 0), Color::new(128, 0, 0), 20).await);

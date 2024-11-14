@@ -441,13 +441,13 @@ pub(crate) async fn backtest_matching_engine(
                                 .collect();
 
                             for order_id in orders_to_remove {
-                                let  (order_id, mut order) = open_order_cache.remove(&order_id).unwrap();
+                                let (_, mut order) = open_order_cache.remove(&order_id).unwrap(); // Changed here
                                 order.state = OrderState::Cancelled;
                                 let event = StrategyEvent::OrderEvents(OrderUpdateEvent::OrderCancelled {
                                     account: account.clone(),
                                     symbol_name: order.symbol_name.clone(),
                                     symbol_code: order.symbol_code.clone(),
-                                    order_id,
+                                    order_id,  // Using the order_id from the for loop
                                     reason: "Flatten All".to_string(),
                                     tag: order.tag.clone(),
                                     time: time.to_string(),
@@ -458,7 +458,15 @@ pub(crate) async fn backtest_matching_engine(
                                 }
                                 closed_order_cache.insert(order.id.clone(), order);
                             }
-                            ledger_service.flatten_all_for_paper_account(&account, time).await;
+                            let events = ledger_service.flatten_all_for_paper_account(&account, time).await;
+                            if !events.is_empty() {
+                                for event in events {
+                                    match strategy_event_sender.send(StrategyEvent::PositionEvents(event)).await {
+                                        Ok(_) => {}
+                                        Err(e) => eprintln!("Timed Event Handler: Failed to send event: {}", e)
+                                    }
+                                }
+                            }
                         }
                     }
                 }
