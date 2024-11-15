@@ -62,14 +62,6 @@ impl LedgerService {
         }
     }
 
-    #[allow(dead_code)]
-    pub async fn process_synchronized_orders(&self, order: Order, quantity: Decimal, time: DateTime<Utc>) {
-        if let Some(sender) = self.ledger_senders.get(&order.account) {
-            let msg = LedgerMessage::ProcessOrder{order, quantity, time};
-            sender.send(msg).await.unwrap();
-        }
-    }
-
     pub(crate) async fn paper_exit_position(
         &self,
         account: &Account,

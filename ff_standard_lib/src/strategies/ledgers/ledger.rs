@@ -187,7 +187,6 @@ impl Ledger {
     }
 
     async fn synchronize_live_position(&self, mut position: Position, time: DateTime<Utc>) {
-        let mut inserted = false;
         if let Some((_, mut existing_position)) = self.positions.remove(&position.symbol_code) {
             if existing_position.side != position.side {
                 let side = match existing_position.side {
@@ -215,58 +214,55 @@ impl Ledger {
                     .entry(position.symbol_code.clone())
                     .or_insert_with(Vec::new)
                     .push(existing_position.clone());
-            } else {
+            } else if position.quantity_open != existing_position.quantity_open {
                 position.highest_recoded_price = existing_position.highest_recoded_price;
                 position.lowest_recoded_price = existing_position.lowest_recoded_price;
                 position.open_pnl = existing_position.open_pnl;
                 position.booked_pnl = existing_position.booked_pnl;
-
-                if position.quantity_open != existing_position.quantity_open {
-                    if position.quantity_open > existing_position.quantity_open {
-                        let event = StrategyEvent::PositionEvents(PositionUpdateEvent::Increased {
-                            position_id: position.position_id.clone(),
-                            side: position.side,
-                            total_quantity_open: position.quantity_open,
-                            average_price: position.average_price,
-                            symbol_name: position.symbol_name.clone(),
-                            symbol_code: position.symbol_code.clone(),
-                            open_pnl: position.open_pnl,
-                            booked_pnl: position.booked_pnl,
-                            account: position.account.clone(),
-                            originating_order_tag: "Synchronized Increase".to_string(),
-                            time: Utc::now().to_string(),
-                        });
-                        match self.strategy_sender.send(event).await {
-                            Ok(_) => {}
-                            Err(e) => eprintln!("Error sending position event: {}", e)
-                        }
-                    } else if position.quantity_open < existing_position.quantity_open {
-                        let event = StrategyEvent::PositionEvents(PositionUpdateEvent::PositionReduced {
-                            position_id: position.position_id.clone(),
-                            side: position.side,
-                            total_quantity_open: position.quantity_open,
-                            average_price: position.average_price,
-                            symbol_name: position.symbol_name.clone(),
-                            symbol_code: position.symbol_code.clone(),
-                            open_pnl: position.open_pnl,
-                            booked_pnl: position.booked_pnl,
-                            average_exit_price: position.average_exit_price.unwrap(),
-                            account: position.account.clone(),
-                            originating_order_tag: "Synchronized Decrease".to_string(),
-                            time: Utc::now().to_string(),
-                            total_quantity_closed: position.quantity_closed,
-                        });
-                        match self.strategy_sender.send(event).await {
-                            Ok(_) => {}
-                            Err(e) => eprintln!("Error sending position event: {}", e)
-                        }
+                if position.quantity_open > existing_position.quantity_open {
+                    let event = StrategyEvent::PositionEvents(PositionUpdateEvent::Increased {
+                        position_id: position.position_id.clone(),
+                        side: position.side,
+                        total_quantity_open: position.quantity_open,
+                        average_price: position.average_price,
+                        symbol_name: position.symbol_name.clone(),
+                        symbol_code: position.symbol_code.clone(),
+                        open_pnl: position.open_pnl,
+                        booked_pnl: position.booked_pnl,
+                        account: position.account.clone(),
+                        originating_order_tag: "Synchronized Increase".to_string(),
+                        time: Utc::now().to_string(),
+                    });
+                    match self.strategy_sender.send(event).await {
+                        Ok(_) => {}
+                        Err(e) => eprintln!("Error sending position event: {}", e)
                     }
                     self.positions.insert(position.symbol_code.clone(), position.clone());
-                    inserted = true;
+                } else if position.quantity_open < existing_position.quantity_open {
+                    let event = StrategyEvent::PositionEvents(PositionUpdateEvent::PositionReduced {
+                        position_id: position.position_id.clone(),
+                        side: position.side,
+                        total_quantity_open: position.quantity_open,
+                        average_price: position.average_price,
+                        symbol_name: position.symbol_name.clone(),
+                        symbol_code: position.symbol_code.clone(),
+                        open_pnl: position.open_pnl,
+                        booked_pnl: position.booked_pnl,
+                        average_exit_price: position.average_exit_price.unwrap(),
+                        account: position.account.clone(),
+                        originating_order_tag: "Synchronized Decrease".to_string(),
+                        time: Utc::now().to_string(),
+                        total_quantity_closed: position.quantity_closed,
+                    });
+                    match self.strategy_sender.send(event).await {
+                        Ok(_) => {}
+                        Err(e) => eprintln!("Error sending position event: {}", e)
+                    }
+                    self.positions.insert(position.symbol_code.clone(), position.clone());
                 }
             }
         }
-        if !inserted && !position.is_closed && !self.positions_closed.contains_key(&position.symbol_code) {
+        if !position.is_closed && !self.positions_closed.contains_key(&position.symbol_code) {
             self.positions.insert(position.symbol_code.clone(), position.clone());
             let position_event = StrategyEvent::PositionEvents(PositionUpdateEvent::PositionOpened {
                 position_id: position.position_id.clone(),
