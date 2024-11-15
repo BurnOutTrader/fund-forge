@@ -25,11 +25,11 @@ pub(crate) fn live_order_handler(
                 #[allow(unused)]
                 OrderUpdateEvent::OrderAccepted { account, symbol_name, symbol_code, order_id, tag, time } => {
                     if let Some(mut order) = open_order_cache.get_mut(order_id) {
-                        //println!("{}", order_update_event);
-                        {
-                            order.value_mut().state = OrderState::Accepted;
-                            order.symbol_code = symbol_code.clone();
+                        if order.state == OrderState::Accepted {
+                            continue;
                         }
+                        order.value_mut().state = OrderState::Accepted;
+                        order.symbol_code = symbol_code.clone();
                         match strategy_event_sender.send(StrategyEvent::OrderEvents(order_update_event.clone())).await {
                             Ok(_) => {}
                             Err(e) => eprintln!("{}", e)
@@ -39,11 +39,14 @@ pub(crate) fn live_order_handler(
                 OrderUpdateEvent::OrderFilled { account, symbol_name, symbol_code, order_id, price, quantity, tag, time, side } => {
                     #[allow(unused)]
                      if let Some((order_id, mut order)) = open_order_cache.remove(order_id) {
+                         if order.state == OrderState::Filled {
+                            continue;
+                         }
                          order.symbol_code = symbol_code.clone();
                          order.state = OrderState::Filled;
 
                          // todo, if we have problems change this to use the order filled quantity, but i think this makes more sense.
-                         order.quantity_filled += order.quantity_open.clone();
+                         order.quantity_filled += quantity;
                          order.quantity_open = dec!(0.0);
                          order.time_filled_utc = Some(time.clone());
                          //println!("{}", order_update_event);
@@ -59,6 +62,9 @@ pub(crate) fn live_order_handler(
                 }
                 OrderUpdateEvent::OrderPartiallyFilled { account, symbol_name, symbol_code, order_id, price, quantity, tag, time,  side} => {
                    if let Some(mut order) = open_order_cache.get_mut(order_id) {
+                       if order.state == OrderState::Filled {
+                           continue;
+                       }
                        //println!("{}", order_update_event);
                        order.state = OrderState::PartiallyFilled;
                        order.symbol_code = symbol_code.clone();

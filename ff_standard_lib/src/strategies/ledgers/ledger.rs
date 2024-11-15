@@ -147,17 +147,12 @@ impl Ledger {
             &mut *(self as *mut Ledger)
         };
         tokio::spawn(async move {
-            let mut last_time = Utc::now();
             while let Some(message) = receiver.recv().await {
                 match message {
                     LedgerMessage::SyncPosition { position, time } => {
-                        if time < last_time {
-                            continue;
-                        }
                         if !static_self.is_simulating_pnl {
                             static_self.synchronize_live_position(position, time).await;
                         }
-                        last_time = time;
                     }
                     LedgerMessage::ProcessOrder { .. } => {
                         //ledger.process_synchronized_orders(order, quantity, time).await; //todo, doesnt work
@@ -167,7 +162,6 @@ impl Ledger {
                             StrategyMode::Backtest | StrategyMode::LivePaperTrading => static_self.update_or_create_paper_position(symbol_name, symbol_code, quantity, side, time, market_fill_price, tag, order_id.unwrap(), paper_response_sender.unwrap()).await,
                             StrategyMode::Live => static_self.update_or_create_live_position(symbol_name, symbol_code, quantity, side, time, market_fill_price, tag).await
                         };
-                        last_time = time;
                     }
                     LedgerMessage::TimeSliceUpdate { time_slice } => {
                         static_self.timeslice_update(time_slice).await;
