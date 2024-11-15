@@ -189,7 +189,7 @@ impl Ledger {
     async fn synchronize_live_position(&self, mut position: Position, time: DateTime<Utc>) {
         let mut inserted = false;
         if let Some((_, mut existing_position)) = self.positions.remove(&position.symbol_code) {
-            if existing_position.side != position.side || position.is_closed || position.quantity_open == dec!(0.0) {
+            if existing_position.side != position.side {
                 let side = match existing_position.side {
                     PositionSide::Long => OrderSide::Buy,
                     PositionSide::Short => OrderSide::Sell,
@@ -215,8 +215,7 @@ impl Ledger {
                     .entry(position.symbol_code.clone())
                     .or_insert_with(Vec::new)
                     .push(existing_position.clone());
-            }
-            if !position.is_closed || position.quantity_open > dec!(0.0) {
+            } else {
                 position.highest_recoded_price = existing_position.highest_recoded_price;
                 position.lowest_recoded_price = existing_position.lowest_recoded_price;
                 position.open_pnl = existing_position.open_pnl;
