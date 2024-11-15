@@ -307,7 +307,22 @@ impl HybridStorage {
         let symbol_pb = MULTIBAR.add(ProgressBar::new(1));
         symbol_pb.set_prefix(format!("{}", symbol.name));
 
-        self.download_tasks.insert(key.clone(), client.update_historical_data(symbol.clone(), base_data_type, resolution, start_time, Utc::now() + Duration::from_secs(15), false, symbol_pb, false));
+        let task = task::spawn(async move {
+            match client.update_historical_data(symbol.clone(), base_data_type, resolution, start_time, Utc::now(), false, symbol_pb, false).await {
+                Ok(_) => {},
+                Err(_) => {}
+            }
+        });
+        {
+            self.download_tasks.insert(key.clone(), task);
+        }
+
+        // Wait for task to complete if it exists
+        if let Some(task) = self.download_tasks.get(&key) {
+            if let Err(e) = task.await {
+                eprintln!("Task failed: {}", e);
+            }
+        }
 
         // Remove from active tasks
         self.download_tasks.remove(&key);
