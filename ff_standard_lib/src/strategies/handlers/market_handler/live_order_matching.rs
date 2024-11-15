@@ -43,14 +43,19 @@ pub(crate) fn live_order_handler(
                             continue;
                          }
                          order.symbol_code = symbol_code.clone();
-                         order.state = OrderState::Filled;
-                         order.quantity_filled = order.quantity_open;
+
+                         let quantity = match order.state == OrderState::PartiallyFilled {
+                                true => quantity.clone(),
+                                false => order.quantity_open.clone()
+                         };
+                         order.quantity_filled += order.quantity_open;
                          order.quantity_open = dec!(0.0);
                          order.time_filled_utc = Some(time.clone());
+                         order.state = OrderState::Filled;
 
                          //println!("{}", order_update_event);
                          match synchronize_positions {
-                             false => ledger_service.update_or_create_position(&account, symbol_name.clone(), symbol_code.clone(), order.quantity_open, side.clone(), time_utc, *price, tag.to_string(), None, None).await,
+                             false => ledger_service.update_or_create_position(&account, symbol_name.clone(), symbol_code.clone(), quantity, side.clone(), time_utc, *price, tag.to_string(), None, None).await,
                              true => {}//ledger_service.process_synchronized_orders(order.clone(), quantity.clone(), time_utc).await
                          };
 
