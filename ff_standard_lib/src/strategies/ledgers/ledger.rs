@@ -266,7 +266,7 @@ impl Ledger {
                 }
             }
         }
-        if !inserted && !position.is_closed {
+        if !inserted && !position.is_closed && !self.positions_closed.contains_key(&position.symbol_code) {
             self.positions.insert(position.symbol_code.clone(), position.clone());
             let position_event = StrategyEvent::PositionEvents(PositionUpdateEvent::PositionOpened {
                 position_id: position.position_id.clone(),
