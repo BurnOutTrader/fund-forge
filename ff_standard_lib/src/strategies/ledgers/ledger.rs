@@ -1,5 +1,5 @@
 use dashmap::DashMap;
-use tokio::sync::Mutex;
+use tokio::sync::{oneshot};
 use rust_decimal::Decimal;
 use chrono::{DateTime, Utc};
 use std::fs::create_dir_all;
@@ -17,7 +17,7 @@ use crate::standardized_types::base_data::traits::BaseData;
 use crate::standardized_types::broker_enum::Brokerage;
 use crate::standardized_types::enums::{OrderSide, PositionSide, StrategyMode};
 use crate::standardized_types::new_types::{Price, Volume};
-use crate::standardized_types::orders::Order;
+use crate::standardized_types::orders::{Order, OrderId, OrderUpdateEvent};
 use crate::standardized_types::position::{Position, PositionId, PositionUpdateEvent};
 use crate::standardized_types::subscriptions::{SymbolCode, SymbolName};
 use crate::standardized_types::symbol_info::SymbolInfo;
@@ -31,18 +31,24 @@ use crate::strategies::strategy_events::StrategyEvent;
  - The ledger itself doesnt need to exist,
 */
 
+#[derive(Debug)]
 pub enum LedgerMessage {
     SyncPosition{position: Position, time: DateTime<Utc>},
     ProcessOrder{order: Order, quantity: Decimal, time: DateTime<Utc>},
-    UpdateOrCreatePosition{symbol_name: SymbolName, symbol_code: SymbolCode, quantity: Volume, side: OrderSide, time: DateTime<Utc>, market_fill_price: Price, tag: String}
+    UpdateOrCreatePosition{symbol_name: SymbolName, symbol_code: SymbolCode, quantity: Volume, side: OrderSide, time: DateTime<Utc>, market_fill_price: Price, tag: String, paper_response_sender: Option<oneshot::Sender<Option<OrderUpdateEvent>>>, order_id: Option<OrderId>},
+    TimeSliceUpdate{time_slice: Arc<TimeSlice>},
+    LiveAccountUpdate{cash_value: Decimal, cash_available: Decimal, cash_used: Decimal},
+    ExitPaperPosition{symbol_code: SymbolCode, time: DateTime<Utc>, market_fill_price: Price, tag: String},
+    PaperFlattenAll{time: DateTime<Utc>},
 }
+
 /// A ledger specific to the strategy which will ignore positions not related to the strategy but will update its balances relative to the actual account balances for live trading.
 pub struct Ledger {
     pub account: Account,
-    pub cash_value: Mutex<Price>,
-    pub cash_available: Mutex<Price>,
+    pub cash_value: Price,
+    pub cash_available: Price,
     pub currency: Currency,
-    pub cash_used: Mutex<Price>,
+    pub cash_used: Price,
     pub positions: DashMap<SymbolCode, Position>,
     pub last_update: DashMap<SymbolCode, DateTime<Utc>>,
     pub symbol_code_map: DashMap<SymbolName, Vec<String>>,
@@ -51,8 +57,8 @@ pub struct Ledger {
     pub symbol_closed_pnl: DashMap<SymbolCode, Decimal>,
     pub(crate) symbol_info: DashMap<SymbolName, SymbolInfo>,
     pub open_pnl: DashMap<SymbolCode, Price>,
-    pub total_booked_pnl: Mutex<Price>,
-    pub commissions_paid: Mutex<Decimal>,
+    pub total_booked_pnl: Price,
+    pub commissions_paid: Decimal,
     pub mode: StrategyMode,
     pub is_simulating_pnl: bool,
     pub(crate) strategy_sender: Sender<StrategyEvent>,
@@ -88,10 +94,10 @@ impl Ledger {
 
         let ledger = Self {
             account: Account::new(account_info.brokerage, account_info.account_id),
-            cash_value: Mutex::new(account_info.cash_value),
-            cash_available: Mutex::new(account_info.cash_available),
+            cash_value: account_info.cash_value,
+            cash_available: account_info.cash_available,
             currency: account_info.currency,
-            cash_used: Mutex::new(account_info.cash_used),
+            cash_used: account_info.cash_used,
             positions,
             last_update: Default::default(),
             symbol_code_map: contract_map,
@@ -100,7 +106,7 @@ impl Ledger {
             symbol_closed_pnl: Default::default(),
             symbol_info: DashMap::new(),
             open_pnl: DashMap::new(),
-            total_booked_pnl: Mutex::new(dec!(0)),
+            total_booked_pnl: dec!(0),
             commissions_paid: Default::default(),
             mode,
             is_simulating_pnl,
@@ -130,18 +136,16 @@ impl Ledger {
     }
 
     pub async fn update(&mut self, cash_value: Decimal, cash_available: Decimal, cash_used: Decimal) {
-        let mut account_cash_value= self.cash_value.lock().await;
-        *account_cash_value = cash_value;
-
-        let mut account_cash_used= self.cash_used.lock().await;
-        *account_cash_used = cash_used;
-
-        let mut account_cash_available= self.cash_available.lock().await;
-        *account_cash_available = cash_available;
+        self.cash_value = cash_value;
+        self.cash_used = cash_used;
+        self.cash_available = cash_available;
     }
 
 
-    pub fn live_ledger_updates(ledger: Arc<Ledger>, mut receiver: Receiver<LedgerMessage>) {
+    pub fn ledger_updates(&mut self, mut receiver: Receiver<LedgerMessage>, mode: StrategyMode) {
+        let static_self = unsafe {
+            &mut *(self as *mut Ledger)
+        };
         tokio::spawn(async move {
             let mut last_time = Utc::now();
             while let Some(message) = receiver.recv().await {
@@ -150,23 +154,32 @@ impl Ledger {
                         if time < last_time {
                             continue;
                         }
-                        if !ledger.is_simulating_pnl {
-                            ledger.synchronize_live_position(position, time).await;
+                        if !static_self.is_simulating_pnl {
+                            static_self.synchronize_live_position(position, time).await;
                         }
                         last_time = time;
                     }
                     LedgerMessage::ProcessOrder { .. } => {
                         //ledger.process_synchronized_orders(order, quantity, time).await; //todo, doesnt work
                     }
-                    LedgerMessage::UpdateOrCreatePosition { symbol_name, symbol_code, quantity, side, time, market_fill_price, tag } => {
-                        let updates = ledger.update_or_create_live_position(symbol_name, symbol_code, quantity, side, time, market_fill_price, tag).await;
-                        for update in updates {
-                            match ledger.strategy_sender.send(StrategyEvent::PositionEvents(update)).await {
-                                Ok(_) => {}
-                                Err(e) => eprintln!("Error sending position event: {}", e)
-                            }
-                        }
+                    LedgerMessage::UpdateOrCreatePosition { symbol_name, symbol_code, quantity, side, time, market_fill_price, tag , paper_response_sender, order_id} => {
+                        match mode {
+                            StrategyMode::Backtest | StrategyMode::LivePaperTrading => static_self.update_or_create_paper_position(symbol_name, symbol_code, quantity, side, time, market_fill_price, tag, order_id.unwrap(), paper_response_sender.unwrap()).await,
+                            StrategyMode::Live => static_self.update_or_create_live_position(symbol_name, symbol_code, quantity, side, time, market_fill_price, tag).await
+                        };
                         last_time = time;
+                    }
+                    LedgerMessage::TimeSliceUpdate { time_slice } => {
+                        static_self.timeslice_update(time_slice).await;
+                    }
+                    LedgerMessage::LiveAccountUpdate { cash_value, cash_available, cash_used } => {
+                        static_self.update(cash_value, cash_available, cash_used).await;
+                    }
+                    LedgerMessage::ExitPaperPosition { symbol_code, time, market_fill_price, tag } => {
+                        static_self.paper_exit_position(&symbol_code, time, market_fill_price, tag).await;
+                    }
+                    LedgerMessage::PaperFlattenAll { time } => {
+                        static_self.flatten_all_for_paper_account(time).await;
                     }
                 }
             }
@@ -438,11 +451,11 @@ impl Ledger {
         };
 
         let break_even = total_trades - wins - losses;
-        let cash_value = self.cash_value.lock().await.clone();
-        let cash_used = self.cash_used.lock().await.clone();
-        let cash_available = self.cash_available.lock().await.clone();
-        let commission_paid = self.commissions_paid.lock().await.clone();
-        let pnl = self.total_booked_pnl.lock().await.clone();
+        let cash_value = self.cash_value.clone();
+        let cash_used = self.cash_used.clone();
+        let cash_available = self.cash_available.clone();
+        let commission_paid = self.commissions_paid.clone();
+        let pnl = self.total_booked_pnl.clone();
         format!("Account: {}, Balance: {} {}, Win Rate: {}%, Average Risk Reward: {}, Profit Factor {}, Total profit: {}, Total Wins: {}, Total Losses: {}, Break Even: {}, Total Trades: {}, Open Positions: {}, Cash Used: {}, Cash Available: {}, Commission Paid: {}",
                 self.account, cash_value.round_dp(2), self.currency, win_rate.round_dp(2), risk_reward.round_dp(2), profit_factor.round_dp(2), pnl.round_dp(2), wins, losses, break_even, total_trades, self.positions.len(), cash_used.round_dp(2), cash_available.round_dp(2), commission_paid)
     }
@@ -462,7 +475,7 @@ impl Ledger {
         )
     }
 
-    pub async fn timeslice_update(&self, time_slice: Arc<TimeSlice>) {
+    pub async fn timeslice_update(&mut self, time_slice: Arc<TimeSlice>) {
         for base_data_enum in time_slice.iter() {
             let data_symbol_name = &base_data_enum.symbol().name;
             if let Some(codes) = self.symbol_code_map.get(data_symbol_name) {
@@ -494,15 +507,12 @@ impl Ledger {
             }
         }
         if self.mode != StrategyMode::Live {
-            let mut cash_value = self.cash_value.lock().await;
-            let cash_used = self.cash_used.lock().await;
-            let cash_available = self.cash_available.lock().await;
-            *cash_value = *cash_used + *cash_available;
+            self.cash_value = self.cash_used + self.cash_available;
         }
     }
 
     async fn update_or_create_live_position(
-        &self,
+        &mut self,
         symbol_name: SymbolName,
         symbol_code: SymbolCode,
         quantity: Volume,
@@ -510,7 +520,7 @@ impl Ledger {
         time: DateTime<Utc>,
         market_fill_price: Price,
         tag: String
-    ) -> Vec<PositionUpdateEvent> {
+    ) {
     /*    if let Some(last_update) = self.last_update.get_requests(&symbol_code) {
             if last_update.value() > &time {
                 return vec![];
@@ -547,8 +557,7 @@ impl Ledger {
                                 .entry(symbol_code.clone())
                                 .and_modify(|pnl| *pnl += booked_pnl)
                                 .or_insert(booked_pnl.clone());
-                            let mut total_booked_pnl = self.total_booked_pnl.lock().await;
-                            *total_booked_pnl += booked_pnl;
+                            self.total_booked_pnl += booked_pnl;
                         }
                         //println!("Reduced Position: {}", symbol_name);
                     }
@@ -559,8 +568,7 @@ impl Ledger {
                                 .and_modify(|pnl| *pnl += booked_pnl)
                                 .or_insert(booked_pnl.clone());
 
-                            let mut total_booked_pnl = self.total_booked_pnl.lock().await;
-                            *total_booked_pnl += booked_pnl;
+                            self.total_booked_pnl += booked_pnl;
                         }
                         if !self.positions_closed.contains_key(&symbol_code) {
                             self.positions_closed.insert(symbol_code.clone(), vec![]);
@@ -649,6 +657,11 @@ impl Ledger {
             //println!("{:?}", event);
             position_events.push(event);
         }
-        position_events
+        for event in position_events {
+            match self.strategy_sender.send(StrategyEvent::PositionEvents(event)).await {
+                Ok(_) => {}
+                Err(e) => eprintln!("Error sending position event: {}", e)
+            }
+        }
     }
 }

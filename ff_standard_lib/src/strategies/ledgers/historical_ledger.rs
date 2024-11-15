@@ -4,48 +4,38 @@ use rust_decimal::Decimal;
 use rust_decimal_macros::dec;
 use crate::messages::data_server_messaging::FundForgeError;
 use crate::product_maps::rithmic::maps::get_futures_commissions_info;
-use crate::standardized_types::accounts::Currency;
+use crate::standardized_types::accounts::{Currency};
 use crate::standardized_types::enums::{OrderSide, PositionSide, StrategyMode};
 use crate::standardized_types::new_types::{Price, Volume};
 use crate::standardized_types::orders::{OrderId, OrderUpdateEvent};
 use crate::standardized_types::position::{Position, PositionUpdateEvent};
 use crate::standardized_types::subscriptions::{SymbolCode, SymbolName};
 use crate::strategies::client_features::other_requests::get_exchange_rate;
+use crate::strategies::handlers::market_handler::price_service::price_service_request_market_fill_price;
+use crate::strategies::strategy_events::StrategyEvent;
 
 impl Ledger {
-    pub(crate) async fn charge_commission(&self, symbol_name: &SymbolName, contracts: Volume, exchange_rate: Decimal) {
+    pub(crate) async fn charge_commission(&mut self, symbol_name: &SymbolName, contracts: Volume, exchange_rate: Decimal) {
         //todo, this fn get_futures_commissions_info() will need to be a more dynamic / generic function to cover all brokerages, we also need to use
         // commission info to get the exchange rate, for example pnl currency will not be exchange rate currency
         if let Ok(commission_info) = get_futures_commissions_info(&symbol_name) {
             let commission = contracts * commission_info.per_side * exchange_rate;
-            {
-                let mut balance = self.cash_available.lock().await;
-                *balance -= commission;
-            }
-            {
-                let mut commission_paid = self.commissions_paid.lock().await;
-                *commission_paid += commission;
-            }
+            self.cash_available -= commission;
+            self.commissions_paid += commission;
         }
     }
 
-    pub(crate) async fn release_margin_used(&self, symbol_code: &SymbolCode) {
+    pub(crate) async fn release_margin_used(&mut self, symbol_code: &SymbolCode) {
         // First get_requests the margin amount without removing it
         if let Some((_,margin_used)) = self.margin_used.remove(symbol_code) {
             //eprintln!("release_margin_used: {}", symbol_code);
             // Update cash values first
-            {
-                let mut account_cash_used = self.cash_used.lock().await;
-                *account_cash_used -= margin_used;
-            }
-            {
-                let mut account_cash_available = self.cash_available.lock().await;
-                *account_cash_available += margin_used;
-            }
+            self.cash_used -= margin_used;
+            self.cash_available += margin_used;
         }
     }
 
-    pub(crate) async fn commit_margin(&self, symbol_name: &SymbolName, symbol_code: &SymbolCode, quantity: Volume, market_price: Price, time: DateTime<Utc>, side: OrderSide, base_currency: Option<Currency>, position_currency: Currency) -> Result<(), FundForgeError> {
+    pub(crate) async fn commit_margin(&mut self, symbol_name: &SymbolName, symbol_code: &SymbolCode, quantity: Volume, market_price: Price, time: DateTime<Utc>, side: OrderSide, base_currency: Option<Currency>, position_currency: Currency) -> Result<(), FundForgeError> {
         //eprintln!("commit_margin: {}", symbol_code);
         let rate = if position_currency == self.currency {
             dec!(1)
@@ -64,15 +54,12 @@ impl Ledger {
             .unwrap_or_else(|| quantity * market_price * rate);
 
         // Check available cash first
-        {
-            let cash_available = self.cash_available.lock().await;
-            if *cash_available < margin {
-                return Err(FundForgeError::ClientSideErrorDebug(format!(
-                    "Insufficient funds: Required {}, Available {}",
-                    margin,
-                    *cash_available
-                )));
-            }
+        if  self.cash_available < margin {
+            return Err(FundForgeError::ClientSideErrorDebug(format!(
+                "Insufficient funds: Required {}, Available {}",
+                margin,
+                self.cash_available
+            )));
         }
 
         // Update margin tracking before updating cash
@@ -83,29 +70,20 @@ impl Ledger {
             margin
         };
         self.margin_used.insert(symbol_code.clone(), total_margin);
-
-        // Update cash values
-        {
-            let mut account_cash_used = self.cash_used.lock().await;
-            *account_cash_used += margin;
-        }
-
-        {
-            let mut account_cash_available = self.cash_available.lock().await;
-            *account_cash_available -= margin;
-        }
+        self.cash_used += margin;
+        self.cash_available -= margin;
         //println!("Margin Used: {}", margin_used);
 
         Ok(())
     }
 
     pub(crate) async fn paper_exit_position(
-        &self,
+        &mut self,
         symbol_code: &SymbolCode,
         time: DateTime<Utc>,
         market_price: Price,
         tag: String
-    ) -> Option<PositionUpdateEvent> {
+    ) {
         if let Some((symbol_name, mut existing_position)) = self.positions.remove(symbol_code) {
             // Mark the position as closed
             existing_position.is_closed = true;
@@ -127,8 +105,6 @@ impl Ledger {
             };
             self.charge_commission(&symbol_name, existing_position.quantity_open, exchange_rate).await;
             let event = existing_position.reduce_position_size(market_price, existing_position.quantity_open, self.currency, exchange_rate, time, tag).await;
-            let mut cash_available = self.cash_available.lock().await;
-            let mut total_booked_pnl = self.total_booked_pnl.lock().await;
             match &event {
                 PositionUpdateEvent::PositionClosed { booked_pnl, .. } => {
                     // TODO[Strategy]: Add option to mirror account position or use internal position curating.
@@ -136,16 +112,14 @@ impl Ledger {
                         .entry(symbol_name.clone())
                         .and_modify(|pnl| *pnl += booked_pnl)
                         .or_insert(booked_pnl.clone());
-                    *total_booked_pnl += booked_pnl;
+                    self.total_booked_pnl += booked_pnl;
 
-                    *cash_available += booked_pnl;
+                    self.cash_available += booked_pnl;
                 }
                 _ => panic!("this shouldn't happen")
             }
 
-            let mut cash_value = self.cash_value.lock().await;
-            let cash_used = self.cash_used.lock().await;
-            *cash_value = *cash_used + *cash_available;
+            self.cash_value = self.cash_used + self.cash_available;
 
             // Add the closed position to the positions_closed DashMap
             self.positions_closed
@@ -153,30 +127,30 @@ impl Ledger {
                 .or_insert_with(Vec::new)                    // If no entry exists, create a new Vec
                 .push(existing_position);     // Push the closed position to the Vec
 
-            return Some(event)
+            self.strategy_sender.send(StrategyEvent::PositionEvents(event)).await.unwrap();
         }
-        None
     }
 
     /// If Ok it will return a Position event for the successful position update, if the ledger rejects the order it will return an Err(OrderEvent)
     ///todo, check ledger max order etc before placing orders
     pub(crate) async fn update_or_create_paper_position(
-        &self,
+        &mut self,
         symbol_name: SymbolName,
         symbol_code: SymbolCode,
-        order_id: OrderId,
         quantity: Volume,
         side: OrderSide,
         time: DateTime<Utc>,
         market_fill_price: Price, // we use the passed in price because we don't know what sort of order was filled, limit or market
-        tag: String
-    ) -> Result<Vec<PositionUpdateEvent>, OrderUpdateEvent> {
+        tag: String,
+        order_id: OrderId,
+        paper_response_sender: tokio::sync::oneshot::Sender<Option<OrderUpdateEvent>>
+    ) {
         if self.mode == StrategyMode::Live {
             panic!("Incorrect mode for update_or_create_position()");
         }
         //eprintln!("quantity: {}, side: {:?}, time: {}, market_fill_price: {}, tag: {}", quantity, side, time, market_fill_price, tag);
         //todo it is possible I might want to use the last updates time to prevent duplicate updates or out of order updates
-        let mut updates = vec![];
+        let mut position_events = vec![];
         // Check if there's an existing position for the given symbol
         let mut remaining_quantity = quantity;
         if let Some((_, mut existing_position)) = self.positions.remove(&symbol_code) {
@@ -211,13 +185,11 @@ impl Ledger {
                             .entry(symbol_code.clone())
                             .and_modify(|pnl| *pnl += booked_pnl)
                             .or_insert(booked_pnl.clone());
-                        {
-                            let mut total_booked_pnl = self.total_booked_pnl.lock().await;
-                            *total_booked_pnl += booked_pnl;
 
-                            let mut cash_available = self.cash_available.lock().await;
-                            *cash_available += booked_pnl;
-                        }
+                        self.total_booked_pnl += booked_pnl;
+
+                        self.cash_available += booked_pnl;
+
                         //println!("Reduced Position: {}", symbol_name);
                     }
                     PositionUpdateEvent::PositionClosed { booked_pnl, .. } => {
@@ -227,13 +199,8 @@ impl Ledger {
                             .and_modify(|pnl| *pnl += booked_pnl)
                             .or_insert(booked_pnl.clone());
 
-                        {
-                            let mut total_booked_pnl = self.total_booked_pnl.lock().await;
-                            *total_booked_pnl += booked_pnl;
-
-                            let mut cash_available = self.cash_available.lock().await;
-                            *cash_available += booked_pnl;
-                        }
+                        self.total_booked_pnl += booked_pnl;
+                        self.cash_available += booked_pnl;
 
                         if !self.positions_closed.contains_key(&symbol_code) {
                             self.positions_closed.insert(symbol_code.clone(), vec![]);
@@ -246,14 +213,9 @@ impl Ledger {
                     _ => panic!("This shouldn't happen")
                 }
 
-                {
-                    let mut cash_value = self.cash_value.lock().await;
-                    let cash_used = self.cash_used.lock().await;
-                    let cash_available = self.cash_available.lock().await;
-                    *cash_value = *cash_used + *cash_available;
-                }
+                self.cash_value = self.cash_used + self.cash_available;
 
-                updates.push(event);
+                position_events.push(event);
             } else {
                 match self.commit_margin(&symbol_name, &symbol_code, quantity, market_fill_price, time, side, existing_position.symbol_info.base_currency, existing_position.symbol_info.pnl_currency).await {
                     Ok(_) => {}
@@ -268,20 +230,16 @@ impl Ledger {
                             tag,
                             time: time.to_string()
                         };
-                        return Err(event)
+                        paper_response_sender.send(Some(event)).unwrap();
+                        return
                     }
                 }
                 let event = existing_position.add_to_position(self.mode, self.is_simulating_pnl, self.currency, market_fill_price, quantity, time, tag.clone()).await;
                 self.positions.insert(symbol_code.clone(), existing_position);
 
-                {
-                    let mut cash_value = self.cash_value.lock().await;
-                    let cash_used = self.cash_used.lock().await;
-                    let cash_available = self.cash_available.lock().await;
-                    *cash_value = *cash_used + *cash_available;
-                }
+                self.cash_value = self.cash_used + self.cash_available;
 
-                updates.push(event);
+                position_events.push(event);
                 remaining_quantity = dec!(0.0);
             }
         }
@@ -290,7 +248,7 @@ impl Ledger {
             match self.commit_margin(&symbol_name, &symbol_code, quantity, market_fill_price, time, side, info.base_currency, info.pnl_currency).await {
                 Ok(_) => {}
                 Err(e) => {
-                    let event = OrderUpdateEvent::OrderRejected {
+                   let event = OrderUpdateEvent::OrderRejected {
                         account: self.account.clone(),
                         symbol_name: symbol_name.clone(),
                         symbol_code: symbol_code.clone(),
@@ -299,7 +257,8 @@ impl Ledger {
                         tag,
                         time: time.to_string()
                     };
-                    return Err(event)
+                    paper_response_sender.send(Some(event)).unwrap();
+                    return
                 }
             }
 
@@ -371,16 +330,54 @@ impl Ledger {
                 time: time.to_string()
             };
 
-            {
-                let mut cash_value = self.cash_value.lock().await;
-                let cash_used = self.cash_used.lock().await;
-                let cash_available = self.cash_available.lock().await;
-                *cash_value = *cash_used + *cash_available;
-            }
+            self.cash_value = self.cash_used + self.cash_available;
 
             //println!("{:?}", event);
-            updates.push(event);
+            position_events.push(event);
         }
-        Ok(updates)
+        paper_response_sender.send(None).unwrap();
+        for event in position_events {
+            match self.strategy_sender.send(StrategyEvent::PositionEvents(event)).await {
+                Ok(_) => {}
+                Err(e) => eprintln!("Error sending position event: {}", e)
+            }
+        }
+    }
+
+    pub async fn flatten_all_for_paper_account(&mut self, time: DateTime<Utc>) {
+        let positions_to_close: Vec<_> = self.positions.iter()
+            .map(|position| {
+                (
+                    position.key().clone(),  // symbol_code
+                    position.side,
+                    position.symbol_name.clone(),
+                    position.quantity_open
+                )
+            })
+            .collect();
+
+        // Then close each position
+        for (symbol_code, side, symbol_name, quantity) in positions_to_close {
+            let order_side = match side {
+                PositionSide::Long => OrderSide::Sell,
+                PositionSide::Short => OrderSide::Buy,
+            };
+
+            let market_price = match price_service_request_market_fill_price(
+                order_side,
+                symbol_name.clone(),
+                symbol_code.clone(),
+                quantity
+            ).await {
+                Ok(price) => match price.price() {
+                    None => continue,
+                    Some(price) => price
+                },
+                Err(_) => continue
+            };
+
+            let tag = "Flatten All".to_string();
+            self.paper_exit_position(&symbol_code, time, market_price, tag).await;
+        }
     }
 }

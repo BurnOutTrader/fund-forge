@@ -270,7 +270,6 @@ pub async fn on_data_received(
                         }
                     },
                 }
-                let quantity = strategy.position_size(&account, &symbol_code);
                 let msg = format!("{}, Time Local: {}", event, event.time_local(strategy.time_zone()));
                 println!("{}", msg.as_str().purple());
             }
