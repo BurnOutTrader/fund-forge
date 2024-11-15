@@ -239,6 +239,19 @@ impl Ledger {
         }
         if !inserted {
             self.positions.insert(position.symbol_code.clone(), position.clone());
+            let position_event = StrategyEvent::PositionEvents(PositionUpdateEvent::PositionOpened {
+                position_id: position.position_id.clone(),
+                side: position.side,
+                symbol_name: position.symbol_name.clone(),
+                symbol_code: position.symbol_code.clone(),
+                account: position.account.clone(),
+                originating_order_tag: position.tag,
+                time: position.open_time.to_string(),
+            });
+            match self.strategy_sender.send(position_event).await {
+                Ok(_) => {}
+                Err(e) => eprintln!("Error sending position event: {}", e)
+            }
         }
     }
 
