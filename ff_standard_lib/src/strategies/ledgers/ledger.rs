@@ -204,12 +204,16 @@ impl Ledger {
                     .entry(position.symbol_code.clone())
                     .or_insert_with(Vec::new)
                     .push(existing_position.clone());
+
             } else if position.quantity_open != existing_position.quantity_open {
                 position.highest_recoded_price = existing_position.highest_recoded_price;
                 position.lowest_recoded_price = existing_position.lowest_recoded_price;
                 position.open_pnl = existing_position.open_pnl;
                 position.booked_pnl = existing_position.booked_pnl;
-                if position.quantity_open > existing_position.quantity_open {
+                if position.quantity_open == existing_position.quantity_open {
+                    self.positions.insert(position.symbol_code.clone(), position.clone());
+                }
+                else if position.quantity_open > existing_position.quantity_open {
                     let event = StrategyEvent::PositionEvents(PositionUpdateEvent::Increased {
                         position_id: position.position_id.clone(),
                         side: position.side,
