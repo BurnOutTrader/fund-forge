@@ -34,7 +34,6 @@ use crate::strategies::strategy_events::StrategyEvent;
 #[derive(Debug)]
 pub enum LedgerMessage {
     SyncPosition{position: Position, time: DateTime<Utc>},
-    ProcessOrder{order: Order, quantity: Decimal, time: DateTime<Utc>},
     UpdateOrCreatePosition{symbol_name: SymbolName, symbol_code: SymbolCode, quantity: Volume, side: OrderSide, time: DateTime<Utc>, market_fill_price: Price, tag: String, paper_response_sender: Option<oneshot::Sender<Option<OrderUpdateEvent>>>, order_id: Option<OrderId>},
     TimeSliceUpdate{time_slice: Arc<TimeSlice>},
     LiveAccountUpdate{cash_value: Decimal, cash_available: Decimal, cash_used: Decimal},
@@ -154,9 +153,6 @@ impl Ledger {
                             static_self.synchronize_live_position(position, time).await;
                         }
                     }
-                    LedgerMessage::ProcessOrder { .. } => {
-                        //ledger.process_synchronized_orders(order, quantity, time).await; //todo, doesnt work
-                    }
                     LedgerMessage::UpdateOrCreatePosition { symbol_name, symbol_code, quantity, side, time, market_fill_price, tag , paper_response_sender, order_id} => {
                         match mode {
                             StrategyMode::Backtest | StrategyMode::LivePaperTrading => static_self.update_or_create_paper_position(symbol_name, symbol_code, quantity, side, time, market_fill_price, tag, order_id.unwrap(), paper_response_sender.unwrap()).await,
@@ -256,7 +252,7 @@ impl Ledger {
                 }
             }
         }
-        if !position.is_closed && !self.positions_closed.contains_key(&position.symbol_code) {
+        if !position.is_closed && !self.positions.contains_key(&position.symbol_code) {
             self.positions.insert(position.symbol_code.clone(), position.clone());
             let position_event = StrategyEvent::PositionEvents(PositionUpdateEvent::PositionOpened {
                 position_id: position.position_id.clone(),

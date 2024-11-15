@@ -25,7 +25,7 @@ pub(crate) fn live_order_handler(
                 #[allow(unused)]
                 OrderUpdateEvent::OrderAccepted { account, symbol_name, symbol_code, order_id, tag, time } => {
                     if let Some(mut order) = open_order_cache.get_mut(order_id) {
-                        if order.state == OrderState::Accepted {
+                        if order.state != OrderState::Created {
                             continue;
                         }
                         order.value_mut().state = OrderState::Accepted;
