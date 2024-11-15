@@ -189,7 +189,7 @@ impl Ledger {
     async fn synchronize_live_position(&self, mut position: Position, time: DateTime<Utc>) {
         let mut inserted = false;
         if let Some((_, mut existing_position)) = self.positions.remove(&position.symbol_code) {
-            if existing_position.side != position.side {
+            if existing_position.side != position.side || position.is_closed || position.quantity_open == dec!(0.0) {
                 let side = match existing_position.side {
                     PositionSide::Long => OrderSide::Buy,
                     PositionSide::Short => OrderSide::Sell,
@@ -205,22 +205,8 @@ impl Ledger {
                 } else {
                     dec!(1.0)
                 };
-                existing_position.reduce_position_size(position.average_price, existing_position.quantity_open, self.currency, exchange_rate, time, "Synchronizing".to_string()).await;
-                let closed_event = StrategyEvent::PositionEvents(PositionUpdateEvent::PositionClosed {
-                    position_id: existing_position.position_id.clone(),
-                    side: existing_position.side,
-                    symbol_name: existing_position.symbol_name.clone(),
-                    symbol_code: existing_position.symbol_code.clone(),
-                    total_quantity_open: existing_position.quantity_open.clone(),
-                    total_quantity_closed: existing_position.quantity_closed.clone(),
-                    average_price: existing_position.average_price.clone(),
-                    booked_pnl: existing_position.booked_pnl.clone(),
-                    average_exit_price: existing_position.average_exit_price,
-                    account: existing_position.account.clone(),
-                    originating_order_tag: "".to_string(),
-                    time: "".to_string(),
-                });
-                match self.strategy_sender.send(closed_event).await {
+                let event = existing_position.reduce_position_size(position.average_price, existing_position.quantity_open, self.currency, exchange_rate, time, "Synchronizing".to_string()).await;
+                match self.strategy_sender.send(StrategyEvent::PositionEvents(event)).await {
                     Ok(_) => {}
                     Err(e) => eprintln!("Error sending position event: {}", e)
                 }
