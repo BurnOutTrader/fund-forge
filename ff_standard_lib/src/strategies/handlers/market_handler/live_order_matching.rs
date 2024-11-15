@@ -43,11 +43,7 @@ pub(crate) fn live_order_handler(
                             continue;
                          }
                          order.symbol_code = symbol_code.clone();
-
-                         let quantity = match order.state == OrderState::PartiallyFilled {
-                                true => quantity.clone(),
-                                false => order.quantity_open.clone()
-                         };
+                         let quantity = order.quantity_open;
                          order.quantity_filled += order.quantity_open;
                          order.quantity_open = dec!(0.0);
                          order.time_filled_utc = Some(time.clone());
