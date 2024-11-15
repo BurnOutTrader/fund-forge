@@ -44,16 +44,16 @@ pub(crate) fn live_order_handler(
                          }
                          order.symbol_code = symbol_code.clone();
                          order.state = OrderState::Filled;
-
-                         // todo, if we have problems change this to use the order filled quantity, but i think this makes more sense.
-                         order.quantity_filled += quantity;
+                         order.quantity_filled = order.quantity_open;
                          order.quantity_open = dec!(0.0);
                          order.time_filled_utc = Some(time.clone());
+
                          //println!("{}", order_update_event);
                          match synchronize_positions {
-                             false => ledger_service.update_or_create_position(&account, symbol_name.clone(), symbol_code.clone(), quantity.clone(), side.clone(), time_utc, *price, tag.to_string(), None, None).await,
+                             false => ledger_service.update_or_create_position(&account, symbol_name.clone(), symbol_code.clone(), order.quantity_open, side.clone(), time_utc, *price, tag.to_string(), None, None).await,
                              true => {}//ledger_service.process_synchronized_orders(order.clone(), quantity.clone(), time_utc).await
                          };
+
                          match strategy_event_sender.send(StrategyEvent::OrderEvents(order_update_event.clone())).await {
                              Ok(_) => {}
                              Err(e) => eprintln!("{}", e)
