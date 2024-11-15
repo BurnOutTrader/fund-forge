@@ -241,6 +241,16 @@ impl HybridStorage {
     }
 
     pub async fn pre_subscribe_updates(&self, symbol: Symbol, resolution: Resolution, base_data_type: BaseDataType) {
+        let key = (symbol.name.clone(), base_data_type.clone(), resolution.clone());
+        let mut was_downloading = false;
+        while self.download_tasks.contains_key(&key) {
+            was_downloading = true;
+            sleep(Duration::from_secs(1)).await;
+        }
+        if was_downloading {
+            return;
+        }
+
         let client: Arc<dyn VendorApiResponse> = match symbol.data_vendor {
             DataVendor::Rithmic if RITHMIC_DATA_IS_CONNECTED.load(Ordering::SeqCst) => {
                 match get_rithmic_market_data_system().and_then(|sys| RITHMIC_CLIENTS.get(&sys)) {
@@ -293,24 +303,11 @@ impl HybridStorage {
                 }
             }
         };
-        let key = (symbol.name.clone(), base_data_type.clone(), resolution.clone());
-
-        let mut was_downloading = false;
-        while self.download_tasks.contains_key(&key) {
-            was_downloading = true;
-            sleep(Duration::from_secs(1)).await;
-        }
-        if was_downloading {
-            return;
-        }
 
         let symbol_pb = MULTIBAR.add(ProgressBar::new(1));
         symbol_pb.set_prefix(format!("{}", symbol.name));
 
-        match client.update_historical_data(symbol.clone(), base_data_type, resolution, start_time, Utc::now() + Duration::from_secs(15), false, symbol_pb, false).await {
-            Ok(_) => {},
-            Err(_) => {}
-        }
+        self.download_tasks.insert(key.clone(), client.update_historical_data(symbol.clone(), base_data_type, resolution, start_time, Utc::now() + Duration::from_secs(15), false, symbol_pb, false));
 
         // Remove from active tasks
         self.download_tasks.remove(&key);
