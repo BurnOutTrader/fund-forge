@@ -6,3 +6,4 @@ pub mod rsi;
 pub mod macd;
 pub mod stochastic;
 pub mod bollinger_bands;
+pub mod adx;
