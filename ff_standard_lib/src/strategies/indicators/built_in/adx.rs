@@ -213,7 +213,7 @@ impl AverageDirectionalIndex {
         plus_di_color: Color,
         minus_di_color: Color,
         tick_rounding: bool,
-    ) -> Self {
+    ) -> Box<Self> {
         let symbol_name = match subscription.market_type {
             MarketType::Futures(_) => extract_symbol_from_contract(&subscription.symbol.name),
             _ => subscription.symbol.name.clone(),
@@ -243,7 +243,7 @@ impl AverageDirectionalIndex {
             smoothed_plus_dm: None,
             smoothed_minus_dm: None,
         };
-        adx
+        Box::new(adx)
     }
 
     fn get_bar_data(data: &BaseDataEnum) -> (Price, Price, Price) {

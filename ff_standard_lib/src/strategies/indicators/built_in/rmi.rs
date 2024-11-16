@@ -60,7 +60,7 @@ impl RelativeMomentumIndex {
         momentum: usize,
         plot_color_rmi: Color,
         tick_rounding: bool,
-    ) -> Self {
+    ) -> Box<Self> {
         let decimal_accuracy = subscription.symbol.data_vendor.decimal_accuracy(subscription.symbol.name.clone())
             .await
             .unwrap();
@@ -68,7 +68,7 @@ impl RelativeMomentumIndex {
             .await
             .unwrap();
 
-        RelativeMomentumIndex {
+        Box::new(RelativeMomentumIndex {
             name,
             subscription,
             history: RollingWindow::new(history_to_retain),
@@ -80,7 +80,7 @@ impl RelativeMomentumIndex {
             tick_rounding,
             tick_size,
             plot_color_rmi,
-        }
+        })
     }
 
     /// Extract close price from BaseDataEnum.

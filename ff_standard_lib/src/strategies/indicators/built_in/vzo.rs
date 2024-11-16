@@ -61,7 +61,7 @@ impl VolumeZoneOscillator {
         period: u64,
         plot_color: Color,
         tick_rounding: bool,
-    ) -> Self {
+    ) -> Box<Self> {
         let decimal_accuracy = subscription.symbol.data_vendor.decimal_accuracy(subscription.symbol.name.clone())
             .await
             .unwrap();
@@ -69,7 +69,7 @@ impl VolumeZoneOscillator {
             .await
             .unwrap();
 
-        VolumeZoneOscillator {
+        Box::new(VolumeZoneOscillator {
             name,
             subscription,
             history: RollingWindow::new(history_to_retain),
@@ -82,7 +82,7 @@ impl VolumeZoneOscillator {
             plot_color,
             positive_volume: Decimal::zero(),
             total_volume: Decimal::zero(),
-        }
+        })
     }
 
     /// Extract price and volume from BaseDataEnum.

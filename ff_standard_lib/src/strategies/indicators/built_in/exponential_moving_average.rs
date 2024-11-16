@@ -81,7 +81,7 @@ impl ExponentialMovingAverage {
         period: u64,
         plot_color: Color,
         tick_rounding: bool,
-    ) -> Self {
+    ) -> Box<Self> {
         let symbol_name = match subscription.market_type {
             MarketType::Futures(_) => extract_symbol_from_contract(&subscription.symbol.name),
             _ => subscription.symbol.name.clone(),
@@ -108,7 +108,7 @@ impl ExponentialMovingAverage {
             multiplier,
             last_ema: None,
         };
-        ema
+        Box::new(ema)
     }
 
     fn calculate_first_sma(&self) -> Price {

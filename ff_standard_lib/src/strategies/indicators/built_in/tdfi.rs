@@ -63,7 +63,7 @@ impl TrendDirectionForceIndex {
         period: u64,
         trend_color: Color,
         tick_rounding: bool,
-    ) -> Self {
+    ) -> Box<Self> {
         let decimal_accuracy = subscription.symbol.data_vendor.decimal_accuracy(subscription.symbol.name.clone())
             .await
             .unwrap();
@@ -71,7 +71,7 @@ impl TrendDirectionForceIndex {
             .await
             .unwrap();
 
-        TrendDirectionForceIndex {
+        Box::new(TrendDirectionForceIndex {
             name,
             subscription,
             history: RollingWindow::new(history_to_retain),
@@ -86,7 +86,7 @@ impl TrendDirectionForceIndex {
             smoothed_velocity: None,
             smoothed_momentum: None,
             last_close: None,
-        }
+        })
     }
 
     /// Smooth a value using Wilder's smoothing method.

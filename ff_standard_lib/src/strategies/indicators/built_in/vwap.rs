@@ -93,7 +93,7 @@ impl VolumeWeightedAveragePrice {
         lower_band_color: Color,
         tick_rounding: bool,
         trading_hours: TradingHours,
-    ) -> Self {
+    ) -> Box<Self> {
         let symbol_name = match subscription.market_type {
             MarketType::Futures(_) => extract_symbol_from_contract(&subscription.symbol.name),
             _ => subscription.symbol.name.clone(),
@@ -121,7 +121,7 @@ impl VolumeWeightedAveragePrice {
             trading_hours,
             was_last_bar_in_session: false,
         };
-        vwap
+        Box::new(vwap)
     }
 
     fn get_typical_price(data: &BaseDataEnum) -> Option<(Price, Volume)> {

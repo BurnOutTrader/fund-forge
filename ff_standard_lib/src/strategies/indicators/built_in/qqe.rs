@@ -65,7 +65,7 @@ impl QQE {
         plot_color_qqe: Color,
         plot_color_signal: Color,
         tick_rounding: bool,
-    ) -> Self {
+    ) -> Box<Self> {
         let decimal_accuracy = subscription.symbol.data_vendor.decimal_accuracy(subscription.symbol.name.clone())
             .await
             .unwrap();
@@ -73,7 +73,7 @@ impl QQE {
             .await
             .unwrap();
 
-        QQE {
+        Box::new(QQE {
             name,
             subscription,
             history: RollingWindow::new(history_to_retain),
@@ -88,7 +88,7 @@ impl QQE {
             plot_color_signal,
             last_qqe: None,
             last_signal: None,
-        }
+        })
     }
 
     /// Extract close price from BaseDataEnum.

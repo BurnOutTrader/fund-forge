@@ -63,7 +63,7 @@ impl KaufmanAdaptiveMovingAverage {
         slow_period: u64,
         plot_color: Color,
         tick_rounding: bool,
-    ) -> Self {
+    ) -> Box<Self> {
         let decimal_accuracy = subscription.symbol.data_vendor.decimal_accuracy(subscription.symbol.name.clone())
             .await
             .unwrap();
@@ -71,7 +71,7 @@ impl KaufmanAdaptiveMovingAverage {
             .await
             .unwrap();
 
-        KaufmanAdaptiveMovingAverage {
+        Box::new(KaufmanAdaptiveMovingAverage {
             name,
             subscription,
             history: RollingWindow::new(history_to_retain),
@@ -85,7 +85,7 @@ impl KaufmanAdaptiveMovingAverage {
             tick_size,
             plot_color,
             last_kama: None,
-        }
+        })
     }
 
     /// Extract price from BaseDataEnum (unique to this indicator).

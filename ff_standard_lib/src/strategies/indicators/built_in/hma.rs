@@ -55,7 +55,7 @@ impl HullMovingAverage {
         period: u64,
         plot_color: Color,
         tick_rounding: bool,
-    ) -> Self {
+    ) -> Box<Self> {
         let decimal_accuracy = subscription.symbol.data_vendor.decimal_accuracy(subscription.symbol.name.clone())
             .await
             .unwrap();
@@ -63,7 +63,7 @@ impl HullMovingAverage {
             .await
             .unwrap();
 
-        HullMovingAverage {
+       Box::new(HullMovingAverage {
             name,
             subscription,
             history: RollingWindow::new(history_to_retain),
@@ -74,7 +74,7 @@ impl HullMovingAverage {
             tick_rounding,
             tick_size,
             plot_color,
-        }
+        })
     }
 
     /// Extract price from BaseDataEnum (unique to this indicator).

@@ -57,7 +57,7 @@ impl McGinleyDynamic {
         period: u64,
         plot_color: Color,
         tick_rounding: bool,
-    ) -> Self {
+    ) -> Box<Self> {
         let decimal_accuracy = subscription.symbol.data_vendor.decimal_accuracy(subscription.symbol.name.clone())
             .await
             .unwrap();
@@ -65,7 +65,7 @@ impl McGinleyDynamic {
             .await
             .unwrap();
 
-        McGinleyDynamic {
+        Box::new(McGinleyDynamic {
             name,
             subscription,
             history: RollingWindow::new(history_to_retain),
@@ -77,7 +77,7 @@ impl McGinleyDynamic {
             tick_size,
             plot_color,
             last_mcginley: None,
-        }
+        })
     }
 
     /// Extract close price from BaseDataEnum.

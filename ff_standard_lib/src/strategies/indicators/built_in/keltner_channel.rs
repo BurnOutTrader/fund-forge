@@ -75,7 +75,7 @@ impl KeltnerChannels {
         upper_color: Color,
         lower_color: Color,
         tick_rounding: bool,
-    ) -> Self {
+    ) -> Box<Self> {
         let symbol_name = match subscription.market_type {
             MarketType::Futures(_) => extract_symbol_from_contract(&subscription.symbol.name),
             _ => subscription.symbol.name.clone(),
@@ -102,7 +102,7 @@ impl KeltnerChannels {
             last_ema: None,
             last_atr: None,
         };
-        keltner
+        Box::new(keltner)
     }
 
     fn get_price_data(data: &BaseDataEnum) -> Option<(Price, Price, Price)> {

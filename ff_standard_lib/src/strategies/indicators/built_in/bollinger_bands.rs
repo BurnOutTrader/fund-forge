@@ -186,7 +186,7 @@ impl BollingerBands {
         upper_color: Color,
         lower_color: Color,
         tick_rounding: bool,
-    ) -> Self {
+    ) -> Box<Self> {
         let symbol_name = match subscription.market_type {
             MarketType::Futures(_) => extract_symbol_from_contract(&subscription.symbol.name),
             _ => subscription.symbol.name.clone(),
@@ -210,7 +210,7 @@ impl BollingerBands {
             decimal_accuracy,
             tick_rounding,
         };
-        bb
+        Box::new(bb)
     }
 
     fn get_close_price(data: &BaseDataEnum) -> Price {

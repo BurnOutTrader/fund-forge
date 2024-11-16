@@ -61,7 +61,7 @@ impl RelativeVigorIndex {
         plot_color_rvi: Color,
         plot_color_signal: Color,
         tick_rounding: bool,
-    ) -> Self {
+    ) -> Box<Self> {
         let decimal_accuracy = subscription.symbol.data_vendor.decimal_accuracy(subscription.symbol.name.clone())
             .await
             .unwrap();
@@ -69,7 +69,7 @@ impl RelativeVigorIndex {
             .await
             .unwrap();
 
-        RelativeVigorIndex {
+        Box::new(RelativeVigorIndex {
             name,
             subscription,
             history: RollingWindow::new(history_to_retain),
@@ -83,7 +83,7 @@ impl RelativeVigorIndex {
             plot_color_signal,
             smoothed_rvi: None,
             smoothed_signal: None,
-        }
+        })
     }
 
     /// Extract high, low, open, and close prices from BaseDataEnum.

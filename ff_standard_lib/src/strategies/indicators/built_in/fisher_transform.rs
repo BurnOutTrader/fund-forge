@@ -49,7 +49,7 @@ impl FisherTransform {
         plot_color_fisher: Color,
         plot_color_trigger: Color,
         tick_rounding: bool,
-    ) -> Self {
+    ) -> Box<Self> {
         let decimal_accuracy = subscription
             .symbol
             .data_vendor
@@ -63,7 +63,7 @@ impl FisherTransform {
             .await
             .unwrap();
 
-        FisherTransform {
+        Box::new(FisherTransform {
             name,
             subscription,
             history: RollingWindow::new(history_to_retain),
@@ -77,7 +77,7 @@ impl FisherTransform {
             plot_color_trigger,
             last_fisher: None,
             last_trigger: None,
-        }
+        })
     }
 
     /// Apply tick rounding or decimal precision rounding.

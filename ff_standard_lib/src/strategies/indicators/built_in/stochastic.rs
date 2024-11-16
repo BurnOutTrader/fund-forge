@@ -238,7 +238,7 @@ impl StochasticOscillator {
         k_color: Color,
         d_color: Color,
         tick_rounding: bool,
-    ) -> Self {
+    ) -> Box<Self> {
         let symbol_name = match subscription.market_type {
             MarketType::Futures(_) => extract_symbol_from_contract(&subscription.symbol.name),
             _ => subscription.symbol.name.clone(),
@@ -262,7 +262,7 @@ impl StochasticOscillator {
             tick_rounding,
             last_k_values: Vec::with_capacity(d_period as usize),
         };
-        stoch
+        Box::new(stoch)
     }
 
     fn get_price_data(data: &BaseDataEnum) -> (Price, Price, Price) {

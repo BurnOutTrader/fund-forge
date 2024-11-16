@@ -43,8 +43,8 @@ impl WilliamsVIXFix {
         period: usize,
         smoothing: usize,
         plot_color: Color,
-    ) -> Self {
-        WilliamsVIXFix {
+    ) -> Box<Self> {
+        Box::new(WilliamsVIXFix {
             name,
             subscription,
             history: RollingWindow::new(history_to_retain),
@@ -53,7 +53,7 @@ impl WilliamsVIXFix {
             period,
             smoothing,
             plot_color,
-        }
+        })
     }
 
     /// Extract high, low, and close prices from BaseDataEnum.

@@ -170,7 +170,7 @@ impl VolumeWeightedMA {
         volume_significance_color: Color,
         tick_rounding: bool,
         high_volume_threshold: Decimal,
-    ) -> Self {
+    ) -> Box<Self> {
         let symbol_name = match subscription.market_type {
             MarketType::Futures(_) => extract_symbol_from_contract(&subscription.symbol.name),
             _ => subscription.symbol.name.clone(),
@@ -194,7 +194,7 @@ impl VolumeWeightedMA {
             average_volume: None,
             high_volume_threshold,
         };
-        vwma
+        Box::new(vwma)
     }
 
     fn get_price_and_volume(data: &BaseDataEnum) -> Option<(Price, Volume)> {

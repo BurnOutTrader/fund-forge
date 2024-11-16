@@ -65,7 +65,7 @@ impl ElderRayIndex {
         plot_color_bear: Color,
         plot_color_ema: Color,
         tick_rounding: bool,
-    ) -> Self {
+    ) -> Box<Self> {
         let decimal_accuracy = subscription.symbol.data_vendor.decimal_accuracy(subscription.symbol.name.clone())
             .await
             .unwrap();
@@ -75,7 +75,7 @@ impl ElderRayIndex {
 
         let multiplier = Decimal::from(2) / (Decimal::from(period) + Decimal::from(1));
 
-        ElderRayIndex {
+        Box::new(ElderRayIndex {
             name,
             subscription,
             history: RollingWindow::new(history_to_retain),
@@ -90,7 +90,7 @@ impl ElderRayIndex {
             plot_color_ema,
             ema: None,
             multiplier,
-        }
+        })
     }
 
     /// Extract high, low, and close prices from BaseDataEnum.

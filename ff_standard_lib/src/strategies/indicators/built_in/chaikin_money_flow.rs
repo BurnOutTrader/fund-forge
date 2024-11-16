@@ -127,7 +127,7 @@ impl ChaikinMoneyFlow {
         tick_rounding: bool,
         overbought_level: Decimal,
         oversold_level: Decimal,
-    ) -> Self {
+    ) -> Box<Self> {
         let symbol_name = match subscription.market_type {
             MarketType::Futures(_) => extract_symbol_from_contract(&subscription.symbol.name),
             _ => subscription.symbol.name.clone(),
@@ -151,7 +151,7 @@ impl ChaikinMoneyFlow {
             overbought_level,
             oversold_level,
         };
-        cmf
+        Box::new(cmf)
     }
 
     fn get_bar_data(data: &BaseDataEnum) -> Option<(Price, Price, Price, Price, Volume)> {

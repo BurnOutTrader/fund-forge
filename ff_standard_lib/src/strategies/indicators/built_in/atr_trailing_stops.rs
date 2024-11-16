@@ -204,7 +204,7 @@ impl AtrTrailingStop {
         long_stop_color: Color,
         short_stop_color: Color,
         tick_rounding: bool,
-    ) -> Self {
+    ) -> Box<Self> {
         let symbol_name = match subscription.market_type {
             MarketType::Futures(_) => extract_symbol_from_contract(&subscription.symbol.name),
             _ => subscription.symbol.name.clone(),
@@ -232,7 +232,7 @@ impl AtrTrailingStop {
             last_long_stop: None,
             last_short_stop: None,
         };
-        atr_stop
+        Box::new(atr_stop)
     }
 
     fn get_price_data(data: &BaseDataEnum) -> Option<(Price, Price, Price)> {

@@ -211,7 +211,7 @@ impl DirectionalMovementRating {
         admr_color: Color,
         rating_color: Color,
         tick_rounding: bool,
-    ) -> Self {
+    ) -> Box<Self> {
         let decimal_accuracy = subscription.symbol.data_vendor.decimal_accuracy(subscription.symbol.name.clone()).await.unwrap();
         let tick_size = subscription.symbol.data_vendor.tick_size(subscription.symbol.name.clone()).await.unwrap();
 
@@ -234,7 +234,7 @@ impl DirectionalMovementRating {
             last_high: None,
             last_low: None,
         };
-        admr
+        Box::new(admr)
     }
 
     fn get_bar_data(data: &BaseDataEnum) -> Option<(Price, Price)> {

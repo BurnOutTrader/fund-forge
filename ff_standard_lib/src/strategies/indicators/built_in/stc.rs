@@ -51,7 +51,7 @@ impl SchaffTrendCycle {
         cycle_period: usize,
         plot_color: Color,
         tick_rounding: bool,
-    ) -> Self {
+    ) -> Box<Self> {
         let decimal_accuracy = subscription
             .symbol
             .data_vendor
@@ -65,7 +65,7 @@ impl SchaffTrendCycle {
             .await
             .unwrap();
 
-        SchaffTrendCycle {
+        Box::new(SchaffTrendCycle {
             name,
             subscription,
             history: RollingWindow::new(history_to_retain),
@@ -80,7 +80,7 @@ impl SchaffTrendCycle {
             plot_color,
             macd_values: Vec::new(),
             stc_values: Vec::new(),
-        }
+        })
     }
 
     /// Round a value to the tick size or decimal accuracy, depending on configuration.

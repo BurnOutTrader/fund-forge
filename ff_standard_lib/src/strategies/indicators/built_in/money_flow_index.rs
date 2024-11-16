@@ -79,7 +79,7 @@ impl MoneyFlowIndex {
         tick_rounding: bool,
         overbought_level: Decimal,
         oversold_level: Decimal,
-    ) -> Self {
+    ) -> Box<Self> {
         let symbol_name = match subscription.market_type {
             MarketType::Futures(_) => extract_symbol_from_contract(&subscription.symbol.name),
             _ => subscription.symbol.name.clone(),
@@ -107,7 +107,7 @@ impl MoneyFlowIndex {
             last_typical_price: None,
             raw_money_flows: Vec::with_capacity(period as usize),
         };
-        mfi
+        Box::new(mfi)
     }
 
     fn get_bar_data(data: &BaseDataEnum) -> Option<(Price, Price, Price, Volume)> {

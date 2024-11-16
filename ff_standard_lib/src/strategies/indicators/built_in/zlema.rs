@@ -58,7 +58,7 @@ impl ZeroLagExponentialMovingAverage {
         period: u64,
         plot_color: Color,
         tick_rounding: bool,
-    ) -> Self {
+    ) -> Box<Self> {
         let decimal_accuracy = subscription.symbol.data_vendor.decimal_accuracy(subscription.symbol.name.clone())
             .await
             .unwrap();
@@ -68,7 +68,7 @@ impl ZeroLagExponentialMovingAverage {
 
         let multiplier = Decimal::from(2) / (Decimal::from(period) + Decimal::from(1));
 
-        ZeroLagExponentialMovingAverage {
+        Box::new(ZeroLagExponentialMovingAverage {
             name,
             subscription,
             history: RollingWindow::new(history_to_retain),
@@ -81,7 +81,7 @@ impl ZeroLagExponentialMovingAverage {
             plot_color,
             last_zlema: None,
             multiplier,
-        }
+        })
     }
 
     /// Extract close price from BaseDataEnum.

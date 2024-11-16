@@ -59,7 +59,7 @@ impl Swings {
         plot_color_high: Color,
         plot_color_low: Color,
         tick_rounding: bool,
-    ) -> Self {
+    ) -> Box<Self> {
         let decimal_accuracy = subscription.symbol.data_vendor.decimal_accuracy(subscription.symbol.name.clone())
             .await
             .unwrap();
@@ -67,7 +67,7 @@ impl Swings {
             .await
             .unwrap();
 
-        Swings {
+        Box::new(Swings {
             name,
             subscription,
             history: RollingWindow::new(history_to_retain),
@@ -79,7 +79,7 @@ impl Swings {
             tick_size,
             plot_color_high,
             plot_color_low,
-        }
+        })
     }
 
     /// Extract high and low prices from BaseDataEnum.

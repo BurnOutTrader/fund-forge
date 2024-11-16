@@ -88,7 +88,7 @@ impl DonchianChannels {
         middle_color: Color,
         lower_color: Color,
         tick_rounding: bool,
-    ) -> Self {
+    ) -> Box<Self> {
         let symbol_name = match subscription.market_type {
             MarketType::Futures(_) => extract_symbol_from_contract(&subscription.symbol.name),
             _ => subscription.symbol.name.clone(),
@@ -113,7 +113,7 @@ impl DonchianChannels {
             breakout_level: None,
             last_trend: None,
         };
-        donchian
+        Box::new(donchian)
     }
 
     fn get_price_data(data: &BaseDataEnum) -> Option<(Price, Price)> {

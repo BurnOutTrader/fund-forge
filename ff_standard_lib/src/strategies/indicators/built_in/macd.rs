@@ -95,7 +95,7 @@ impl MovingAverageConvergenceDivergence {
         signal_color: Color,
         hist_color: Color,
         tick_rounding: bool,
-    ) -> Self {
+    ) -> Box<Self> {
         let symbol_name = match subscription.market_type {
             MarketType::Futures(_) => extract_symbol_from_contract(&subscription.symbol.name),
             _ => subscription.symbol.name.clone(),
@@ -135,7 +135,7 @@ impl MovingAverageConvergenceDivergence {
             last_signal_ema: None,
             last_macd: None,
         };
-        macd
+        Box::new(macd)
     }
 
     fn get_close_price(data: &BaseDataEnum) -> Price {
