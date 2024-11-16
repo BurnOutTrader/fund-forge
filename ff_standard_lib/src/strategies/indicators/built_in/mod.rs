@@ -26,4 +26,7 @@ pub mod zlema;
 pub mod swings;
 pub mod rvi;
 pub mod rmi;
-mod qqe;
+pub mod qqe;
+pub mod william_vix;
+mod fisher_transform;
+mod stc;
