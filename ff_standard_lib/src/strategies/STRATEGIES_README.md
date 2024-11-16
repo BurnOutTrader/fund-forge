@@ -746,11 +746,8 @@ fn example() {
 }
 ```
 
-### Using Indicators
-We can use the inbuilt indicators or create our own custom indicators.
-
 #### Creating Indicators
-For creating custom indicators, we just need to implement the `Indicators` trait, `Indicator::new()` should return `Box<Self>`
+To create custom indicators, we just need to implement the `Indicators` trait, and `Indicator::new()` should return `Box<Self>`
 
 Creating indicators for fund-forge is easy, see [Indicators readme](indicators/INDICATORS_README.md)
 
