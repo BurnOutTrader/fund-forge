@@ -28,5 +28,5 @@ pub mod rvi;
 pub mod rmi;
 pub mod qqe;
 pub mod william_vix;
-mod fisher_transform;
-mod stc;
+pub mod fisher_transform;
+pub mod stc;
