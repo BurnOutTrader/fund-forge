@@ -1000,14 +1000,17 @@ impl FundForgeStrategy {
         range_history_data(start_date.to_utc(), end_date, subscription.clone(), self.mode).await
     }
 
+    /// Prints a ledgers statistics
     pub async fn print_ledger(&self, account: &Account) {
         self.ledger_service.print_ledger(account).await;
     }
 
+    /// Prints all ledgers statistics
     pub async fn print_ledgers(&self) {
         self.ledger_service.print_ledgers().await;
     }
 
+    /// Exports trades to a csv file in the directory
     pub fn export_trades(&self, directory: &str) {
         for account_entry in self.ledger_service.ledgers.iter() {
             self.ledger_service.export_trades(account_entry.key(), directory);
@@ -1019,18 +1022,27 @@ impl FundForgeStrategy {
         self.ledger_service.in_profit(account, symbol_name)
     }
 
+    /// boolean if the account is in a drawdown on the symbol
     pub fn in_drawdown(&self, account: &Account, symbol_name: &SymbolName) -> bool {
         self.ledger_service.in_drawdown(account, symbol_name)
     }
 
+    /// The accounts open pnl on a symbol
     pub fn pnl(&self, account: &Account, symbol_name: &SymbolName) -> Decimal {
         self.ledger_service.open_pnl_symbol(account, symbol_name)
     }
 
+    /// The accounts open pnl total
+    pub fn pnl_total(&self, account: &Account) -> Decimal {
+        self.ledger_service.open_pnl(account)
+    }
+
+    /// The accounts closed pnl total for the symbol
     pub fn booked_pnl(&self, account: &Account, symbol_name: &SymbolName) -> Decimal {
         self.ledger_service.booked_pnl(account, symbol_name)
     }
 
+    /// The accounts current position size for the symbol
     pub fn position_size(&self, account: &Account, symbol_name: &SymbolName) -> Decimal {
         self.ledger_service.position_size(account, symbol_name)
     }
