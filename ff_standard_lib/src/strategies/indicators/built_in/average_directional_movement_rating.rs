@@ -4,7 +4,6 @@ use rust_decimal::Decimal;
 use rust_decimal_macros::dec;
 use crate::gui_types::settings::Color;
 use crate::helpers::decimal_calculators::round_to_tick_size;
-use crate::product_maps::rithmic::maps::extract_symbol_from_contract;
 use crate::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use crate::standardized_types::base_data::traits::BaseData;
 use crate::standardized_types::enums::MarketType;
@@ -213,12 +212,8 @@ impl DirectionalMovementRating {
         rating_color: Color,
         tick_rounding: bool,
     ) -> Self {
-        let symbol_name = match subscription.market_type {
-            MarketType::Futures(_) => extract_symbol_from_contract(&subscription.symbol.name),
-            _ => subscription.symbol.name.clone(),
-        };
-        let decimal_accuracy = subscription.symbol.data_vendor.decimal_accuracy(symbol_name.clone()).await.unwrap();
-        let tick_size = subscription.symbol.data_vendor.tick_size(symbol_name.clone()).await.unwrap();
+        let decimal_accuracy = subscription.symbol.data_vendor.decimal_accuracy(subscription.symbol.name.clone()).await.unwrap();
+        let tick_size = subscription.symbol.data_vendor.tick_size(subscription.symbol.name.clone()).await.unwrap();
 
         let admr = DirectionalMovementRating {
             name,
