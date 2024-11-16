@@ -772,7 +772,7 @@ pub async fn on_data_received(strategy: FundForgeStrategy, notify: Arc<Notify>, 
     
     // Subscribe to a 60-minute candle for the AUD-CAD pair
     let aud_cad_60m = DataSubscription::new_custom("AUD-CAD".to_string(), DataVendor::Test, Resolution::Minutes(60), MarketType::Forex, CandleType::HeikinAshi);
-    strategy.subscriptions_update(vec![aud_cad_60m.clone()],100).await;
+    strategy.subscriptions_update(vec![aud_cad_60m.clone()], 100).await;
    
     // let's make another indicator to be handled by the IndicatorHandler, we need to wrap this as an indicator enum variant of the same name.
     let heikin_atr_20 = AverageTrueRange::new(String::from("heikin_atr_20"), aud_cad_60m.clone(), 100, 20).await;
