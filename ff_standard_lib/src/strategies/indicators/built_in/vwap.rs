@@ -251,8 +251,7 @@ impl Indicators for VolumeWeightedAveragePrice {
         self.is_ready = true;
         Some(vec![values])
     }
-
-    // ... rest of the Indicators trait implementation remains the same ...
+    
     fn subscription(&self) -> &DataSubscription {
         &self.subscription
     }
