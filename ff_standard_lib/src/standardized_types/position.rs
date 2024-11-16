@@ -84,7 +84,7 @@ pub enum PositionUpdateEvent {
         total_quantity_closed: Volume,
         average_price: Price,
         booked_pnl: Price,
-        average_exit_price: Option<Price>,
+        average_exit_price: Price,
         account: Account,
         originating_order_tag: String,
         time: String
@@ -206,12 +206,7 @@ impl fmt::Display for PositionUpdateEvent {
                 write!(
                     f,
                     "PositionClosed: Position ID = {}, Account: {}, Total Quantity Open = {}, Total Quantity Closed = {}, Average Price = {}, Booked PnL = {}, Average Exit Price = {}, Originating Order Tag: {}",
-                    position_id, account, total_quantity_open, total_quantity_closed, average_price, booked_pnl,
-                    match average_exit_price {
-                        Some(price) => price.to_string(),
-                        None => "None".to_string(),
-                    },
-                    tag
+                    position_id, account, total_quantity_open, total_quantity_closed, average_price, booked_pnl, average_exit_price, tag
                 )
             }
         }
@@ -348,6 +343,7 @@ impl Position {
             panic!("Something wrong with logic, ledger should know this not to be possible")
         }
 
+        self.exchange_rate_multiplier = exchange_rate;
         // Calculate booked PnL
         let booked_pnl = calculate_theoretical_pnl(
             self.account.brokerage,
@@ -395,7 +391,7 @@ impl Position {
                 total_quantity_closed: self.quantity_closed,
                 average_price: self.average_price,
                 booked_pnl: self.booked_pnl,
-                average_exit_price: self.average_exit_price,
+                average_exit_price: self.average_exit_price.unwrap(),
                 account: self.account.clone(),
                 originating_order_tag: tag,
                 time: time.to_string()
