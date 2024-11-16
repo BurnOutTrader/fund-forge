@@ -20,4 +20,6 @@ pub mod tdfi;
 pub mod hma;
 pub mod kama;
 pub mod vzo;
-mod elder_ray_index;
+pub mod elder_ray_index;
+pub mod mcginley_dynamic_indicator;
+pub mod zlema;
