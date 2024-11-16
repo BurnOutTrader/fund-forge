@@ -16,6 +16,46 @@ use crate::standardized_types::subscriptions::DataSubscription;
 use crate::strategies::indicators::indicator_values::{IndicatorPlot, IndicatorValues};
 use crate::strategies::indicators::indicators_trait::{IndicatorName, Indicators};
 
+/// Automated Fibonacci Retracement
+/// ===============================
+///
+/// Description:
+/// An indicator that automatically identifies significant swing points in price action
+/// and calculates Fibonacci retracement and extension levels between them.
+///
+/// Key Components:
+/// 1. Swing Detection
+///    - Identifies significant highs and lows
+///    - Uses configurable threshold for swing significance
+///    - Adapts to market volatility
+///
+/// 2. Fibonacci Levels
+///    - 0% (Start of retracement)
+///    - 23.6% (Minor retracement)
+///    - 38.2% (Key retracement level)
+///    - 50% (Psychological level)
+///    - 61.8% (Golden ratio retracement)
+///    - 78.6% (Deep retracement)
+///    - 100% (Full retracement)
+///    - 161.8% (Extension)
+///    - 261.8% (Extension)
+///
+/// Output Plots:
+/// - Trend Direction (up/down)
+/// - All Fibonacci levels with descriptions
+/// - Level significance indicators
+///
+/// Use Cases:
+/// - Identifying potential support/resistance levels
+/// - Setting profit targets
+/// - Determining stop loss levels
+/// - Entry points after retracements
+///
+/// Configuration Options:
+/// - Lookback period for swing detection
+/// - Swing threshold for significance
+/// - Color coding for different levels
+/// - Tick size rounding options
 #[derive(Clone, Debug)]
 pub struct FibonacciRetracement {
     name: IndicatorName,

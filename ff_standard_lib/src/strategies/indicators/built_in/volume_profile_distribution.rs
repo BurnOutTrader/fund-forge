@@ -16,6 +16,53 @@ use crate::standardized_types::subscriptions::DataSubscription;
 use crate::strategies::indicators::indicator_values::{IndicatorPlot, IndicatorValues};
 use crate::strategies::indicators::indicators_trait::{IndicatorName, Indicators};
 
+/// Volume Profile Distribution
+/// =========================
+///
+/// Description:
+/// A comprehensive volume analysis tool that creates a volume profile of price levels,
+/// identifying significant areas of price acceptance and rejection.
+///
+/// Key Components:
+/// 1. Price Level Analysis
+///    - Volume nodes at each price
+///    - Buying/selling pressure tracking
+///    - Volume delta calculations
+///    - Time-weighted analysis
+///
+/// 2. Key Levels
+///    - Point of Control (POC) - Highest volume price
+///    - Value Area High (VAH)
+///    - Value Area Low (VAL)
+///    - High Volume Nodes
+///    - Low Volume Nodes
+///
+/// 3. Volume Analysis
+///    - Volume distribution by price
+///    - Buy/sell pressure analysis
+///    - Cumulative delta tracking
+///    - Volume node classification
+///
+/// Output Plots:
+/// - POC, VAH, VAL
+/// - Volume profile bars
+/// - Pressure zones
+/// - Cumulative delta
+/// - Volume node markers
+///
+/// Use Cases:
+/// - Identifying significant price levels
+/// - Finding areas of support/resistance
+/// - Understanding price acceptance/rejection
+/// - Analyzing market structure
+/// - Trading volume imbalances
+///
+/// Configuration Options:
+/// - Value area percentage (typically 70%)
+/// - Number of profile bars
+/// - Update interval
+/// - Color coding for different elements
+/// - Volume node thresholds
 #[derive(Clone, Debug)]
 pub struct VolumeProfileDistribution {
     name: IndicatorName,
