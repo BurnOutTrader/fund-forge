@@ -19,3 +19,5 @@ pub mod average_directional_movement_rating;
 pub mod tdfi;
 pub mod hma;
 pub mod kama;
+pub mod vzo;
+mod elder_ray_index;
