@@ -9,7 +9,7 @@ use tokio::sync::{oneshot};
 use crate::standardized_types::position::Position;
 use crate::standardized_types::accounts::{Account, Currency};
 use crate::standardized_types::new_types::{Price, Volume};
-use crate::standardized_types::orders::{Order, OrderId, OrderUpdateEvent};
+use crate::standardized_types::orders::{OrderId, OrderUpdateEvent};
 use crate::standardized_types::time_slices::TimeSlice;
 use crate::strategies::ledgers::ledger::{Ledger, LedgerMessage};
 use crate::strategies::strategy_events::StrategyEvent;
@@ -208,7 +208,6 @@ impl LedgerService {
             .unwrap_or_else(|| dec!(0))
     }
 
-    #[allow(dead_code)]
     pub fn open_pnl(&self, account: &Account) -> Decimal {
         self.ledgers.get(account)
              .map(|ledger| ledger.get_open_pnl())
