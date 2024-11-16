@@ -2,6 +2,7 @@ use chrono::{DateTime, Datelike, TimeZone, Utc};
 use chrono_tz::America::Chicago;
 use std::collections::HashMap;
 use thiserror::Error;
+use crate::standardized_types::subscriptions::SymbolCode;
 
 #[derive(Debug, Error)]
 pub enum RolloverError {
@@ -116,7 +117,7 @@ fn get_next_month(current_month: u32, is_quarterly: bool) -> (u32, bool) {
     }
 }
 
-pub fn get_front_month(symbol: &str, utc_time: DateTime<Utc>) -> Result<String, RolloverError> {
+pub fn get_front_month(symbol: &str, utc_time: DateTime<Utc>) -> Result<SymbolCode, RolloverError> {
     let spec = CONTRACT_SPECS
         .get(symbol)
         .ok_or_else(|| RolloverError::UnknownSymbol(symbol.to_string()))?;

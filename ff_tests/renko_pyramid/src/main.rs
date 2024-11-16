@@ -99,10 +99,10 @@ pub async fn on_data_received(
     let mut last_short_result = Result::BreakEven;
     let mut last_long_result = Result::BreakEven;
     let hours = get_futures_trading_hours(&symbol_name).unwrap();
-    let symbol_code = get_front_month(&symbol_name, strategy.time_utc()).unwrap();
 
     // The engine will send a buffer of strategy events at the specified buffer interval, it will send an empty buffer if no events were buffered in the period.
     'strategy_loop: while let Some(strategy_event) = event_receiver.recv().await {
+        let symbol_code = get_front_month(&symbol_name, strategy.time_utc()).unwrap();
         //println!("Strategy: Buffer Received Time: {}", strategy.time_local());
         //println!("Strategy: Buffer Event Time: {}", strategy.time_zone().from_utc_datetime(&time.naive_utc()));
         match strategy_event {
