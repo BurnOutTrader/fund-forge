@@ -15,3 +15,4 @@ pub mod chaikin_money_flow;
 pub mod commodity_channel_index;
 pub mod money_flow_index;
 pub mod vwma;
+pub mod average_directional_movement_rating;
