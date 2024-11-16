@@ -8,3 +8,4 @@ pub mod stochastic;
 pub mod bollinger_bands;
 pub mod adx;
 pub mod vwap;
+pub mod atr_trailing_stops;
