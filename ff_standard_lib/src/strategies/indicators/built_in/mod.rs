@@ -17,3 +17,5 @@ pub mod money_flow_index;
 pub mod vwma;
 pub mod average_directional_movement_rating;
 pub mod tdfi;
+pub mod hma;
+pub mod kama;
