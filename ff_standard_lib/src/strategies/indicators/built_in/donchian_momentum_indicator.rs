@@ -131,23 +131,6 @@ use crate::strategies::indicators::indicators_trait::{IndicatorName, Indicators}
 ///    - Used for breakout threshold
 ///    - Adapts to market conditions
 ///
-/// # Example Usage
-/// ```rust
-/// let dm = DonchianMomentum::new(
-///     IndicatorName::new("DM(20,10,14)"),
-///     subscription,
-///     100,           // history to retain
-///     20,            // channel period
-///     10,            // momentum period
-///     14,            // volatility period
-///     dec!(1.5),     // breakout threshold
-///     Color::Blue,   // channel color
-///     Color::Green,  // momentum color
-///     Color::Red,    // signal color
-///     false,         // tick_rounding
-/// ).await;
-/// ```
-///
 /// # Common Patterns
 /// 1. Strong Breakout
 ///    - Price exceeds channel significantly
@@ -243,7 +226,7 @@ impl DonchianMomentum {
         momentum_color: Color,
         signal_color: Color,
         tick_rounding: bool,
-    ) -> Self {
+    ) -> Box<Self> {
         let symbol_name = match subscription.market_type {
             MarketType::Futures(_) => extract_symbol_from_contract(&subscription.symbol.name),
             _ => subscription.symbol.name.clone(),
@@ -270,7 +253,7 @@ impl DonchianMomentum {
             tick_rounding,
             last_breakout: None,
         };
-        dm
+        Box::new(dm)
     }
 
     fn get_bar_data(data: &BaseDataEnum) -> Option<(Price, Price, Price)> {
