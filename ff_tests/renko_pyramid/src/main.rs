@@ -10,7 +10,7 @@ use ff_standard_lib::strategies::fund_forge_strategy::FundForgeStrategy;
 use rust_decimal_macros::dec;
 use tokio::sync::mpsc;
 use ff_standard_lib::gui_types::settings::Color;
-use ff_standard_lib::product_maps::rithmic::maps::get_futures_trading_hours;
+use ff_standard_lib::product_maps::rithmic::maps::{get_futures_exchange, get_futures_trading_hours};
 use ff_standard_lib::product_maps::rithmic::rollover::get_front_month;
 use ff_standard_lib::standardized_types::accounts::{Account, Currency};
 use ff_standard_lib::standardized_types::base_data::base_data_type::BaseDataType;
@@ -28,20 +28,22 @@ async fn main() {
     let (strategy_event_sender, strategy_event_receiver) = mpsc::channel(100);
     let account = Account::new(Brokerage::Rithmic(RithmicSystem::Apex), "APEX-3396-168".to_string());
     let symbol_name = SymbolName::from("MNQ");
+    let exchange = get_futures_exchange(&symbol_name).unwrap();
+
     let subscription = DataSubscription::new(
         symbol_name.clone(),
         DataVendor::Rithmic,
         Resolution::Ticks(1),
         BaseDataType::Ticks,
-        MarketType::Futures(FuturesExchange::CME),
+        MarketType::Futures(exchange),
     );
 
     let strategy = FundForgeStrategy::initialize(
         StrategyMode::Backtest,
         dec!(100000),
         Currency::USD,
-        NaiveDate::from_ymd_opt(2019, 6, 7).unwrap().and_hms_opt(0, 0, 0).unwrap(),
-        NaiveDate::from_ymd_opt(2019, 6, 15).unwrap().and_hms_opt(0, 0, 0).unwrap(),
+        NaiveDate::from_ymd_opt(2019, 11, 7).unwrap().and_hms_opt(0, 0, 0).unwrap(),
+        NaiveDate::from_ymd_opt(2019, 11, 15).unwrap().and_hms_opt(0, 0, 0).unwrap(),
         Australia::Sydney,
         Duration::hours(1),
         vec![
@@ -50,7 +52,7 @@ async fn main() {
         false,
         100,
         strategy_event_sender,
-        core::time::Duration::from_millis(30),
+        core::time::Duration::from_millis(200),
         false,
         false,
         false,
@@ -102,13 +104,13 @@ pub async fn on_data_received(
 
     // The engine will send a buffer of strategy events at the specified buffer interval, it will send an empty buffer if no events were buffered in the period.
     'strategy_loop: while let Some(strategy_event) = event_receiver.recv().await {
-        let symbol_code = get_front_month(&symbol_name, strategy.time_utc()).unwrap();
         //println!("Strategy: Buffer Received Time: {}", strategy.time_local());
         //println!("Strategy: Buffer Event Time: {}", strategy.time_zone().from_utc_datetime(&time.naive_utc()));
         match strategy_event {
             StrategyEvent::IndicatorEvent(event) => {
                 match event {
                     IndicatorEvents::IndicatorTimeSlice(slice) => {
+                        let symbol_code = get_front_month(&symbol_name, strategy.time_utc()).unwrap();
                         for renko_value in slice {
                             if let (Some(block_open), Some(block_close)) = (renko_value.get_plot(&open), renko_value.get_plot(&close)) {
                                 let msg = format!("Renko: Open: {}, Close: {} @ {}", block_open.value, block_close.value, strategy.time_local());

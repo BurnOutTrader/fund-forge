@@ -108,6 +108,7 @@ use lazy_static::lazy_static;
 use rust_decimal::Decimal;
 use rust_decimal_macros::dec;
 use chrono::{NaiveTime};
+use crate::messages::data_server_messaging::FundForgeError;
 use crate::standardized_types::enums::FuturesExchange;
 use crate::standardized_types::symbol_info::{CommissionInfo, SymbolInfo};
 use crate::standardized_types::accounts::Currency;
@@ -144,6 +145,13 @@ lazy_static! {
 
         map
     };
+}
+
+pub fn get_futures_exchange(code: &str) -> Result<FuturesExchange, FundForgeError> {
+    match CODE_TO_EXCHANGE_MAP.get(code).copied() {
+        Some(exchange) => Ok(exchange),
+        None => Err(FundForgeError::ClientSideErrorDebug(format!("Unknown futures code: {}, please add mapping", code))),
+    }
 }
 
 lazy_static! {
@@ -232,6 +240,13 @@ lazy_static! {
 
         map
     };
+}
+
+pub fn get_futures_symbol_info(symbol: &str) -> Result<SymbolInfo, FundForgeError> {
+    match SYMBOL_INFO_MAP.get(symbol) {
+        Some(info) => Ok(info.clone()),
+        None => Err(FundForgeError::ClientSideErrorDebug(format!("Unknown futures symbol: {}, please add mapping", symbol))),
+    }
 }
 
 lazy_static! {
