@@ -1,4 +1,4 @@
-use chrono::{DateTime, Datelike, TimeZone, Utc};
+use chrono::{DateTime, Datelike, Utc};
 use chrono_tz::America::Chicago;
 use std::collections::HashMap;
 use thiserror::Error;
@@ -181,11 +181,10 @@ pub fn get_front_month(symbol: &str, utc_time: DateTime<Utc>) -> Result<SymbolCo
 #[cfg(test)]
 mod tests {
     use super::*;
-    use chrono::TimeZone;
+    use chrono::NaiveDateTime;
 
     fn test_case(symbol: &str, date_str: &str, expected: &str) {
-        let utc_time = Utc.datetime_from_str(date_str, "%Y-%m-%d %H:%M:%S")
-            .expect("Invalid test date");
+        let utc_time = NaiveDateTime::parse_from_str(date_str, "%Y-%m-%d %H:%M:%S").unwrap().and_utc();
         let result = get_front_month(symbol, utc_time).unwrap();
         assert_eq!(
             result, expected,

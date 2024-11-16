@@ -105,7 +105,7 @@ impl TradingHours {
 
 #[cfg(test)]
 mod tests {
-    use chrono::{TimeZone, Utc};
+    use chrono::{TimeZone};
     use chrono_tz::America::Chicago;
     use crate::product_maps::rithmic::maps::CME_HOURS;
 
@@ -114,7 +114,7 @@ mod tests {
         let trading_hours = CME_HOURS;
 
         // Sunday open at 17:00, continues through to Monday close at 16:00
-        let test_time = Chicago.ymd(2024, 1, 8).and_hms(9, 0, 0).with_timezone(&Utc);
+        let test_time = Chicago.with_ymd_and_hms(2024, 1, 8,9, 0, 0).unwrap().to_utc();
         assert!(trading_hours.is_market_open(test_time));
         assert_eq!(
             trading_hours.seconds_until_close(test_time),
@@ -122,7 +122,7 @@ mod tests {
         );
 
         // Monday exact close (should be closed)
-        let test_time = Chicago.ymd(2024, 1, 8).and_hms(16, 0, 0).with_timezone(&Utc);
+        let test_time = Chicago.with_ymd_and_hms(2024, 1, 8,16, 0, 0).unwrap().to_utc();
         assert!(!trading_hours.is_market_open(test_time));
         assert_eq!(trading_hours.seconds_until_close(test_time), None);
     }
@@ -131,11 +131,11 @@ mod tests {
     fn test_friday_saturday_cycle() {
         let trading_hours = CME_HOURS;
 
-        let test_time = Chicago.ymd(2024, 1, 5).and_hms(17, 0, 0).with_timezone(&Utc);
+        let test_time = Chicago.with_ymd_and_hms(2024, 1, 5,17, 0, 0).unwrap().to_utc();
         assert!(trading_hours.is_market_open(test_time));
         assert_eq!(trading_hours.seconds_until_close(test_time), Some(82800)); // Until next day’s close at 16:00
 
-        let test_time = Chicago.ymd(2024, 1, 6).and_hms(0, 0, 0).with_timezone(&Utc);
+        let test_time = Chicago.with_ymd_and_hms(2024, 1, 6, 0, 0, 0).unwrap().to_utc();
         assert!(!trading_hours.is_market_open(test_time));
         assert_eq!(trading_hours.seconds_until_close(test_time), None);
     }
@@ -144,11 +144,11 @@ mod tests {
     fn test_regular_weekday_pattern() {
         let trading_hours = CME_HOURS;
 
-        let test_time = Chicago.ymd(2024, 1, 9).and_hms(9, 0, 0).with_timezone(&Utc);
+        let test_time = Chicago.with_ymd_and_hms(2024, 1, 9,9, 0, 0).unwrap().to_utc();
         assert!(trading_hours.is_market_open(test_time));
         assert_eq!(trading_hours.seconds_until_close(test_time), Some(25200)); // Until 16:00
 
-        let test_time = Chicago.ymd(2024, 1, 9).and_hms(16, 0, 0).with_timezone(&Utc);
+        let test_time = Chicago.with_ymd_and_hms(2024, 1, 9, 16, 0, 0).unwrap().to_utc();
         assert!(!trading_hours.is_market_open(test_time));
         assert_eq!(trading_hours.seconds_until_close(test_time), None);
     }
@@ -158,7 +158,7 @@ mod tests {
         let trading_hours = CME_HOURS;
 
         // Before Tuesday open
-        let test_time = Chicago.ymd(2024, 1, 9).and_hms(16, 59, 0).with_timezone(&Utc);
+        let test_time = Chicago.with_ymd_and_hms(2024, 1, 9, 16, 59, 0).unwrap().to_utc();
         assert!(!trading_hours.is_market_open(test_time));
         assert_eq!(trading_hours.seconds_until_close(test_time), None);
     }
@@ -168,7 +168,7 @@ mod tests {
         let trading_hours = CME_HOURS;
 
         // Just before Monday close at 16:00
-        let test_time = Chicago.ymd(2024, 1, 8).and_hms(15, 59, 59).with_timezone(&Utc);
+        let test_time = Chicago.with_ymd_and_hms(2024, 1, 8,15, 59, 59).unwrap().to_utc();
         assert!(trading_hours.is_market_open(test_time));
         assert_eq!(
             trading_hours.seconds_until_close(test_time),
@@ -182,7 +182,7 @@ mod tests {
         let trading_hours = CME_HOURS;
 
         // Just after Monday close
-        let test_time = Chicago.ymd(2024, 1, 8).and_hms(16, 0, 1).with_timezone(&Utc);
+        let test_time = Chicago.with_ymd_and_hms(2024, 1, 8, 16, 0, 1).unwrap().to_utc();
         assert!(!trading_hours.is_market_open(test_time));
         assert_eq!(trading_hours.seconds_until_close(test_time), None);
     }
@@ -192,7 +192,7 @@ mod tests {
         let trading_hours = CME_HOURS;
 
         // Monday session continues from Sunday open at 17:00 through to Monday close at 16:00
-        let test_time = Chicago.ymd(2024, 1, 8).and_hms(1, 0, 0).with_timezone(&Utc);
+        let test_time = Chicago.with_ymd_and_hms(2024, 1, 8, 1, 0, 0).unwrap().to_utc();
         assert!(trading_hours.is_market_open(test_time));
         assert_eq!(
             trading_hours.seconds_until_close(test_time),
@@ -205,7 +205,7 @@ mod tests {
         let trading_hours = CME_HOURS;
 
         // Saturday has no trading hours
-        let test_time = Chicago.ymd(2024, 1, 6).and_hms(12, 0, 0).with_timezone(&Utc);
+        let test_time = Chicago.with_ymd_and_hms(2024, 1, 6, 12, 0, 0).unwrap().to_utc();
         assert!(!trading_hours.is_market_open(test_time));
         assert_eq!(trading_hours.seconds_until_close(test_time), None);
     }
