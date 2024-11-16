@@ -23,4 +23,7 @@ pub mod vzo;
 pub mod elder_ray_index;
 pub mod mcginley_dynamic_indicator;
 pub mod zlema;
-mod swings;
+pub mod swings;
+pub mod rvi;
+pub mod rmi;
+mod qqe;
