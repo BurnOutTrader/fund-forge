@@ -26,14 +26,6 @@ The first objective was to get everything 'sort of working' so that I could get 
 Now that Oanda and Rithmic are in a sort of working state, I will finish the Bitget api, once the bitget api is complete I will be focused on consolidating the code base into a consistent design pattern, to make maintenance and future api implementations easier.
 This step will be done slowly by testing strategies under live and historical conditions, improving functions to handle errors and refactoring as I go to create a simple, easy to understand standard for future integrations.
 
-### Things I am considering
-- Implementing ledger as an enum so that we can better utilise the functionality of each brokerage while having a set of common standardised functions for backtesting.
-- Make live accounts always synchronise with the brokerage, so that if there is a bug in our strategy logic the strategy will adjust its positions to reflect the brokerage.
-- Simplify subscribing and unsubscribing data, by allowing the trader to specify subscriptions as either consolidator or primary data.
-- Improve download functions.
-- Build data server logging.
-- The data base is not properly set up to handle fundamental data, it will save, but only 1 data point per vendor per time, I will probably remove fundamental data from BaseDataEnum and make it a unique StrategyEvent.
-
 ### Initial Setup
 1. Install [rust](https://www.rust-lang.org/tools/install).
 2. You need to set up a [Rithmic account](ff_data_server/src/rithmic_api/RITHMIC_SETUP.md) or [Oanda account](ff_data_server/src/oanda_api/OANDA_SETUP.md). [Free Historical Data](#historical-data), currently to run a backtest, you need one of these api's active on the server.
