@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 use std::fmt::{self, Display, Formatter};
-use rust_decimal::{Decimal, MathematicalOps};
+use rust_decimal::{Decimal};
 use rust_decimal_macros::dec;
 use crate::gui_types::settings::Color;
 use crate::helpers::decimal_calculators::round_to_tick_size;
@@ -111,7 +111,7 @@ impl AverageDirectionalIndex {
     }
 
     fn calculate_directional_movement(&self, curr_data: &BaseDataEnum, prev_data: &BaseDataEnum) -> (Price, Price, Price) {
-        let (curr_high, curr_low, curr_close) = Self::get_bar_data(curr_data);
+        let (curr_high, curr_low, _curr_close) = Self::get_bar_data(curr_data);
         let (prev_high, prev_low, prev_close) = Self::get_bar_data(prev_data);
 
         // Calculate True Range
