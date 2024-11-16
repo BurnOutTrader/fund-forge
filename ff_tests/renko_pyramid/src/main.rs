@@ -216,7 +216,7 @@ pub async fn on_data_received(
                     _ => {}
                 }
             }
-            StrategyEvent::TimeSlice(slice) => {
+            StrategyEvent::TimeSlice(_slice) => {
                 /*for data in slice.iter() {
                     match data {
                         BaseDataEnum::Tick(tick) => {
