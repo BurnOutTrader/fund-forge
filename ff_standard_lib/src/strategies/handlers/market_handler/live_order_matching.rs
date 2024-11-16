@@ -36,6 +36,7 @@ pub(crate) fn live_order_handler(
                         }
                     }
                 }
+                #[allow(unused)]
                 OrderUpdateEvent::OrderFilled { account, symbol_name, symbol_code, order_id, price, quantity, tag, time, side } => {
                     #[allow(unused)]
                      if let Some((order_id, mut order)) = open_order_cache.remove(order_id) {
