@@ -118,7 +118,7 @@ lazy_static! {
         let mut map = HashMap::new();
 
         // CBOT contracts
-        for code in ["XC", "XK", "XW", "YM", "ZB", "ZC", "ZF", "ZL", "ZM", "ZN", "ZO", "ZR", "ZS", "ZT", "ZW",  "MYM"] {
+        for code in ["XC", "XK", "XW", "YM", "ZB", "ZC", "ZF", "ZL", "ZM", "ZN", "ZO", "ZR", "ZS", "ZT", "ZW"] {
             map.insert(code, FuturesExchange::CBOT);
         }
 
