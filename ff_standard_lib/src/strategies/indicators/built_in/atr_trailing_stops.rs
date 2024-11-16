@@ -14,6 +14,151 @@ use crate::standardized_types::subscriptions::DataSubscription;
 use crate::strategies::indicators::indicator_values::{IndicatorPlot, IndicatorValues};
 use crate::strategies::indicators::indicators_trait::{IndicatorName, Indicators};
 
+/// ATR Trailing Stop
+/// A dynamic stop-loss indicator that adjusts based on market volatility using the Average True Range (ATR).
+/// Provides separate stops for long and short positions, automatically trailing price movement to protect profits
+/// while allowing room for normal market fluctuations.
+///
+/// # Calculation Method
+/// 1. True Range (TR) = max(
+///    current_high - current_low,
+///    |current_high - previous_close|,
+///    |current_low - previous_close|
+/// )
+/// 2. ATR = Exponential Moving Average of True Range
+/// 3. Long Stop = Highest High - (ATR × multiplier)
+/// 4. Short Stop = Lowest Low + (ATR × multiplier)
+///
+/// # Plots
+/// - "long_stop": Stop level for long positions
+///   - Trails below the price during uptrends
+///   - Only moves up, never down
+///   - Exit long position if price closes below this level
+///
+/// - "short_stop": Stop level for short positions
+///   - Trails above the price during downtrends
+///   - Only moves down, never up
+///   - Exit short position if price closes above this level
+///
+/// # Parameters
+/// - period: Number of periods for ATR calculation (typically 14-21)
+/// - multiplier: ATR multiplier for stop distance (typically 2-3)
+///   - Higher multiplier = wider stops, fewer whipsaws
+///   - Lower multiplier = tighter stops, more whipsaws
+/// - tick_rounding: Whether to round values to tick size
+///
+/// # Key Features
+/// 1. Volatility-Based Adaptation
+///    - Stops widen in volatile markets
+///    - Stops tighten in quiet markets
+///    - Adjusts automatically to market conditions
+///
+/// 2. Trend Following
+///    - Long stops trail uptrends
+///    - Short stops trail downtrends
+///    - Helps ride larger trends
+///
+/// 3. Position Management
+///    - Clear exit points for positions
+///    - Automatic profit protection
+///    - Risk management built-in
+///
+/// # Common Usage
+/// 1. Stop Loss Placement
+///    - Initial stop placement for new positions
+///    - Dynamic adjustment as trade progresses
+///    - Clear exit points for risk management
+///
+/// 2. Trend Trading
+///    - Ride trends until stop is hit
+///    - Stay in position while trend continues
+///    - Exit when trend weakens
+///
+/// 3. Position Sizing
+///    - Use stop distance for position sizing
+///    - Calculate risk per trade
+///    - Maintain consistent risk levels
+///
+/// # Best Practices
+/// 1. Entry Management
+///    - Wait for price to move away from stop
+///    - Avoid entering near the stop level
+///    - Consider stop distance in entry timing
+///
+/// 2. Multiple Time Frames
+///    - Longer timeframe for trend direction
+///    - Shorter timeframe for entry/exit timing
+///    - Match ATR period to trading timeframe
+///
+/// 3. Stop Adjustment
+///    - Never widen stops
+///    - Allow stops to tighten in profit
+///    - Consider partial position exits
+///
+/// # Risk Management
+/// 1. Position Sizing
+///    - Calculate risk based on stop distance
+///    - Account for volatility changes
+///    - Adjust position size accordingly
+///
+/// 2. Multiple Stops
+///    - Initial stop for risk control
+///    - Trailing stop for profit protection
+///    - Time-based stops for dead trades
+///
+/// 3. Gap Risk
+///    - Be aware of overnight gaps
+///    - Consider market hours
+///    - Use additional protective measures
+///
+/// # Trade Management
+/// 1. Entry Confirmation
+///    - Price moving away from stop
+///    - Volume confirmation
+///    - Trend alignment
+///
+/// 2. Stop Adjustment
+///    - Move to breakeven when possible
+///    - Tighten stops in profit
+///    - Never widen initial stop
+///
+/// 3. Exit Strategy
+///    - Full exit at stop hit
+///    - Partial exits at targets
+///    - Scale out in trends
+///
+/// # Known Limitations
+/// - Can be whipsawed in ranging markets
+/// - Gap risk in overnight positions
+/// - May trail too far in strong trends
+/// - Requires context from other indicators
+///
+/// # Implementation Notes
+/// 1. Performance
+///    - Efficient updates with new data
+///    - Minimal state maintenance
+///    - Accurate tick rounding
+///
+/// 2. Calculation Accuracy
+///    - True Range includes gaps
+///    - Proper ATR smoothing
+///    - Accurate stop trailing
+///
+/// # Advanced Concepts
+/// 1. Multiple ATR Stops
+///    - Different multipliers for different purposes
+///    - Combine with other indicators
+///    - Create stop zones
+///
+/// 2. Breakout Confirmation
+///    - Use stops for breakout validation
+///    - Combine with volume
+///    - Monitor stop violations
+///
+/// 3. Volatility Analysis
+///    - ATR trends indicate volatility changes
+///    - Stop width indicates market condition
+///    - Use for position sizing
 #[derive(Clone, Debug)]
 pub struct AtrTrailingStop {
     name: IndicatorName,

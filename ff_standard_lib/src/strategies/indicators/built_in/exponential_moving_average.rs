@@ -15,6 +15,34 @@ use crate::standardized_types::subscriptions::DataSubscription;
 use crate::strategies::indicators::indicator_values::{IndicatorPlot, IndicatorValues};
 use crate::strategies::indicators::indicators_trait::{IndicatorName, Indicators};
 
+/// Exponential Moving Average (EMA)
+/// Similar to MA but gives more weight to recent prices.
+///
+/// # Plots
+/// - "ema": The main EMA line. Responds more quickly to price changes than simple MA.
+///
+/// # Parameters
+/// - period: Number of periods for the EMA calculation
+/// - tick_rounding: Whether to round values to tick size
+///
+/// # Usage
+/// More responsive to recent price changes than simple MA, better for shorter-term trading.
+
+/// Relative Strength Index (RSI)
+/// Momentum oscillator measuring speed and magnitude of price changes.
+///
+/// # Plots
+/// - "rsi": Main RSI line (0-100 scale)
+/// - "overbought": Upper reference line (typically 70)
+/// - "oversold": Lower reference line (typically 30)
+///
+/// # Parameters
+/// - period: Lookback period (typically 14)
+/// - tick_rounding: Whether to round values to tick size
+///
+/// # Usage
+/// Identifies overbought/oversold conditions and potential trend reversals.
+
 #[derive(Clone, Debug)]
 pub struct ExponentialMovingAverage {
     name: IndicatorName,

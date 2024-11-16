@@ -15,6 +15,31 @@ use crate::standardized_types::subscriptions::DataSubscription;
 use crate::strategies::indicators::indicator_values::{IndicatorPlot, IndicatorValues};
 use crate::strategies::indicators::indicators_trait::{IndicatorName, Indicators};
 
+/// Moving Average (MA)
+/// A trend-following indicator that smooths price data to create a single flowing line.
+///
+/// # Plots
+/// - "ma": The main moving average line. Shows average price over the specified period.
+///
+/// # Parameters
+/// - period: Number of periods to average (e.g., 20 for 20-period MA)
+/// - tick_rounding: Whether to round values to tick size
+///
+/// # Usage
+/// Helps identify trend direction and potential support/resistance levels.
+
+/// Exponential Moving Average (EMA)
+/// Similar to MA but gives more weight to recent prices.
+///
+/// # Plots
+/// - "ema": The main EMA line. Responds more quickly to price changes than simple MA.
+///
+/// # Parameters
+/// - period: Number of periods for the EMA calculation
+/// - tick_rounding: Whether to round values to tick size
+///
+/// # Usage
+/// More responsive to recent price changes than simple MA, better for shorter-term trading.
 #[derive(Clone, Debug)]
 pub struct MovingAverage {
     name: IndicatorName,

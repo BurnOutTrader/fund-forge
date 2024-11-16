@@ -14,6 +14,189 @@ use crate::standardized_types::subscriptions::DataSubscription;
 use crate::strategies::indicators::indicator_values::{IndicatorPlot, IndicatorValues};
 use crate::strategies::indicators::indicators_trait::{IndicatorName, Indicators};
 
+/// Stochastic Oscillator
+/// A momentum indicator comparing a closing price to its price range over time.
+/// Developed by George Lane, it's based on the observation that momentum precedes
+/// price. The indicator consists of two lines: %K (fast) and %D (slow).
+///
+/// # Calculation Method
+/// 1. %K (Fast Stochastic):
+///    %K = ((Current Close - Lowest Low) / (Highest High - Lowest Low)) × 100
+///    where Lowest Low and Highest High are calculated over the lookback period
+///
+/// 2. %D (Slow Stochastic):
+///    %D = SMA of %K over specified period (typically 3)
+///
+/// 3. Smoothed Stochastic:
+///    - Calculate %K with a moving average of numerator and denominator
+///    - Further smooth with %D calculation
+///
+/// # Plots
+/// - "k": Fast Stochastic (%K line)
+///   - More sensitive to price changes
+///   - Shows immediate momentum
+///   - Faster signal generation
+///
+/// - "d": Slow Stochastic (%D line)
+///   - Smoothed version of %K
+///   - More reliable for signals
+///   - Reduces false signals
+///
+/// - "overbought": Upper reference line (typically 80)
+///   - Indicates potential selling pressure
+///   - More reliable in ranging markets
+///
+/// - "oversold": Lower reference line (typically 20)
+///   - Indicates potential buying pressure
+///   - More reliable in ranging markets
+///
+/// # Parameters
+/// - k_period: Lookback period for %K (typically 14)
+/// - d_period: Smoothing period for %D (typically 3)
+/// - tick_rounding: Whether to round values to tick size
+/// - overbought_level: Upper threshold (typically 80)
+/// - oversold_level: Lower threshold (typically 20)
+///
+/// # Key Signals
+/// 1. Overbought/Oversold
+///   - Above 80: Overbought condition
+///   - Below 20: Oversold condition
+///   - Signals stronger in ranging markets
+///
+/// 2. Crossovers
+///   - Bullish: %K crosses above %D
+///   - Bearish: %K crosses below %D
+///   - Stronger near extremes
+///
+/// 3. Divergence
+///   - Bullish: Price makes lower lows, Stochastic makes higher lows
+///   - Bearish: Price makes higher highs, Stochastic makes lower highs
+///   - Most reliable at extremes
+///
+/// 4. Bull/Bear Setup
+///   - Bull: Oversold + %K crosses above %D
+///   - Bear: Overbought + %K crosses below %D
+///
+/// # Common Usage Patterns
+/// 1. Range Trading
+///   - Buy oversold conditions
+///   - Sell overbought conditions
+///   - Use with range confirmation
+///
+/// 2. Trend Trading
+///   - Trade signals in trend direction
+///   - Look for pullbacks to extremes
+///   - Use with trend indicators
+///
+/// 3. Divergence Trading
+///   - Look for clear divergences
+///   - Confirm with price action
+///   - Use with support/resistance
+///
+/// # Best Practices
+/// 1. Market Context
+///   - Best in ranging markets
+///   - Adjust levels for trending markets
+///   - Consider volatility
+///
+/// 2. Signal Confirmation
+///   - Wait for crossover confirmation
+///   - Check price action
+///   - Use with support/resistance
+///
+/// 3. Multiple Time Frames
+///   - Higher time frame for trend
+///   - Lower time frame for entry
+///   - Look for alignment
+///
+/// # Risk Management
+/// 1. Position Entry
+///   - Wait for crossover confirmation
+///   - Use with price action signals
+///   - Consider market context
+///
+/// 2. Stop Loss Placement
+///   - Behind recent swing points
+///   - Account for volatility
+///   - Use ATR for sizing
+///
+/// 3. Profit Targets
+///   - Opposite extreme level
+///   - Key support/resistance
+///   - Based on range size
+///
+/// # Advanced Concepts
+/// 1. Double Stochastic
+///   - Apply stochastic to stochastic
+///   - Identifies deeper oversold/overbought
+///   - More complex signals
+///
+/// 2. Stochastic RSI
+///   - Applies stochastic to RSI
+///   - Highly sensitive
+///   - Good for momentum
+///
+/// 3. Modified Settings
+///   - Fast Stochastic (5,3)
+///   - Slow Stochastic (14,3)
+///   - Custom levels
+///
+/// # Known Limitations
+/// - False signals in strong trends
+/// - Can stay overbought/oversold
+/// - Lag in smoothed version
+/// - Whipsaws in volatile markets
+///
+/// # Market-Specific Adjustments
+/// 1. Stocks
+///   - Standard settings work well
+///   - Adjust for volatility
+///
+/// 2. Forex
+///   - Consider wider levels
+///   - Use with trend filter
+///
+/// 3. Cryptocurrencies
+///   - Higher volatility settings
+///   - Wider extremes
+///
+/// # Performance Notes
+/// - Efficient calculation
+/// - Minimal state needed
+/// - Accurate crossover detection
+/// - Proper smoothing implementation
+///
+/// # Additional Tips
+/// 1. Trend Filter
+///   - Use moving average
+///   - Consider higher timeframe
+///   - Check market phase
+///
+/// 2. Volume Confirmation
+///   - Check volume at extremes
+///   - Volume on crossovers
+///   - Divergence in volume
+///
+/// 3. Pattern Recognition
+///   - Double bottoms/tops
+///   - Bullish/bearish divergence
+///   - Range boundaries
+///
+/// # Trade Management
+/// 1. Entry Rules
+///   - Wait for crossover
+///   - Confirm with price action
+///   - Check market context
+///
+/// 2. Exit Rules
+///   - Take profit at opposite extreme
+///   - Exit on opposing signal
+///   - Trail stops in trends
+///
+/// 3. Position Sizing
+///   - Based on stop distance
+///   - Account for volatility
+///   - Consider market phase
 #[derive(Clone, Debug)]
 pub struct StochasticOscillator {
     name: IndicatorName,

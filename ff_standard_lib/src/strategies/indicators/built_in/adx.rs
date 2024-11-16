@@ -14,6 +14,158 @@ use crate::standardized_types::subscriptions::DataSubscription;
 use crate::strategies::indicators::indicator_values::{IndicatorPlot, IndicatorValues};
 use crate::strategies::indicators::indicators_trait::{IndicatorName, Indicators};
 
+/// Average Directional Index (ADX)
+/// A trend strength indicator that combines the ADX line with +DI and -DI directional indicators.
+/// Helps determine not only trend strength but also trend direction. Created by Welles Wilder,
+/// it's particularly useful for identifying strong trends and ranging markets.
+///
+/// # Calculation Method
+/// 1. True Range (TR) = max(
+///    high - low,
+///    |high - previous_close|,
+///    |low - previous_close|
+/// )
+/// 2. +DM (Directional Movement) =
+///    if current_high - previous_high > previous_low - current_low:
+///      max(current_high - previous_high, 0)
+///    else: 0
+/// 3. -DM =
+///    if previous_low - current_low > current_high - previous_high:
+///      max(previous_low - current_low, 0)
+///    else: 0
+/// 4. Smooth values using Wilder's smoothing:
+///    - Smoothed TR
+///    - Smoothed +DM
+///    - Smoothed -DM
+/// 5. +DI = (Smoothed +DM / Smoothed TR) × 100
+/// 6. -DI = (Smoothed -DM / Smoothed TR) × 100
+/// 7. ADX = SMA of (|+DI - -DI| / |+DI + -DI| × 100)
+///
+/// # Plots
+/// - "adx": Main ADX line (0-100)
+///   - Shows trend strength regardless of direction
+///   - Values > 25 indicate strong trend
+///   - Values < 20 indicate weak trend/ranging market
+///   - Higher values = stronger trend
+///
+/// - "plus_di": Positive Directional Indicator
+///   - Measures upward price pressure
+///   - Higher values indicate stronger uptrend
+///   - Crossovers with -DI signal potential trades
+///
+/// - "minus_di": Negative Directional Indicator
+///   - Measures downward price pressure
+///   - Higher values indicate stronger downtrend
+///   - Crossovers with +DI signal potential trades
+///
+/// # Parameters
+/// - period: Calculation period (typically 14)
+/// - tick_rounding: Whether to round values to tick size
+///
+/// # Key Signals
+/// 1. Trend Strength
+///   - ADX > 25: Strong trend present
+///   - ADX < 20: Weak or no trend
+///   - ADX > 40: Very strong trend
+///   - Rising ADX: Trend strengthening
+///   - Falling ADX: Trend weakening
+///
+/// 2. Directional Movement
+///   - +DI > -DI: Uptrend
+///   - -DI > +DI: Downtrend
+///   - DI crossovers signal potential trend changes
+///
+/// 3. Trade Signals
+///   - Long: +DI crosses above -DI with ADX > 25
+///   - Short: -DI crosses above +DI with ADX > 25
+///   - Exit: DI crossover in opposite direction
+///
+/// # Common Usage Patterns
+/// 1. Trend Confirmation
+///   - Use ADX to confirm trend strength
+///   - Only trade in direction of trend when ADX > 25
+///   - Avoid trend trades when ADX < 20
+///
+/// 2. Entry Conditions
+///   - Wait for DI crossovers
+///   - Confirm with ADX strength
+///   - Check price action confirmation
+///
+/// 3. Exit Strategies
+///   - Exit on opposing DI crossover
+///   - Exit when ADX falls below threshold
+///   - Take profits when ADX extremely high
+///
+/// # Best Practices
+/// 1. Multiple Time Frame Analysis
+///   - Use longer timeframe for trend
+///   - Use shorter timeframe for entry
+///   - Confirm signals across timeframes
+///
+/// 2. Combine with Other Indicators
+///   - Price action confirmation
+///   - Volume indicators
+///   - Support/resistance levels
+///
+/// 3. Risk Management
+///   - Wider stops in strong trends
+///   - Tighter stops in weak trends
+///   - Position sizing based on trend strength
+///
+/// # Trading Scenarios
+/// 1. Strong Trend
+///   - ADX > 25 and rising
+///   - Clear DI separation
+///   - Trade with trend
+///
+/// 2. Weak Trend
+///   - ADX < 20
+///   - DI lines close together
+///   - Avoid trend trades
+///
+/// 3. Trend Reversal
+///   - ADX high but declining
+///   - DI lines crossing
+///   - Prepare for trend change
+///
+/// # Known Limitations
+/// - Lag due to smoothing calculations
+/// - Can give false signals in choppy markets
+/// - May miss early trend moves
+/// - DI crossovers can whipsaw
+///
+/// # Advanced Concepts
+/// 1. Trend Quality
+///   - ADX slope indicates trend momentum
+///   - DI separation shows trend clarity
+///   - Compare across time frames
+///
+/// 2. Volatility Relationship
+///   - Higher ADX often means higher volatility
+///   - Use for position sizing
+///   - Adjust stops based on ADX level
+///
+/// # Performance Considerations
+/// - Efficient smoothing calculations
+/// - Accurate DI crossing detection
+/// - Proper trend strength classification
+/// - Handles gaps appropriately
+///
+/// # Additional Tips
+/// 1. Filter Signals
+///   - Use ADX threshold for trades
+///   - Confirm with price action
+///   - Check multiple time frames
+///
+/// 2. Position Management
+///   - Size positions based on ADX strength
+///   - Trail stops tighter in weak trends
+///   - Hold longer in strong trends
+///
+/// 3. Market Conditions
+///   - Best in trending markets
+///   - Less useful in ranging markets
+///   - Good for trend confirmation
 #[derive(Clone, Debug)]
 pub struct AverageDirectionalIndex {
     name: IndicatorName,

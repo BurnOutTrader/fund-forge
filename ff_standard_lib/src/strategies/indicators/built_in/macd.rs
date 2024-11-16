@@ -14,6 +14,36 @@ use crate::standardized_types::subscriptions::DataSubscription;
 use crate::strategies::indicators::indicator_values::{IndicatorPlot, IndicatorValues};
 use crate::strategies::indicators::indicators_trait::{IndicatorName, Indicators};
 
+/// Moving Average Convergence Divergence (MACD)
+/// Trend-following momentum indicator showing relationship between two moving averages.
+///
+/// # Plots
+/// - "macd": The MACD line (fast EMA - slow EMA)
+/// - "signal": Signal line (EMA of MACD)
+/// - "histogram": Difference between MACD and signal line
+///
+/// # Parameters
+/// - fast_period: Shorter EMA period (typically 12)
+/// - slow_period: Longer EMA period (typically 26)
+/// - signal_period: Signal line EMA period (typically 9)
+///
+/// # Usage
+/// Identifies trend changes, momentum, and potential entry/exit points.
+
+/// Average Directional Index (ADX)
+/// Measures trend strength regardless of direction.
+///
+/// # Plots
+/// - "adx": Main ADX line showing trend strength (0-100)
+/// - "plus_di": +DI line showing upward price movement
+/// - "minus_di": -DI line showing downward price movement
+///
+/// # Parameters
+/// - period: Calculation period (typically 14)
+/// - tick_rounding: Whether to round values to tick size
+///
+/// # Usage
+/// Determines trend strength and potential trend direction changes.
 #[derive(Clone, Debug)]
 pub struct MovingAverageConvergenceDivergence {
     name: IndicatorName,

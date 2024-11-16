@@ -14,6 +14,136 @@ use crate::standardized_types::subscriptions::DataSubscription;
 use crate::strategies::indicators::indicator_values::{IndicatorPlot, IndicatorValues};
 use crate::strategies::indicators::indicators_trait::{IndicatorName, Indicators};
 
+/// Bollinger Bands (BB)
+/// A volatility-based indicator consisting of three bands: a middle simple moving average (SMA)
+/// and two outer bands placed a specified number of standard deviations away from the middle band.
+/// The bands expand and contract based on market volatility, creating a dynamic price envelope.
+///
+/// # Calculation Method
+/// 1. Middle Band = SMA(price, period)
+/// 2. Standard Deviation = √(Σ(price - SMA)² / period)
+/// 3. Upper Band = Middle Band + (Standard Deviation × multiplier)
+/// 4. Lower Band = Middle Band - (Standard Deviation × multiplier)
+///
+/// # Plots
+/// - "middle": Middle band (SMA)
+///   - Acts as the base trend line
+///   - Often used as a support/resistance level
+///
+/// - "upper": Upper band
+///   - Represents overbought territory
+///   - Price tends to reverse near this level
+///   - Breakouts above signal strong trends
+///
+/// - "lower": Lower band
+///   - Represents oversold territory
+///   - Price tends to reverse near this level
+///   - Breakouts below signal strong downtrends
+///
+/// - "bandwidth": Shows the percentage spread between bands
+///   - bandwidth = (upper - lower) / middle × 100
+///   - High values indicate high volatility
+///   - Low values indicate low volatility (squeeze)
+///
+/// - "percent_b": Shows where price is relative to the bands
+///   - %B = (price - lower) / (upper - lower)
+///   - Above 1.0: Price above upper band
+///   - Below 0.0: Price below lower band
+///   - 0.5: Price at middle band
+///
+/// # Parameters
+/// - period: Number of periods for SMA (typically 20)
+/// - num_std_dev: Number of standard deviations (typically 2)
+/// - tick_rounding: Whether to round values to tick size
+///
+/// # Key Signals
+/// 1. Mean Reversion
+///    - Price tends to return to the middle band
+///    - Extreme moves to outer bands often reverse
+///
+/// 2. Volatility Breakout
+///    - Strong trends when price moves outside bands
+///    - Sustained moves above/below outer bands
+///
+/// 3. Bollinger Squeeze
+///    - Bands narrow (low bandwidth)
+///    - Indicates potential upcoming volatility
+///    - Often precedes significant moves
+///
+/// 4. W-Bottoms and M-Tops
+///    - W-Bottom: Double bottom with second low above lower band
+///    - M-Top: Double top with second high below upper band
+///
+/// # Common Usage Patterns
+/// 1. Trend Identification
+///    - Price above middle band = uptrend
+///    - Price below middle band = downtrend
+///    - Middle band slope indicates trend direction
+///
+/// 2. Volatility Analysis
+///    - Wide bands = high volatility
+///    - Narrow bands = low volatility
+///    - Bandwidth helps identify squeezes
+///
+/// 3. Support/Resistance
+///    - Middle band acts as dynamic support/resistance
+///    - Outer bands mark price extremes
+///
+/// 4. Entry/Exit Signals
+///    - Enter long: Price bounces off lower band
+///    - Enter short: Price bounces off upper band
+///    - Take profit: Price reaches opposite band
+///
+/// # Best Practices
+/// 1. Multiple Time Frame Analysis
+///    - Use longer time frames for trend
+///    - Use shorter time frames for entry/exit
+///
+/// 2. Volume Confirmation
+///    - High volume on band touches
+///    - Volume expansion on breakouts
+///
+/// 3. Additional Indicators
+///    - RSI for overbought/oversold
+///    - MACD for trend confirmation
+///    - Volume indicators for breakout confirmation
+///
+/// # Risk Management
+/// 1. Breakout Trading
+///    - False breakouts common
+///    - Wait for confirmation candles
+///    - Use volume for confirmation
+///
+/// 2. Mean Reversion Trading
+///    - Don't fight strong trends
+///    - Check higher time frame trend
+///    - Use proper position sizing
+///
+/// # Known Limitations
+/// - Lag due to moving average calculation
+/// - Can generate false signals in ranging markets
+/// - Less effective in strong trends
+/// - Requires context from other indicators
+///
+/// # Advanced Concepts
+/// 1. Keltner Channel Comparison
+///    - BB uses standard deviation
+///    - Keltner uses ATR
+///    - Compare for confirmation
+///
+/// 2. Adaptive Bands
+///    - Adjust standard deviations based on volatility
+///    - Use different periods for different markets
+///
+/// 3. Multiple Band Sets
+///    - Use 1, 2, and 3 standard deviations
+///    - More bands for more precision
+///
+/// # Performance Considerations
+/// - Updates efficiently with new data
+/// - Maintains minimal state (SMA calculation)
+/// - Handles tick rounding appropriately
+/// - Uses accurate standard deviation calculation
 #[derive(Clone, Debug)]
 pub struct BollingerBands {
     name: IndicatorName,

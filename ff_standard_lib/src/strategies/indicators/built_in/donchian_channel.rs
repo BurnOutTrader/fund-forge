@@ -14,7 +14,38 @@ use crate::standardized_types::subscriptions::DataSubscription;
 use crate::strategies::indicators::indicator_values::{IndicatorPlot, IndicatorValues};
 use crate::strategies::indicators::indicators_trait::{IndicatorName, Indicators};
 
+/// Donchian Channels
+/// Shows highest high and lowest low over N periods.
+///
+/// # Plots
+/// - "upper": Highest high over period
+/// - "middle": Midpoint between upper and lower
+/// - "lower": Lowest low over period
+/// - "width": Channel width
+/// - "percent_width": Channel width as percentage
+///
+/// # Parameters
+/// - period: Lookback period
+///
+/// # Usage
+/// Identifies trends and potential breakout levels.
 
+/// Chaikin Money Flow (CMF)
+/// Volume-weighted measure of accumulation/distribution.
+///
+/// # Plots
+/// - "cmf": Main CMF line
+/// - "zero_line": Zero reference line
+/// - "signal": Market signal (Overbought/Oversold/Neutral)
+/// - "trend": Trend direction
+///
+/// # Parameters
+/// - period: Calculation period (typically 20)
+/// - overbought_level: Upper threshold
+/// - oversold_level: Lower threshold
+///
+/// # Usage
+/// Measures buying/selling pressure and potential trend changes.
 #[derive(Clone, Debug)]
 pub struct DonchianChannels {
     name: IndicatorName,

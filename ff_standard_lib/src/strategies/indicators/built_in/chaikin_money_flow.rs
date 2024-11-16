@@ -14,6 +14,77 @@ use crate::standardized_types::subscriptions::DataSubscription;
 use crate::strategies::indicators::indicator_values::{IndicatorPlot, IndicatorValues};
 use crate::strategies::indicators::indicators_trait::{IndicatorName, Indicators};
 
+/// Chaikin Money Flow (CMF)
+/// A volume-weighted measure that indicates the level of accumulation or distribution over a specified
+/// period. Combines price action with volume to identify buying and selling pressure. CMF measures the
+/// money flow volume over a specific time period, helping identify market trends and potential reversals.
+///
+/// # Calculation Method
+/// 1. Money Flow Multiplier = ((Close - Low) - (High - Close)) / (High - Low)
+/// 2. Money Flow Volume = Money Flow Multiplier × Volume
+/// 3. CMF = Sum(Money Flow Volume) / Sum(Volume) over N periods
+///
+/// # Plots
+/// - "cmf": Main CMF line ranging from -1 to +1
+///   - Positive values indicate buying pressure (accumulation)
+///   - Negative values indicate selling pressure (distribution)
+/// - "zero_line": Reference line at zero
+///   - Crossing above indicates shift to bullish
+///   - Crossing below indicates shift to bearish
+/// - "signal": Market condition indicator
+///   - "Overbought": When CMF exceeds overbought threshold
+///   - "Oversold": When CMF drops below oversold threshold
+///   - "Bullish": When CMF is positive but below overbought
+///   - "Bearish": When CMF is negative but above oversold
+///   - "Neutral": When CMF is near zero
+/// - "trend": Trend direction classification
+///   - "Bullish": Sustained positive CMF
+///   - "Bearish": Sustained negative CMF
+///   - "Neutral": CMF oscillating around zero
+///
+/// # Parameters
+/// - period: Number of periods for calculation (typically 20 or 21)
+/// - overbought_level: Upper threshold (typically 0.25 or 0.30)
+/// - oversold_level: Lower threshold (typically -0.25 or -0.30)
+/// - tick_rounding: Whether to round values to tick size
+///
+/// # Key Signals
+/// 1. Zero Line Crossovers
+///    - Crossing above zero suggests potential uptrend
+///    - Crossing below zero suggests potential downtrend
+///
+/// 2. Divergence
+///    - Bullish: Price making lower lows while CMF makes higher lows
+///    - Bearish: Price making higher highs while CMF makes lower highs
+///
+/// 3. Volume Confirmation
+///    - High volume with positive CMF confirms uptrend
+///    - High volume with negative CMF confirms downtrend
+///
+/// # Common Usage
+/// - Trend Confirmation: Use with price action to confirm trend direction
+/// - Volume Analysis: Identify whether price moves are supported by volume
+/// - Divergence Trading: Spot potential reversals through price/CMF divergence
+/// - Support/Resistance: CMF levels can act as support/resistance
+///
+/// # Interpretation
+/// - Strong Bullish: CMF > overbought_level with increasing volume
+/// - Strong Bearish: CMF < oversold_level with increasing volume
+/// - Weak Trend: CMF near zero or diverging from price
+/// - Potential Reversal: CMF diverging from price at extremes
+///
+/// # Best Practices
+/// 1. Use in conjunction with other indicators for confirmation
+/// 2. Look for volume confirmation of CMF signals
+/// 3. Pay attention to divergences at market extremes
+/// 4. Consider longer periods (20+) for more reliable signals
+/// 5. Watch for sustained moves above/below zero line
+///
+/// # Considerations
+/// - More reliable in trending markets than ranging markets
+/// - Can generate false signals in low volume conditions
+/// - Best used with additional confirmation indicators
+/// - May lag in fast-moving markets due to period calculation
 #[derive(Clone, Debug)]
 pub struct ChaikinMoneyFlow {
     name: IndicatorName,

@@ -14,6 +14,21 @@ use crate::standardized_types::subscriptions::DataSubscription;
 use crate::strategies::indicators::indicator_values::{IndicatorPlot, IndicatorValues};
 use crate::strategies::indicators::indicators_trait::{IndicatorName, Indicators};
 
+/// Keltner Channels
+/// Volatility-based bands using ATR around an EMA.
+///
+/// # Plots
+/// - "middle": Middle line (EMA)
+/// - "upper": Upper channel line
+/// - "lower": Lower channel line
+///
+/// # Parameters
+/// - ema_period: Period for middle line EMA
+/// - atr_period: Period for ATR calculation
+/// - multiplier: ATR multiplier for band width
+///
+/// # Usage
+/// Similar to Bollinger Bands but uses ATR for volatility.
 #[derive(Clone, Debug)]
 pub struct KeltnerChannels {
     name: IndicatorName,

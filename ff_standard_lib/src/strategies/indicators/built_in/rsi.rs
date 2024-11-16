@@ -14,6 +14,181 @@ use crate::standardized_types::subscriptions::DataSubscription;
 use crate::strategies::indicators::indicator_values::{IndicatorPlot, IndicatorValues};
 use crate::strategies::indicators::indicators_trait::{IndicatorName, Indicators};
 
+/// Relative Strength Index (RSI)
+/// A momentum oscillator that measures the speed and magnitude of price changes.
+/// RSI evaluates overbought and oversold conditions by comparing the magnitude
+/// of recent gains to recent losses. Developed by J. Welles Wilder Jr.
+///
+/// # Calculation Method
+/// 1. Calculate price changes:
+///    Change = Current Close - Previous Close
+///
+/// 2. Separate gains and losses:
+///    Gains = Change if Change > 0, else 0
+///    Losses = |Change| if Change < 0, else 0
+///
+/// 3. Calculate average gains and losses:
+///    First Average Gain = Sum of Gains over past n periods / n
+///    First Average Loss = Sum of Losses over past n periods / n
+///
+/// 4. Use Wilder's smoothing for subsequent values:
+///    Avg Gain = (Previous Avg Gain × (n-1) + Current Gain) / n
+///    Avg Loss = (Previous Avg Loss × (n-1) + Current Loss) / n
+///
+/// 5. Calculate RS (Relative Strength):
+///    RS = Average Gain / Average Loss
+///
+/// 6. Calculate RSI:
+///    RSI = 100 - (100 / (1 + RS))
+///
+/// # Plots
+/// - "rsi": Main RSI line (0-100 scale)
+///   - Overbought zone: Above 70
+///   - Oversold zone: Below 30
+///   - Centerline: 50
+///
+/// - "overbought": Upper reference line (typically 70)
+///   - Indicates potential reversal zone
+///   - Signals to consider taking profits
+///
+/// - "oversold": Lower reference line (typically 30)
+///   - Indicates potential reversal zone
+///   - Signals to look for buying opportunities
+///
+/// - "centerline": Middle reference line (50)
+///   - Trend indicator
+///   - Above 50: Bullish
+///   - Below 50: Bearish
+///
+/// # Parameters
+/// - period: Calculation period (typically 14)
+/// - tick_rounding: Whether to round values to tick size
+/// - overbought_level: Upper threshold (typically 70)
+/// - oversold_level: Lower threshold (typically 30)
+///
+/// # Key Signals
+/// 1. Overbought/Oversold
+///   - RSI > 70: Overbought condition
+///   - RSI < 30: Oversold condition
+///   - More extreme levels (80/20) for strong trends
+///
+/// 2. Divergence
+///   - Bullish: Price makes lower lows, RSI makes higher lows
+///   - Bearish: Price makes higher highs, RSI makes lower highs
+///   - Hidden: Confirms existing trend
+///
+/// 3. Centerline Crossovers
+///   - Cross above 50: Bullish
+///   - Cross below 50: Bearish
+///   - Confirms trend direction
+///
+/// 4. Failure Swings
+///   - Bullish: RSI holds above 30, makes higher low
+///   - Bearish: RSI holds below 70, makes lower high
+///   - Strong reversal signals
+///
+/// # Common Usage Patterns
+/// 1. Trend Identification
+///   - RSI > 50: Uptrend
+///   - RSI < 50: Downtrend
+///   - Slope indicates momentum
+///
+/// 2. Support/Resistance
+///   - RSI can form its own trendlines
+///   - Look for breaks of RSI trendlines
+///   - RSI levels can act as S/R
+///
+/// 3. Entry/Exit Points
+///   - Enter longs near oversold levels
+///   - Enter shorts near overbought levels
+///   - Exit on divergence signals
+///
+/// # Best Practices
+/// 1. Multiple Time Frame Analysis
+///   - Use longer timeframe for trend
+///   - Use shorter timeframe for entry
+///   - Confirm signals across timeframes
+///
+/// 2. Market Context
+///   - Adjust levels for different markets
+///   - Higher levels in bull markets
+///   - Lower levels in bear markets
+///
+/// 3. Confirmation
+///   - Use price action confirmation
+///   - Look for candlestick patterns
+///   - Check volume for confirmation
+///
+/// # Risk Management
+/// 1. Position Sizing
+///   - Larger size in trend direction
+///   - Smaller size for counter-trend
+///   - Scale in/out at extremes
+///
+/// 2. Stop Loss Placement
+///   - Behind recent swing points
+///   - Outside normal RSI fluctuation
+///   - Based on volatility
+///
+/// # Advanced Concepts
+/// 1. Modified RSI Versions
+///   - Stochastic RSI
+///   - Connors RSI
+///   - Dynamic RSI levels
+///
+/// 2. Pattern Recognition
+///   - Double bottoms/tops
+///   - Head and shoulders
+///   - Chart patterns in RSI
+///
+/// 3. Momentum Analysis
+///   - Rate of change in RSI
+///   - RSI trend strength
+///   - RSI range analysis
+///
+/// # Known Limitations
+/// - Lag due to averaging
+/// - False signals in strong trends
+/// - Can stay overbought/oversold
+/// - Requires context
+///
+/// # Trading Strategies
+/// 1. Mean Reversion
+///   - Trade from extremes back to center
+///   - Use with proper confirmation
+///   - Set realistic targets
+///
+/// 2. Trend Following
+///   - Use centerline crossovers
+///   - Trade with overall trend
+///   - Wait for pullbacks
+///
+/// 3. Divergence Trading
+///   - Look for clear divergences
+///   - Multiple timeframe confirmation
+///   - Use with support/resistance
+///
+/// # Performance Notes
+/// - Efficient updates with new data
+/// - Accurate smoothing calculation
+/// - Proper divergence detection
+/// - Handles gaps appropriately
+///
+/// # Additional Tips
+/// 1. Combine with Other Indicators
+///   - Moving averages
+///   - Volume indicators
+///   - Price patterns
+///
+/// 2. Market-Specific Adjustments
+///   - Stocks: Standard settings work well
+///   - Forex: May need wider levels
+///   - Crypto: Consider extreme levels
+///
+/// 3. Time-Based Considerations
+///   - More reliable on daily timeframe
+///   - Faster signals on lower timeframes
+///   - Weekly for major trends
 #[derive(Clone, Debug)]
 pub struct RelativeStrengthIndex {
     name: IndicatorName,

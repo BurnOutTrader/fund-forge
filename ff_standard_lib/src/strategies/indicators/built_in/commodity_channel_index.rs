@@ -14,6 +14,23 @@ use crate::standardized_types::subscriptions::DataSubscription;
 use crate::strategies::indicators::indicator_values::{IndicatorPlot, IndicatorValues};
 use crate::strategies::indicators::indicators_trait::{IndicatorName, Indicators};
 
+/// Commodity Channel Index (CCI)
+/// Measures current price level relative to average price level.
+///
+/// # Plots
+/// - "cci": Main CCI line
+/// - "zero_line": Zero reference line
+/// - "overbought": Overbought level (+100)
+/// - "oversold": Oversold level (-100)
+/// - "signal": Market signal
+/// - "strength": Trend strength
+///
+/// # Parameters
+/// - period: Calculation period (typically 20)
+/// - constant: Lambert constant (typically 0.015)
+///
+/// # Usage
+/// Identifies cyclical trends and potential reversals.
 #[derive(Clone, Debug)]
 pub struct CommodityChannelIndex {
     name: IndicatorName,

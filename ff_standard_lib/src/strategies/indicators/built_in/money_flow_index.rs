@@ -14,6 +14,23 @@ use crate::standardized_types::subscriptions::DataSubscription;
 use crate::strategies::indicators::indicator_values::{IndicatorPlot, IndicatorValues};
 use crate::strategies::indicators::indicators_trait::{IndicatorName, Indicators};
 
+/// Money Flow Index (MFI)
+/// Volume-weighted RSI measuring buying/selling pressure.
+///
+/// # Plots
+/// - "mfi": Main MFI line (0-100)
+/// - "overbought": Overbought level (typically 80)
+/// - "oversold": Oversold level (typically 20)
+/// - "signal": Market signal
+/// - "divergence": Price/MFI divergence signals
+///
+/// # Parameters
+/// - period: Calculation period (typically 14)
+/// - overbought_level: Upper threshold
+/// - oversold_level: Lower threshold
+///
+/// # Usage
+/// Identifies potential reversals and confirms trends with volume.
 #[derive(Clone, Debug)]
 pub struct MoneyFlowIndex {
     name: IndicatorName,

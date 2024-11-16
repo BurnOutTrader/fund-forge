@@ -16,6 +16,37 @@ use rust_decimal_macros::dec;
 use chrono::{DateTime, Datelike, Utc};
 use crate::standardized_types::market_hours::TradingHours;
 
+/// Volume Weighted Average Price (VWAP)
+/// Price average weighted by volume, typically reset daily.
+///
+/// # Plots
+/// - "vwap": Main VWAP line
+/// - "upper_band": Upper standard deviation band
+/// - "lower_band": Lower standard deviation band
+///
+/// # Parameters
+/// - std_dev_multiplier: Band width multiplier
+/// - trading_hours: Market hours configuration
+///
+/// # Usage
+/// Identifies fair value and potential support/resistance levels.
+
+/// Bollinger Bands
+/// Dynamic volatility bands around a moving average.
+///
+/// # Plots
+/// - "middle": Middle band (simple moving average)
+/// - "upper": Upper volatility band
+/// - "lower": Lower volatility band
+/// - "bandwidth": Distance between bands
+/// - "percent_b": Price position relative to bands (0-100)
+///
+/// # Parameters
+/// - period: MA period (typically 20)
+/// - num_std_dev: Standard deviation multiplier (typically 2)
+///
+/// # Usage
+/// Measures volatility and identifies potential price extremes.
 #[derive(Clone, Debug)]
 pub struct VolumeWeightedAveragePrice {
     name: IndicatorName,
