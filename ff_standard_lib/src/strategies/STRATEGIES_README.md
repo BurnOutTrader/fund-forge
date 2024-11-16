@@ -750,29 +750,18 @@ fn example() {
 We can use the inbuilt indicators or create our own custom indicators.
 
 #### Creating Indicators
-For creating custom indicators, we just need to implement the `Indicators trait` and either:
-1. Create and hardcode `IndicatorEnum` variant including all matching statements, or
-2. Wrap our indicator in the `IndicatorEnum::Custom(Box<dyn AsyncIndicators + Send + Sync>)` variant, where it will be used via `Box<dyn Indicators>` dynamic dispatch.
-The fist option is the most performant, but if you want to create and test a number of indicators, you can save hardcoding the enum variants by using the second option.
-Once you have tested and are happy with the performance of your custom indicator, you can then hardcode it into the IndicatorEnum.
-You don't actually need to do any of this if you want to manually handle your Indicators in the `fn on_data_received()` function, but if you wrap in the `IndicatorEnum::Custom(Box<dyn Indicators>)` variant, 
-you will be able to handle it in the Indicator handler, which will automatically update the indicators for you and return enums `IndicatorEvents` to the `fn on_data_received()`.
-3. Creating indicators for fund-forge is easy, see [Indicators readme](indicators/INDICATORS_README.md)
+For creating custom indicators, we just need to implement the `Indicators` trait, `Indicator::new()` should return `Box<Self>`
+
+Creating indicators for fund-forge is easy, see [Indicators readme](indicators/INDICATORS_README.md)
 
 #### Using Indicators
-If we pass the indicator to `strategy.indicator_subscribe(indicator: IndicatorEnum).await;` the handler will automatically handle, history, warmup and deletion of the indicator when we unsubscribe a symbol.
+If we pass the indicator to `strategy.indicator_subscribe(indicator: Box<dyn Indicators>).await;` the handler will automatically handle, history, warmup and deletion of the indicator when we unsubscribe a symbol.
 There aren't many reasons not to use this fn.
 
 we can access the indicators values the same way we do for base_data 
 ```rust
 fn example(strategy: FundForgeStrategy) {
-    let mut heikin_atr = AverageTrueRange::new(String::from("heikin_atr"), aud_cad_60m.clone(), 100, 14).await;
-    let heikin_atr_20 = IndicatorEnum::AverageTrueRange(AverageTrueRange::new(String::from("heikin_atr_20"), aud_cad_60m.clone(), 100, 20).await);
-
-    // auto subscribe will subscribe the strategy to the indicators required data feed if it is not already, 
-    // if this is false and you don't have the subscription, the strategy will panic instead.
-    // if true then the new data subscription will also show up in the strategy event loop
-    let auto_subscribe: bool = true;
+    let heikin_atr_20 = AverageTrueRange::new(String::from("heikin_atr_20"), aud_cad_60m.clone(), 100, 20).await;
 
     //subscribe the strategy to auto manage the indicator
     strategy.subscribe_indicator(heikin_atr_20, auto_subscribe).await;
@@ -784,44 +773,15 @@ pub async fn on_data_received(strategy: FundForgeStrategy, notify: Arc<Notify>, 
     // Subscribe to a 60-minute candle for the AUD-CAD pair
     let aud_cad_60m = DataSubscription::new_custom("AUD-CAD".to_string(), DataVendor::Test, Resolution::Minutes(60), MarketType::Forex, CandleType::HeikinAshi);
     strategy.subscriptions_update(vec![aud_cad_60m.clone()],100).await;
-    
-    // Create a manually managed indicator directly in the on_data_received function (14 period ATR, which retains 100 historical IndicatorValues)
-    let mut heikin_atr = AverageTrueRange::new(String::from("heikin_atr"), aud_cad_60m.clone(), 100, 14).await;
-    let mut heikin_atr_history: RollingWindow<IndicatorValues> = RollingWindow::new(100);
-
+   
     // let's make another indicator to be handled by the IndicatorHandler, we need to wrap this as an indicator enum variant of the same name.
-    let heikin_atr_20 = IndicatorEnum::AverageTrueRange(AverageTrueRange::new(String::from("heikin_atr_20"), aud_cad_60m.clone(), 100, 20).await);
+    let heikin_atr_20 = AverageTrueRange::new(String::from("heikin_atr_20"), aud_cad_60m.clone(), 100, 20).await;
+   
     strategy.indicator_subscribe(heikin_atr_20).await;
     
     'strategy_loop: while let Some(event_slice) = event_receiver.recv().await {
          match strategy_event {
              StrategyEvent::TimeSlice(time_slice) => {
-                 'base_data_loop: for base_data in time_slice.iter() {
-                     match base_data {
-                         BaseDataEnum::Candle(candle) => {
-                             // lets update the indicator with the new candles
-                             if candle.is_closed {
-                                 heikin_atr.update_base_data(candle).await;
-                             }
-                             
-                             // lets get_requests the indicator value for the current candle, note for atr we can use current, as it only updates on closed candles.
-                             if heikin_atr.is_ready() {
-                                 let atr = heikin_atr.current();
-                                 println!("{}...{} ATR: {}", strategy.time_utc().await, aud_cad_60m.symbol.name, atr.unwrap());
-                                 heikin_atr_history.add(heikin_atr.current());
-                            
-                                 // we can also get_requests the value at a specific index, current bar (closed) is index 0, 1 bar ago is index 1 etc.
-                                 let atr = heikin_atr.index(3);
-                                 println!("{}...{} ATR 3 bars ago: {}", strategy.time_utc().await, aud_cad_60m.symbol.name, atr.unwrap());
-                                 
-                                 //or we can use our own history to get_requests the value at a specific index
-                                 let atr = heikin_atr_history.get(10);
-                                 println!("{}...{} ATR 10 bars ago: {}", strategy.time_utc().await, aud_cad_60m.symbol.name, atr.unwrap());
-                             }
-                         },
-                         _ => {}
-                     }
-                 }
              }
              StrategyEvent::IndicatorEvent(_, event) => {
                  //we can handle indicator events here, this is useful for working with the IndicatorHandler.

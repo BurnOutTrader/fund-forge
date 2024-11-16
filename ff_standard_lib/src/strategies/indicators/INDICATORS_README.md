@@ -12,7 +12,7 @@ See [Indicators readme](ff_standard_lib/src/strategies/indicators/INDICATORS_REA
 ```rust
 fn example() {
   // Here we create a 5 period ATR using a Heikin Ashi data subscription, and we specify to retain the last 100 bars in memory.
-  let heikin_atr_5: Box<dyn Indicators> = IndicatorEnum::AverageTrueRange(
+  let heikin_atr_5: Box<dyn Indicators> = 
     AverageTrueRange::new(
       IndicatorName::from("heikin_atr_5"),
       DataSubscription::new_custom(
@@ -25,8 +25,7 @@ fn example() {
       100, //retain 100 last values
       5, // atr period
       Some(Color::new(50,50,50)) //plot color rgb for charting 
-    ).await,
-  );
+    ).await;
   
   // auto subscribe will subscribe the strategy to the indicators required data feed if it is not already, 
   // if this is false and you don't have the subscription, the strategy will panic instead.
