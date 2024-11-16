@@ -98,8 +98,9 @@ pub async fn on_data_received(
     let mut tp_id: Option<OrderId> = None;
     let mut last_short_result = Result::BreakEven;
     let mut last_long_result = Result::BreakEven;
-
     let hours = get_futures_trading_hours(&symbol_name).unwrap();
+    let symbol_code = get_front_month(&symbol_name, strategy.time_utc()).unwrap();
+
     // The engine will send a buffer of strategy events at the specified buffer interval, it will send an empty buffer if no events were buffered in the period.
     'strategy_loop: while let Some(strategy_event) = event_receiver.recv().await {
         //println!("Strategy: Buffer Received Time: {}", strategy.time_local());
@@ -108,7 +109,6 @@ pub async fn on_data_received(
             StrategyEvent::IndicatorEvent(event) => {
                 match event {
                     IndicatorEvents::IndicatorTimeSlice(slice) => {
-                        let symbol_code = get_front_month(&symbol_name, strategy.time_utc()).unwrap();
                         for renko_value in slice {
                             if let (Some(block_open), Some(block_close)) = (renko_value.get_plot(&open), renko_value.get_plot(&close)) {
                                 let msg = format!("Renko: Open: {}, Close: {} @ {}", block_open.value, block_close.value, strategy.time_local());
