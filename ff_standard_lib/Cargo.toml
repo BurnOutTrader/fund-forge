@@ -29,7 +29,7 @@ env_logger = "*"
 futures = "*"
 rustls = "0.23.5"
 tokio-rustls = "*"
-rust_decimal = { version = "*", features = ["rkyv", "rkyv-safe"] }
+rust_decimal = { version = "*", features = ["rkyv", "rkyv-safe", "maths"] }
 rustls-pemfile = "*"
 async-std = "*"
 async-trait = "0.1.80"
