@@ -716,6 +716,7 @@ lazy_static! {
         m.insert("GC", &CME_HOURS);   // Gold Futures
         m.insert("SI", &CME_HOURS);   // Silver Futures
         m.insert("HG", &CME_HOURS);   // Copper Futures
+        m.insert("CL", &CME_HOURS);   // Crude Oil Futures
         m.insert("PL", &CME_HOURS);   // Platinum Futures
         m.insert("PA", &CME_HOURS);   // Palladium Futures
         m.insert("ALI", &CME_HOURS);  // Aluminum Futures

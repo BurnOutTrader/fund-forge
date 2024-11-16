@@ -1,5 +1,4 @@
 use chrono::{DateTime, Datelike, Utc};
-use chrono_tz::America::Chicago;
 use std::collections::HashMap;
 use thiserror::Error;
 use crate::product_maps::rithmic::maps::get_futures_trading_hours;
@@ -126,7 +125,7 @@ pub fn get_front_month(symbol: &str, utc_time: DateTime<Utc>) -> Result<SymbolCo
     // Convert to Chicago time
     let time_zone = match get_futures_trading_hours(symbol) {
         Some(hours) => hours.timezone,
-        None => Chicago,
+        None => return Err(RolloverError::UnknownSymbol(symbol.to_string()))
     };
 
     let chicago_time = utc_time.with_timezone(&time_zone);
