@@ -11,3 +11,4 @@ pub mod vwap;
 pub mod atr_trailing_stops;
 pub mod keltner_channel;
 pub mod donchian_channel;
+mod chaikin_money_flow;
