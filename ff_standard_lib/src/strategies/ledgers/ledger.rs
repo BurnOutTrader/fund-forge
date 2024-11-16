@@ -156,7 +156,11 @@ impl Ledger {
                     LedgerMessage::UpdateOrCreatePosition { symbol_name, symbol_code, quantity, side, time, market_fill_price, tag , paper_response_sender, order_id} => {
                         match mode {
                             StrategyMode::Backtest | StrategyMode::LivePaperTrading => static_self.update_or_create_paper_position(symbol_name, symbol_code, quantity, side, time, market_fill_price, tag, order_id.unwrap(), paper_response_sender.unwrap()).await,
-                            StrategyMode::Live => static_self.update_or_create_live_position(symbol_name, symbol_code, quantity, side, time, market_fill_price, tag).await
+                            StrategyMode::Live => {
+                                if static_self.is_simulating_pnl {
+                                    static_self.update_or_create_live_position(symbol_name, symbol_code, quantity, side, time, market_fill_price, tag).await
+                                }
+                            }
                         };
                     }
                     LedgerMessage::TimeSliceUpdate { time_slice } => {
@@ -261,19 +265,18 @@ impl Ledger {
                     std::cmp::Ordering::Equal => None,
                 };
 
+                // Preserve position metadata
+                position.highest_recoded_price = existing_position.highest_recoded_price;
+                position.lowest_recoded_price = existing_position.lowest_recoded_price;
+                position.booked_pnl = existing_position.booked_pnl;
+
+                self.positions.insert(position.symbol_code.clone(), position);
+
                 if let Some(event) = update_event {
                     if let Err(e) = self.strategy_sender.send(event).await {
                         eprintln!("Error sending position event: {}", e);
                     }
                 }
-
-                // Preserve position metadata
-                position.highest_recoded_price = existing_position.highest_recoded_price;
-                position.lowest_recoded_price = existing_position.lowest_recoded_price;
-                position.open_pnl = existing_position.open_pnl;
-                position.booked_pnl = existing_position.booked_pnl;
-
-                self.positions.insert(position.symbol_code.clone(), position);
             }
         } else if !position.is_closed {
             // New position
