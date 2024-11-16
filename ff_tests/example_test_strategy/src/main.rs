@@ -15,7 +15,6 @@ use tokio::sync::mpsc;
 use ff_standard_lib::standardized_types::broker_enum::Brokerage;
 use ff_standard_lib::standardized_types::datavendor_enum::DataVendor;
 use ff_standard_lib::strategies::indicators::built_in::average_true_range::AverageTrueRange;
-use ff_standard_lib::strategies::indicators::indicator_enum::IndicatorEnum;
 use ff_standard_lib::strategies::indicators::indicators_trait::IndicatorName;
 use ff_standard_lib::standardized_types::base_data::quotebar::QuoteBar;
 use ff_standard_lib::gui_types::settings::Color;
@@ -76,8 +75,7 @@ async fn main() {
     ).await;
 
     // we can subscribe to indicators here or in our event loop at run time.
-    let quotebar_5s_atr_5 = IndicatorEnum::AverageTrueRange(
-        AverageTrueRange::new(
+    let quotebar_5s_atr_5 = AverageTrueRange::new(
             IndicatorName::from("quotebar_5s_atr_5"),
               // The subscription for the indicator
               DataSubscription::new(
@@ -98,8 +96,8 @@ async fn main() {
               Color::new (128, 0, 128),
 
             true
-        ).await,
-    );
+
+    ).await;
 
     //if you set auto subscribe to false and change the resolution, the strategy will intentionally panic to let you know you won't have data for the indicator
     strategy.subscribe_indicator(quotebar_5s_atr_5).await;
@@ -359,22 +357,20 @@ pub async fn subscribe_to_my_atr_example(strategy: &FundForgeStrategy) {
     );
     println!("{}",msg.as_str().purple());
     // this will test both our auto warm up for indicators and data subscriptions
-    let quote_bar_atr10_15min = IndicatorEnum::AverageTrueRange(
-        AverageTrueRange::new(
-            IndicatorName::from("quote_bar_atr10_15min"),
-            DataSubscription::new(
-                SymbolName::from("EUR-USD"),
-                DataVendor::Test,
-                Resolution::Minutes(15),
-                BaseDataType::QuoteBars,
-                MarketType::Forex,
-            ),
-            5,
-            10,
-            Color::new(255, 165, 0),
-            true
-        ).await,
-    );
+    let quote_bar_atr10_15min = AverageTrueRange::new(
+        IndicatorName::from("quote_bar_atr10_15min"),
+        DataSubscription::new(
+            SymbolName::from("EUR-USD"),
+            DataVendor::Test,
+            Resolution::Minutes(15),
+            BaseDataType::QuoteBars,
+            MarketType::Forex,
+        ),
+        5,
+        10,
+        Color::new(255, 165, 0),
+        true
+    ).await;
     // we auto subscribe to the subscription, this will warm up the data subscription, which the indicator will then use to warm up.
     // the indicator would still warm up if this was false, but if we  don't have the data subscription already subscribed the strategy will deliberately panic
     strategy.subscribe_indicator(quote_bar_atr10_15min).await;

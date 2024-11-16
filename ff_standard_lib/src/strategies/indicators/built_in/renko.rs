@@ -43,14 +43,14 @@ impl Renko {
         up_color: Color,
         down_color: Color,
         history_to_retain: usize,
-    ) -> Self {
+    ) -> Box<Self> {
         if subscription.base_data_type != BaseDataType::Quotes && subscription.base_data_type != BaseDataType::Ticks {
             panic!("Incorrect BaseDataType for Renko Subscription")
         }
         let decimal_accuracy = subscription.symbol.data_vendor.decimal_accuracy(subscription.symbol.name.clone()).await.unwrap();
         let tick_size = subscription.symbol.data_vendor.tick_size(subscription.symbol.name.clone()).await.unwrap();
 
-        Renko {
+        Box::new(Renko {
             name,
             market_type: subscription.market_type.clone(),
             subscription,
@@ -63,7 +63,7 @@ impl Renko {
             is_ready: false,
             open_price: None,
             open_time: None,
-        }
+        })
     }
 
     fn process_price(&mut self, price: Decimal, time: DateTime<Utc>) -> Option<Vec<IndicatorValues>> {

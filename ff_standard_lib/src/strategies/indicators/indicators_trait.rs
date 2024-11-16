@@ -12,7 +12,7 @@ pub trait AsyncIndicators {
     async fn update_base_data(&self, ) -> Option<Vec<IndicatorValues>>;
 }
 
-pub trait Indicators {
+pub trait Indicators: Send + Sync {
     fn name(&self) -> IndicatorName;
 
     /// Returns the name of the indicator with the symbol and data vendor, resolution, base data type and candle type where applicable.

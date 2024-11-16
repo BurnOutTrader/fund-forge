@@ -9,7 +9,6 @@ use chrono::{DateTime, Utc};
 use dashmap::DashMap;
 use crate::strategies::consolidators::consolidator_enum::ConsolidatorEnum;
 use crate::strategies::indicators::indicator_events::IndicatorEvents;
-use crate::strategies::indicators::indicator_enum::IndicatorEnum;
 use crate::strategies::indicators::indicators_trait::{IndicatorName, Indicators};
 use crate::strategies::indicators::indicator_values::IndicatorValues;
 use crate::strategies::client_features::server_connections::is_warmup_complete;
@@ -19,7 +18,7 @@ use crate::standardized_types::base_data::traits::BaseData;
 use crate::strategies::handlers::subscription_handler::SubscriptionHandler;
 
 pub struct IndicatorHandler {
-    indicators: Arc<DashMap<DataSubscription, DashMap<IndicatorName, IndicatorEnum>>>,
+    indicators: Arc<DashMap<DataSubscription, DashMap<IndicatorName, Box<dyn Indicators>>>>,
     strategy_mode: StrategyMode,
     subscription_map: DashMap<IndicatorName, DataSubscription>, //used to quickly find the subscription of an indicator by name.
     subscription_handler: Arc<SubscriptionHandler>,
@@ -36,7 +35,7 @@ impl IndicatorHandler {
         handler
     }
 
-    pub async fn add_indicator(&self, indicator: IndicatorEnum, time: DateTime<Utc>) -> IndicatorEvents {
+    pub async fn add_indicator(&self, indicator: Box<dyn Indicators>, time: DateTime<Utc>) -> IndicatorEvents {
         let subscription = indicator.subscription().clone();
 
         if !self.indicators.contains_key(&subscription) {
@@ -162,9 +161,9 @@ impl IndicatorHandler {
 async fn warmup( //todo make async task version for live mode
     to_time: DateTime<Utc>,
     strategy_mode: StrategyMode,
-    mut indicator: IndicatorEnum,
+    mut indicator: Box<dyn Indicators>,
      subscription_handler: Arc<SubscriptionHandler>
-) -> IndicatorEnum {
+) -> Box<dyn Indicators> {
    //1. Check if we have history for the indicator.subscription
     let subscription =  indicator.subscription();
     match subscription.base_data_type {

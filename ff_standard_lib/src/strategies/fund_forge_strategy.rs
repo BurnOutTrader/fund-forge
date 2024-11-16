@@ -3,9 +3,8 @@ use chrono::{DateTime, Duration as ChronoDuration, NaiveDateTime, TimeZone, Utc}
 use chrono_tz::Tz;
 use crate::strategies::handlers::drawing_object_handler::DrawingObjectHandler;
 use crate::gui_types::drawing_objects::drawing_tool_enum::DrawingTool;
-use crate::strategies::indicators::indicator_enum::IndicatorEnum;
 use crate::strategies::handlers::indicator_handler::IndicatorHandler;
-use crate::strategies::indicators::indicators_trait::{IndicatorName};
+use crate::strategies::indicators::indicators_trait::{IndicatorName, Indicators};
 use crate::strategies::indicators::indicator_values::IndicatorValues;
 use crate::standardized_types::base_data::history::range_history_data;
 use crate::standardized_types::enums::{OrderSide, StrategyMode, PrimarySubscription};
@@ -746,7 +745,7 @@ impl FundForgeStrategy {
     /// If we subscribe to an indicator and we do not have the appropriate data subscription, we will also subscribe to the data subscription.
     /// Using unwrap on historical index() data in live mode should still be safe when using the current data as reference for the new subscription,
     /// because we won't forward bars until the consolidator is warmed up.
-    pub async fn subscribe_indicator(&self, indicator: IndicatorEnum) {
+    pub async fn subscribe_indicator(&self, indicator: Box<dyn Indicators>) {
         match self.mode {
             StrategyMode::Backtest => {
                 self.indicator_handler

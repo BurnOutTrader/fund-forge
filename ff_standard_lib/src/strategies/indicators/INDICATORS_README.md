@@ -1,4 +1,8 @@
 ## Using Indicators
+The indicator handler uses dynamic dispatch, there was no noticeable runtime cost since looking up the correct type in a Vtable is negligible compared to running the actual indicator logic.
+
+Any object that implements the [Indicators](indicators_trait.rs) trait can be used as an indicator.
+
 It is easy to create and add indicators or custom candlestick types. Below we subscribe to an ATR indicator using Heikin Ashi candles.
 
 Indicators can also be set to keep a history, so you can call the last .index(0) objects without having to manually retain the history.
@@ -8,7 +12,7 @@ See [Indicators readme](ff_standard_lib/src/strategies/indicators/INDICATORS_REA
 ```rust
 fn example() {
   // Here we create a 5 period ATR using a Heikin Ashi data subscription, and we specify to retain the last 100 bars in memory.
-  let heikin_atr_5 = IndicatorEnum::AverageTrueRange(
+  let heikin_atr_5: Box<dyn Indicators> = IndicatorEnum::AverageTrueRange(
     AverageTrueRange::new(
       IndicatorName::from("heikin_atr_5"),
       DataSubscription::new_custom(
@@ -40,7 +44,10 @@ I have chosen to use enums and matching statements over dynamic dispatch for inc
 *I will add another enum type and trait for multi symbol indicators in the future.*
 
 ### Step 1
-1. Create a new Indicator object that implements the [Indicators](indicators_trait.rs) trait
+The `new()` function for your indicator should return a Box<Self>
+
+### Step 2
+2. Create a new Indicator object that implements the [Indicators](indicators_trait.rs) trait
 also see [AverageTrueRange](built_in/average_true_range.rs) for a working example.
 ```rust
 pub struct YOUR_NEW_VARIANT {
@@ -110,30 +117,7 @@ impl Indicators for YOUR_NEW_VARIANT {
     }
 }
 ```
+
 ### Step 2
-Create a new [IndicatorEnum Variant](indicator_enum.rs)
-```rust
-pub enum IndicatorEnum {
-    AverageTrueRange(AverageTrueRange),
-    YOUR_NEW_VARIANT(YOUR_NEW_VARIANT)
-}
-
-```
-
-### Step 3
-Complete the matching statements for your new variant in indicator enum impl.
-This is easy since you implement the exact same trait as the IndicatorEnum.
-```rust
-impl Indicators for IndicatorEnum {
-    fn name(&self) -> IndicatorName {
-        match self {
-            IndicatorEnum::AverageTrueRange(atr) => atr.name(),
-            IndicatorEnum::YOUR_NEW_VARIANT(new_indicator) => new_indicator.name()
-        }
-    }
-}
-```
-
-### Step 4
 Your indicator can now be auto managed by using strategy.subscribe_indicator(), including auto warm up and other automatic features.
 You don't need to do anything else other than test it.

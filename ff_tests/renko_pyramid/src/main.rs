@@ -3,9 +3,9 @@ use chrono_tz::Australia;
 use colored::Colorize;
 use ff_standard_lib::apis::rithmic::rithmic_systems::RithmicSystem;
 use rust_decimal::Decimal;
-use ff_standard_lib::standardized_types::enums::{FuturesExchange, MarketType, OrderSide, PositionSide, StrategyMode};
+use ff_standard_lib::standardized_types::enums::{MarketType, OrderSide, PositionSide, StrategyMode};
 use ff_standard_lib::strategies::strategy_events::{StrategyEvent};
-use ff_standard_lib::standardized_types::subscriptions::{DataSubscription, SymbolCode, SymbolName};
+use ff_standard_lib::standardized_types::subscriptions::{DataSubscription, SymbolName};
 use ff_standard_lib::strategies::fund_forge_strategy::FundForgeStrategy;
 use rust_decimal_macros::dec;
 use tokio::sync::mpsc;
@@ -20,7 +20,6 @@ use ff_standard_lib::standardized_types::orders::{OrderId, OrderUpdateEvent, Tim
 use ff_standard_lib::standardized_types::position::PositionUpdateEvent;
 use ff_standard_lib::standardized_types::resolution::Resolution;
 use ff_standard_lib::strategies::indicators::built_in::renko::Renko;
-use ff_standard_lib::strategies::indicators::indicator_enum::IndicatorEnum;
 use ff_standard_lib::strategies::indicators::indicator_events::IndicatorEvents;
 
 #[tokio::main]
@@ -90,7 +89,7 @@ pub async fn on_data_received(
     println!("Starting Renko Pyramid Strategy with parameters: Renko Range: {}, Max Size: {}, Size: {}, Incremental Scalp PNL: {}, Limit Order Expire in Secs: {}, Trading Long: {}, Trading Short: {}", RENKO_RANGE, MAX_SIZE, SIZE, INCREMENTAL_SCALP_PNL, LIMIT_ORDER_EXPIRE_IN_SECS, TRADING_LONG, TRADING_SHORT);
 
     let renko = "renko".to_string();
-    let renko_indicator = IndicatorEnum::Renko(Renko::new(renko.clone(), subscription.clone(), RENKO_RANGE, Color::new(0, 128, 0), Color::new(128, 0, 0), 20).await);
+    let renko_indicator = Renko::new(renko.clone(), subscription.clone(), RENKO_RANGE, Color::new(0, 128, 0), Color::new(128, 0, 0), 20).await;
     strategy.subscribe_indicator(renko_indicator).await;
     let open = "open".to_string();
     let close = "close".to_string();
