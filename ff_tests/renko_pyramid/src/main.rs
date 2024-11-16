@@ -299,7 +299,7 @@ pub async fn on_data_received(
                     },
                     OrderUpdateEvent::OrderCancelled { .. }  => {
                         //strategy.print_ledger(event.account()).await;
-                        println!("{}", msg.as_str().on_bright_magenta().on_bright_yellow());
+                        println!("{}", msg.as_str().bright_yellow());
                         if let Some(order_id) = &entry_order_id {
                             if event.order_id() == order_id {
                                 entry_order_id = None;
@@ -317,7 +317,7 @@ pub async fn on_data_received(
                         }
                     },
                     OrderUpdateEvent::OrderFilled {..} => {
-                        println!("{}", msg.as_str().on_bright_magenta().on_bright_yellow());
+                        println!("{}", msg.as_str().bright_yellow());
                         if let Some(order_id) = &entry_order_id {
                             if event.order_id() == order_id {
                                 entry_order_id = None;
