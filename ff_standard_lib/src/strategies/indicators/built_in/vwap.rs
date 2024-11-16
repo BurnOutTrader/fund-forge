@@ -251,7 +251,7 @@ impl Indicators for VolumeWeightedAveragePrice {
         self.is_ready = true;
         Some(vec![values])
     }
-    
+
     fn subscription(&self) -> &DataSubscription {
         &self.subscription
     }
