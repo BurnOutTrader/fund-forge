@@ -14,6 +14,121 @@ use crate::standardized_types::subscriptions::DataSubscription;
 use crate::strategies::indicators::indicator_values::{IndicatorPlot, IndicatorValues};
 use crate::strategies::indicators::indicators_trait::{IndicatorName, Indicators};
 
+/// Volume Weighted Moving Average (VWMA)
+/// A technical indicator that factors in volume in addition to price, giving more weight
+/// to price moves that occur on higher volume. This helps identify more significant
+/// price movements and potential trend changes based on volume confirmation.
+///
+/// # Calculation Method
+/// 1. Basic VWMA calculation:
+///    VWMA = Σ(Price × Volume) / Σ(Volume)
+///    over the specified period
+///
+/// 2. Volume Significance:
+///    - Tracks average volume using exponential smoothing
+///    - Calculates current volume relative to average
+///    - Identifies high volume periods using threshold
+///
+/// # Plots
+/// - "vwma": Main VWMA line
+///   - Volume-weighted price average
+///   - More responsive to high-volume moves
+///   - Less affected by low-volume noise
+///
+/// - "volume_significance": Volume context
+///   - Shows relative volume strength
+///   - "High Volume": Above threshold
+///   - "Normal Volume": Below threshold
+///
+/// # Parameters
+/// - period: Calculation period for the moving average
+/// - high_volume_threshold: Multiple of average volume to mark as high
+/// - tick_rounding: Whether to round values to tick size
+///
+/// # Key Features
+/// 1. Volume Weighting
+///   - Emphasizes price moves with higher volume
+///   - Reduces impact of low-volume noise
+///   - Better reflects true market momentum
+///
+/// 2. Volume Analysis
+///   - Tracks average volume dynamically
+///   - Identifies significant volume spikes
+///   - Provides volume context for price moves
+///
+/// 3. Implementation Details
+///   - Uses exponential smoothing for volume average
+///   - Handles missing data appropriately
+///   - Efficient updates with new data
+///
+/// # Common Usage
+/// 1. Trend Following
+///   - VWMA acts as dynamic support/resistance
+///   - More reliable than simple MA due to volume
+///   - Use crossovers for trend changes
+///
+/// 2. Volume Analysis
+///   - Identifies significant price moves
+///   - Confirms breakouts with volume
+///   - Spots weak moves on low volume
+///
+/// 3. Support/Resistance
+///   - Dynamic S/R levels with volume context
+///   - More reliable on high volume
+///   - Less reliable on low volume
+///
+/// # Best Practices
+/// 1. Trend Analysis
+///   - Compare price to VWMA for trend
+///   - Watch for high-volume crossovers
+///   - Consider multiple timeframes
+///
+/// 2. Volume Confirmation
+///   - Check volume significance on moves
+///   - More weight to high-volume signals
+///   - Be cautious of low-volume moves
+///
+/// 3. Signal Generation
+///   - Use with price action
+///   - Confirm with other indicators
+///   - Consider market context
+///
+/// # Advantages
+/// - Better than simple MA for trend identification
+/// - Built-in volume confirmation
+/// - Reduces impact of low-volume noise
+/// - More responsive to significant moves
+///
+/// # Limitations
+/// - Can lag on sudden reversals
+/// - Requires volume data
+/// - May be less useful in low-volume periods
+/// - Can be affected by irregular volume patterns
+///
+/// # Example Usage
+/// ```rust
+/// let vwma = VolumeWeightedMA::new(
+///     IndicatorName::new("VWMA(20)"),
+///     subscription,
+///     100,           // history to retain
+///     20,            // period
+///     Color::Blue,   // VWMA line color
+///     Color::Green,  // Volume significance color
+///     false,         // tick_rounding
+///     dec!(2.0),     // high_volume_threshold
+/// ).await;
+/// ```
+///
+/// # Performance Considerations
+/// - Efficient volume average updates
+/// - Minimal state maintenance
+/// - O(1) updates for new data
+/// - Memory usage proportional to period
+///
+/// # Note on Volume Data
+/// The indicator requires reliable volume data to function properly.
+/// It works with both standard candles and quote bars, extracting
+/// volume data appropriately from each format.
 #[derive(Clone, Debug)]
 pub struct VolumeWeightedMA {
     name: IndicatorName,
