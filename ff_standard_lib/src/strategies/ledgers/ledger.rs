@@ -140,7 +140,6 @@ impl Ledger {
         self.cash_available = cash_available;
     }
 
-
     pub fn ledger_updates(&mut self, mut receiver: Receiver<LedgerMessage>, mode: StrategyMode) {
         let static_self = unsafe {
             &mut *(self as *mut Ledger)
