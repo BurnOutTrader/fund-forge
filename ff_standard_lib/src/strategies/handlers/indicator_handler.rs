@@ -15,6 +15,7 @@ use crate::strategies::client_features::server_connections::is_warmup_complete;
 use crate::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use crate::standardized_types::base_data::base_data_type::BaseDataType;
 use crate::standardized_types::base_data::traits::BaseData;
+use crate::standardized_types::market_hours::TradingHours;
 use crate::strategies::handlers::subscription_handler::SubscriptionHandler;
 
 pub struct IndicatorHandler {
@@ -35,7 +36,7 @@ impl IndicatorHandler {
         handler
     }
 
-    pub async fn add_indicator(&self, indicator: Box<dyn Indicators>, time: DateTime<Utc>) -> IndicatorEvents {
+    pub async fn add_indicator(&self, indicator: Box<dyn Indicators>, time: DateTime<Utc>, market_hours: Option<TradingHours>) -> IndicatorEvents {
         let subscription = indicator.subscription().clone();
 
         if !self.indicators.contains_key(&subscription) {
@@ -45,7 +46,7 @@ impl IndicatorHandler {
         let name = indicator.name().clone();
 
         let indicator = match is_warmup_complete() {
-            true => warmup(time, self.strategy_mode.clone(), indicator, self.subscription_handler.clone()).await,
+            true => warmup(time, self.strategy_mode.clone(), indicator, self.subscription_handler.clone(), market_hours).await,
             false => indicator,
         };
 
@@ -162,7 +163,8 @@ async fn warmup( //todo make async task version for live mode
     to_time: DateTime<Utc>,
     strategy_mode: StrategyMode,
     mut indicator: Box<dyn Indicators>,
-     subscription_handler: Arc<SubscriptionHandler>
+     subscription_handler: Arc<SubscriptionHandler>,
+     market_hours: Option<TradingHours>,
 ) -> Box<dyn Indicators> {
    //1. Check if we have history for the indicator.subscription
     let subscription =  indicator.subscription();
@@ -215,7 +217,7 @@ async fn warmup( //todo make async task version for live mode
         _ => {}
     }
     let _ = subscription_handler.deref();
-    let consolidator = ConsolidatorEnum::create_consolidator(subscription.clone(), false).await;
+    let consolidator = ConsolidatorEnum::create_consolidator(subscription.clone(), false, market_hours).await;
     let (_, window) = ConsolidatorEnum::warmup(consolidator, to_time, (indicator.data_required_warmup() + 1) as i32, strategy_mode).await;
     for data in window.history {
         let _ = indicator.update_base_data(&data);

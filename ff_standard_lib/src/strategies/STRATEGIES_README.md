@@ -87,23 +87,29 @@ The time zone of the strategy, you can use Utc for default.
 The warmup duration for the strategy. used if we need to warmup consolidators, indicators etc.
 We might also need a certain amount of history to be available before starting, this will ensure that it is.
 
-#### `subscriptions: Vec<(Option<PrimarySubscription>, DataSubscription)>:`
+#### `subscriptions: Vec<(Option<PrimarySubscription>, DataSubscription, Option<TradingHours>)>:`
 The initial data subscriptions for the strategy.
 If your subscriptions are empty, you will need to add some at the start of your `fn on_data_received()`.
 
 We are passing in a tuple where PrimarySubscription is an Optional, this is used when the broker does not have the resolution we want to subscribe to, we can pass in the resolution and data type that we want to consolidate data from.
 
+The TradingHours is also an optional input, and must be used for `Resolution::Days(_)` or `Resolution::Weeks(_)`
+Trading hours are used to define daily or weekly open and close times.
+
+There are helper functions for trading hours `get_futures_trading_hours(symbol: &str)` or you can construct your own custom object.
+
 It is also useful if we don't have historical data, for example we want to subscribe to 15 minute candles but we only have 1 minute candles, we can pass in the 1 minute candles as a primary subscription and the engine will consolidate the data to 15 minute candles for us.
 ```rust 
 pub fn example() {
-    (Some(PrimarySubscription::new(Resolution::Minutes(1), BaseDataType::QuoteBars)), 
+   let trading_hours = get_futures_trading_hours("ES".to_string());
+    (Some(PrimarySubscription::new(Resolution::Minutes(1), BaseDataType::Candles)), 
      DataSubscription::new(
-         SymbolName::from("EUR-USD"),
+         SymbolName::from("ES"),
          DataVendor::Oanda,
-         Resolution::Minutes(15),
-         BaseDataType::QuoteBars,
-         MarketType::Forex
-     )),
+         Resolution::Days(1),
+         BaseDataType::Candles,
+         MarketType::Futures(FuturesExchange::CME),
+     ), Some(trading_hours)),
 }
 ```
 
@@ -116,7 +122,7 @@ pub fn example() {
          Resolution::Minutes(15),
          BaseDataType::QuoteBars,
          MarketType::Forex
-     )),
+     ), None),
 }
 ```
 

@@ -4,13 +4,15 @@ use colored::Colorize;
 use rust_decimal::Decimal;
 use ff_standard_lib::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use ff_standard_lib::standardized_types::base_data::traits::BaseData;
-use ff_standard_lib::standardized_types::enums::{FuturesExchange, MarketType, OrderSide, StrategyMode};
+use ff_standard_lib::standardized_types::enums::{FuturesExchange, MarketType, OrderSide, PrimarySubscription, StrategyMode};
 use ff_standard_lib::strategies::strategy_events::{StrategyEvent};
 use ff_standard_lib::standardized_types::subscriptions::{DataSubscription, SymbolCode, SymbolName};
 use ff_standard_lib::strategies::fund_forge_strategy::FundForgeStrategy;
 use rust_decimal_macros::dec;
 use tokio::sync::mpsc;
 use ff_standard_lib::apis::rithmic::rithmic_systems::RithmicSystem;
+use ff_standard_lib::product_maps::rithmic::maps::get_futures_trading_hours;
+use ff_standard_lib::product_maps::rithmic::rollover::get_front_month;
 use ff_standard_lib::standardized_types::accounts::{Account, AccountId, Currency};
 use ff_standard_lib::standardized_types::base_data::base_data_type::BaseDataType;
 use ff_standard_lib::standardized_types::base_data::tick::Aggressor;
@@ -26,9 +28,7 @@ async fn main() {
     let (strategy_event_sender, strategy_event_receiver) = mpsc::channel(1000);
 
     let symbol_name = SymbolName::from("MNQ");
-    let mut symbol_code = symbol_name.clone();
-    symbol_code.push_str("Z4");
-
+    let market_hours = get_futures_trading_hours(&symbol_name).unwrap();
     let strategy = FundForgeStrategy::initialize(
         StrategyMode::Backtest,
         dec!(100000),
@@ -44,14 +44,15 @@ async fn main() {
                 Resolution::Ticks(1),
                 BaseDataType::Ticks,
                 MarketType::Futures(FuturesExchange::CME),
-            )),
-         /*   DataSubscription::new_custom(
+            ), None),
+
+            (Some(PrimarySubscription::new(Resolution::Ticks(1), BaseDataType::Ticks)), DataSubscription::new (
                 symbol_name.clone(),
                 DataVendor::Rithmic,
-                Resolution::Seconds(15),
+                Resolution::Days(1),
+                BaseDataType::Candles,
                 MarketType::Futures(FuturesExchange::CME),
-                CandleType::CandleStick
-            )*/
+            ), Some(market_hours.clone())),
         ],
         false,
         100,
@@ -63,7 +64,7 @@ async fn main() {
         vec![Account::new(Brokerage::Rithmic(RithmicSystem::Apex), "APEX-3396-168".to_string())]
     ).await;
 
-    on_data_received(strategy, strategy_event_receiver, symbol_name, symbol_code).await;
+    on_data_received(strategy, strategy_event_receiver, symbol_name).await;
 }
 
 
@@ -71,7 +72,6 @@ pub async fn on_data_received(
     strategy: FundForgeStrategy,
     mut event_receiver: mpsc::Receiver<StrategyEvent>,
     _symbol_name: SymbolName,
-    symbol_code: SymbolCode
 ) {
     let account_1 = Account::new(Brokerage::Rithmic(RithmicSystem::Apex), AccountId::from("APEX-3396-168"));
     let mut exit_sent = false;
@@ -84,7 +84,7 @@ pub async fn on_data_received(
                 for base_data in time_slice.iter() {
                     match base_data {
                         BaseDataEnum::Tick(tick) => {
-                            let msg = format!("{} {} Tick: {}, {}, Aggressor: {}", tick.symbol.name, tick.time_local(strategy.time_zone()), tick.price, tick.volume, tick.aggressor);
+                            /*let msg = format!("{} {} Tick: {}, {}, Aggressor: {}", tick.symbol.name, tick.time_local(strategy.time_zone()), tick.price, tick.volume, tick.aggressor);
                             match tick.aggressor {
                                 Aggressor::Buy => {
                                     println!("{}", msg.as_str().bright_green());
@@ -96,9 +96,10 @@ pub async fn on_data_received(
                                 Aggressor::None => {
                                     println!("{}", msg.as_str().cyan());
                                 },
-                            }
+                            }*/
                         }
                         BaseDataEnum::Candle(candle) => {
+                            let symbol_code = get_front_month(&candle.symbol.name, strategy.time_utc()).unwrap();
                             // Place trades based on the AUD-CAD Heikin Ashi Candles
                             if candle.is_closed == true {
                                 let msg = format!("{} {} {} Close: {}, {}", candle.symbol.name, candle.resolution, candle.candle_type, candle.close, candle.time_closed_local(strategy.time_zone()));
@@ -164,6 +165,7 @@ pub async fn on_data_received(
                         strategy.print_ledger(event.account()).await
                     },
                 }
+                let symbol_code = get_front_month(&event.symbol_name(), strategy.time_utc()).unwrap();
                 let quantity = strategy.position_size(&account_1, &symbol_code);
                 let msg = format!("{}, Time Local: {}", event, event.time_local(strategy.time_zone()));
                 println!("{}", msg.as_str().purple());

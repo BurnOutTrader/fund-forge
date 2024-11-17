@@ -46,7 +46,7 @@ async fn main() {
         Australia::Sydney,
         Duration::hours(1),
         vec![
-            (None, subscription.clone())
+            (None, subscription.clone(), None)
         ],
         false,
         100,
@@ -90,7 +90,7 @@ pub async fn on_data_received(
 
     let renko = "renko".to_string();
     let renko_indicator = Renko::new(renko.clone(), subscription.clone(), RENKO_RANGE, Color::new(0, 128, 0), Color::new(128, 0, 0), 20).await;
-    strategy.subscribe_indicator(renko_indicator).await;
+    strategy.subscribe_indicator(renko_indicator, None).await;
     let open = "open".to_string();
     let close = "close".to_string();
     let mut warmup_complete = false;

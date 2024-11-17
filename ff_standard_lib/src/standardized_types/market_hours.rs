@@ -19,7 +19,7 @@ impl DaySession {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, )]
 pub struct TradingHours {
     pub timezone: Tz,
     pub sunday: DaySession,
@@ -29,6 +29,7 @@ pub struct TradingHours {
     pub thursday: DaySession,
     pub friday: DaySession,
     pub saturday: DaySession,
+    pub week_start: Weekday,
 }
 
 impl TradingHours {

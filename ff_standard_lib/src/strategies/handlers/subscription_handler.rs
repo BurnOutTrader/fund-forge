@@ -26,6 +26,7 @@ use crate::strategies::strategy_events::StrategyEvent;
 use tokio::sync::broadcast;
 use tokio::sync::mpsc::Sender;
 use crate::standardized_types::base_data::history::{get_compressed_historical_data};
+use crate::standardized_types::market_hours::TradingHours;
 
 /// Manages all subscriptions for a strategy. each strategy has its own subscription handler.
 pub struct SubscriptionHandler {
@@ -88,7 +89,8 @@ impl SubscriptionHandler {
         current_time: DateTime<Utc>,
         fill_forward: bool,
         history_to_retain: usize,
-        broadcast: bool
+        broadcast: bool,
+        hours: Option<TradingHours>,
     ) {
         let mut strategy_subscriptions = self.strategy_subscriptions.write().await;
         if !strategy_subscriptions.contains(&new_subscription) {
@@ -129,7 +131,8 @@ impl SubscriptionHandler {
                 current_time,
                 history_to_retain,
                 self.strategy_mode,
-                fill_forward
+                fill_forward,
+                hours,
             ).await;
 
         match windows {
@@ -620,7 +623,8 @@ impl SymbolSubscriptionHandler {
         warm_up_to_time: DateTime<Utc>,
         history_to_retain: usize,
         strategy_mode: StrategyMode,
-        fill_forward: bool
+        fill_forward: bool,
+        hours: Option<TradingHours>
     ) -> Result<AHashMap<DataSubscription, RollingWindow<BaseDataEnum>>, DataSubscriptionEvent> {
         if new_subscription.base_data_type == BaseDataType::Fundamentals {
             return Err(DataSubscriptionEvent::FailedToSubscribe(new_subscription, "Symbol handler does not handle Fundamental subscriptions".to_string()));
@@ -673,7 +677,7 @@ impl SymbolSubscriptionHandler {
                 }
             }
             if !self.secondary_subscriptions.contains_key(&primary) {
-                let consolidator = ConsolidatorEnum::create_consolidator(new_subscription.clone(), fill_forward.clone()).await;
+                let consolidator = ConsolidatorEnum::create_consolidator(new_subscription.clone(), fill_forward.clone(), hours).await;
                 let (final_consolidator, window) = match is_warmed_up {
                     true => {
                         let (final_consolidator, window) = ConsolidatorEnum::warmup(consolidator, warm_up_to_time, history_to_retain as i32, strategy_mode).await;

@@ -17,6 +17,7 @@ use futures::future::join_all;
 use tokio::sync::oneshot;
 use crate::strategies::client_features::connection_types::ConnectionType;
 use crate::standardized_types::enums::{StrategyMode, PrimarySubscription};
+use crate::standardized_types::market_hours::TradingHours;
 use crate::strategies::client_features::request_handler::{send_request, StrategyRequest};
 use crate::strategies::client_features::server_connections::SETTINGS_MAP;
 use crate::strategies::consolidators::consolidator_enum::ConsolidatorEnum;
@@ -331,7 +332,8 @@ pub async fn range_history_data(
     from_time: DateTime<Utc>,
     to_time: DateTime<Utc>,
     subscription: DataSubscription,
-    mode: StrategyMode
+    mode: StrategyMode,
+    market_hours: Option<TradingHours>,
 ) -> BTreeMap<DateTime<Utc>, BaseDataEnum> {
     if from_time > to_time {
         panic!("From time cannot be greater than to time");
@@ -367,7 +369,7 @@ pub async fn range_history_data(
         let resolution_ns = subscription.resolution.as_duration().num_nanoseconds().unwrap(); // Total nanoseconds in `resolution`
 
         let history_to_retain = duration_ns / resolution_ns;
-        let consolidator = ConsolidatorEnum::create_consolidator(subscription, false).await;
+        let consolidator = ConsolidatorEnum::create_consolidator(subscription, false, market_hours).await;
         let (_, window) = ConsolidatorEnum::warmup(consolidator, to_time, history_to_retain as i32, mode).await;
         let mut map:BTreeMap<DateTime<Utc>, BaseDataEnum> = BTreeMap::new();
         for base_data in window.history() {

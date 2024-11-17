@@ -48,7 +48,7 @@ async fn main() {
                 Resolution::Seconds(5),
                 BaseDataType::QuoteBars,
                 MarketType::CFD,
-            )),
+            ), None),
         ],
 
         //fill forward
@@ -100,7 +100,7 @@ async fn main() {
     ).await;
 
     //if you set auto subscribe to false and change the resolution, the strategy will intentionally panic to let you know you won't have data for the indicator
-    strategy.subscribe_indicator(quotebar_5s_atr_5).await;
+    strategy.subscribe_indicator(quotebar_5s_atr_5, None).await;
 
     // Start receiving the buffers
     on_data_received(strategy, strategy_event_receiver).await;
@@ -373,7 +373,7 @@ pub async fn subscribe_to_my_atr_example(strategy: &FundForgeStrategy) {
     ).await;
     // we auto subscribe to the subscription, this will warm up the data subscription, which the indicator will then use to warm up.
     // the indicator would still warm up if this was false, but if we  don't have the data subscription already subscribed the strategy will deliberately panic
-    strategy.subscribe_indicator(quote_bar_atr10_15min).await;
+    strategy.subscribe_indicator(quote_bar_atr10_15min, None).await;
 }
 
 
@@ -399,5 +399,5 @@ pub async fn subscribe_to_new_candles_example(strategy: &FundForgeStrategy) {
     );
 
     // In live we start a background task for this (untested)
-     strategy.subscribe(Some(PrimarySubscription::new(Resolution::Seconds(5), BaseDataType::QuoteBars)),minute_15_ha_candles, 48, false).await;
+     strategy.subscribe(Some(PrimarySubscription::new(Resolution::Seconds(5), BaseDataType::QuoteBars)),minute_15_ha_candles, 48, false, None).await;
 }

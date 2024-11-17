@@ -42,7 +42,7 @@ async fn main() {
                 Resolution::Hours(4),
                 BaseDataType::QuoteBars,
                 MarketType::Forex
-            )),
+            ), None),
             (Some(PrimarySubscription::new(Resolution::Hours(1), BaseDataType::QuoteBars)),
              DataSubscription::new(
                 SymbolName::from("USD-CAD"),
@@ -50,7 +50,7 @@ async fn main() {
                 Resolution::Hours(4),
                 BaseDataType::QuoteBars,
                 MarketType::Forex
-            )),
+            ), None),
             (Some(PrimarySubscription::new(Resolution::Hours(1), BaseDataType::QuoteBars)),
              DataSubscription::new(
                 SymbolName::from("EUR-CAD"),
@@ -58,7 +58,7 @@ async fn main() {
                 Resolution::Hours(4),
                 BaseDataType::QuoteBars,
                 MarketType::Forex
-            )),
+            ), None),
             (Some(PrimarySubscription::new(Resolution::Hours(1), BaseDataType::QuoteBars)),
              DataSubscription::new(
                 SymbolName::from("EUR-JPY"),
@@ -66,7 +66,7 @@ async fn main() {
                 Resolution::Hours(4),
                 BaseDataType::QuoteBars,
                 MarketType::Forex
-            )),
+            ), None),
             (Some(PrimarySubscription::new(Resolution::Hours(1), BaseDataType::QuoteBars)),
              DataSubscription::new(
                 SymbolName::from("AUD-JPY"),
@@ -74,7 +74,7 @@ async fn main() {
                 Resolution::Hours(4),
                 BaseDataType::QuoteBars,
                 MarketType::Forex
-            )),
+            ), None),
         ],
 
         //fill forward

@@ -30,6 +30,7 @@ use crate::standardized_types::base_data::tick::Tick;
 use crate::messages::data_server_messaging::DataServerRequest;
 use crate::standardized_types::accounts::{Account, Currency};
 use crate::standardized_types::base_data::base_data_enum::BaseDataEnum;
+use crate::standardized_types::market_hours::TradingHours;
 use crate::standardized_types::new_types::{Price, Volume};
 use crate::standardized_types::orders::{Order, OrderId, OrderRequest, OrderType, OrderUpdateType, TimeInForce};
 use crate::strategies::client_features::connection_types::ConnectionType;
@@ -129,7 +130,7 @@ impl FundForgeStrategy {
         end_date: NaiveDateTime,
         time_zone: Tz,
         warmup_duration: ChronoDuration,
-        subscriptions: Vec<(Option<PrimarySubscription>, DataSubscription)>,
+        intraday_subscriptions: Vec<(Option<PrimarySubscription>, DataSubscription, Option<TradingHours>)>,
         fill_forward: bool,
         retain_history: usize,
         strategy_event_sender: mpsc::Sender<StrategyEvent>,
@@ -164,8 +165,8 @@ impl FundForgeStrategy {
         }
         init_connections(gui_enabled, buffering_duration.clone(), strategy_mode.clone(), live_order_updates_sender, synchronize_accounts, strategy_event_sender.clone(), ledger_service.clone(), indicator_handler.clone(), subscription_handler.clone()).await;
 
-        for (primary, sub) in subscriptions {
-            subscription_handler.subscribe(primary, sub, warm_up_start_time, fill_forward, retain_history, false).await;
+        for (primary, sub, trading_hours) in intraday_subscriptions {
+            subscription_handler.subscribe(primary, sub, warm_up_start_time, fill_forward, retain_history, false, trading_hours).await;
         }
 
         let paper_order_sender = match strategy_mode {
@@ -745,11 +746,15 @@ impl FundForgeStrategy {
     /// If we subscribe to an indicator and we do not have the appropriate data subscription, we will also subscribe to the data subscription.
     /// Using unwrap on historical index() data in live mode should still be safe when using the current data as reference for the new subscription,
     /// because we won't forward bars until the consolidator is warmed up.
-    pub async fn subscribe_indicator(&self, indicator: Box<dyn Indicators>) {
+    /// # Arguments
+    /// * `indicator: Box<dyn Indicators>` - The indicator to subscribe to.
+    /// * `trading_hours: Option<TradingHours>` - The trading hours for the indicator, this is only used for non-intraday resolutions. for example daily or weekly bars will be constructed based on the market hours.
+    /// * `week_start: Option<Weekday>` - The day of the week to start the week on, this is only used for weekly subscriptions.
+    pub async fn subscribe_indicator(&self, indicator: Box<dyn Indicators>, trading_hours: Option<TradingHours>) {
         match self.mode {
             StrategyMode::Backtest => {
                 self.indicator_handler
-                    .add_indicator(indicator, self.time_utc())
+                    .add_indicator(indicator, self.time_utc(), trading_hours)
                     .await;
                 //add_buffer(self.time_utc(), StrategyEvent::IndicatorEvent(event)).await;
             }
@@ -757,7 +762,7 @@ impl FundForgeStrategy {
                 let indicator_handler = self.indicator_handler.clone();
                // tokio::task::spawn(async move {
                     indicator_handler
-                        .add_indicator(indicator, Utc::now())
+                        .add_indicator(indicator, Utc::now(), trading_hours)
                         .await;
                    // add_buffer(Utc::now(), StrategyEvent::IndicatorEvent(event)).await;
                // });
@@ -856,18 +861,18 @@ impl FundForgeStrategy {
     /// In live mode we will warm up the subscription as a background task, in backtest we will block the main thread.
     /// Using unwrap on historical index() data in live mode should still be safe when using the current data as reference for the new subscription,
     /// because we won't forward bars until the consolidator is warmed up.
-    pub async fn subscribe(&self, primary_source: Option<PrimarySubscription>, subscription: DataSubscription, history_to_retain: usize, fill_forward: bool) {
+    pub async fn subscribe(&self, primary_source: Option<PrimarySubscription>, subscription: DataSubscription, history_to_retain: usize, fill_forward: bool, trading_hours: Option<TradingHours>) {
         match self.mode {
             StrategyMode::Backtest => {
                 let _ = self.subscription_handler
-                    .subscribe(primary_source, subscription.clone(), self.time_utc(), fill_forward, history_to_retain, true)
+                    .subscribe(primary_source, subscription.clone(), self.time_utc(), fill_forward, history_to_retain, true, trading_hours)
                     .await;
             }
             StrategyMode::Live | StrategyMode::LivePaperTrading => {
                 let handler = self.subscription_handler.clone();
                 //tokio::task::spawn(async move{
                     let _ = handler
-                        .subscribe(primary_source, subscription.clone(), Utc::now(), fill_forward, history_to_retain, true)
+                        .subscribe(primary_source, subscription.clone(), Utc::now(), fill_forward, history_to_retain, true, trading_hours)
                         .await;
                 //});
             }
@@ -945,9 +950,10 @@ impl FundForgeStrategy {
         from_time: NaiveDateTime,
         time_zone: Tz,
         subscription: &DataSubscription,
+        trading_hours: Option<TradingHours>,
     ) -> BTreeMap<DateTime<Utc>, BaseDataEnum> {
         let start_date = naive_date_time_to_tz(from_time, time_zone);
-        range_history_data(start_date.to_utc(), self.time_utc(), subscription.clone(), self.mode).await
+        range_history_data(start_date.to_utc(), self.time_utc(), subscription.clone(), self.mode, trading_hours).await
     }
 
     /// Returns a BTreeMap of BaseDataEnum where data.time_closed_utc() is key and data is value.
@@ -956,9 +962,10 @@ impl FundForgeStrategy {
         &self,
         from_time: NaiveDateTime,
         subscription: &DataSubscription,
+        trading_hours: Option<TradingHours>,
     ) -> BTreeMap<DateTime<Utc>, BaseDataEnum> {
         let start_date = naive_date_time_to_utc(from_time);
-        range_history_data(start_date.to_utc(), self.time_utc(), subscription.clone(), self.mode).await
+        range_history_data(start_date.to_utc(), self.time_utc(), subscription.clone(), self.mode, trading_hours).await
     }
 
     /// Returns a BTreeMap of BaseDataEnum where data.time_closed_utc() is key and data is value.
@@ -969,6 +976,7 @@ impl FundForgeStrategy {
         to_time: NaiveDateTime,
         time_zone: Tz,
         subscription: &DataSubscription,
+        trading_hours: Option<TradingHours>,
     ) -> BTreeMap<DateTime<Utc>, BaseDataEnum> {
         let start_date = naive_date_time_to_tz(from_time, time_zone);
         let end_date =  naive_date_time_to_tz(to_time, time_zone).to_utc();
@@ -978,7 +986,7 @@ impl FundForgeStrategy {
             false => end_date.to_utc(),
         };
 
-        range_history_data(start_date.to_utc(), end_date, subscription.clone(), self.mode).await
+        range_history_data(start_date.to_utc(), end_date, subscription.clone(), self.mode, trading_hours).await
     }
 
     /// Currently returns only primary data that is available, needs to be updated to be able to return all subscriptions via consolidated data
@@ -987,6 +995,7 @@ impl FundForgeStrategy {
         from_time: NaiveDateTime,
         to_time: NaiveDateTime,
         subscription: &DataSubscription,
+        trading_hours: Option<TradingHours>,
     ) -> BTreeMap<DateTime<Utc>, BaseDataEnum> {
         let start_date = DateTime::<Utc>::from_naive_utc_and_offset(from_time, Utc);
         let end_date = DateTime::<Utc>::from_naive_utc_and_offset(to_time, Utc);
@@ -996,7 +1005,7 @@ impl FundForgeStrategy {
             false => end_date,
         };
 
-        range_history_data(start_date.to_utc(), end_date, subscription.clone(), self.mode).await
+        range_history_data(start_date.to_utc(), end_date, subscription.clone(), self.mode, trading_hours).await
     }
 
     /// Prints a ledgers statistics

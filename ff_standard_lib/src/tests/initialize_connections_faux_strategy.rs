@@ -27,7 +27,7 @@ pub(crate) fn initialize_tests() -> FundForgeStrategy {
             Australia::Sydney,
             Duration::hours(1),
             vec![
-                (Some(PrimarySubscription::new(Resolution::Minutes(1), BaseDataType::QuoteBars)), DataSubscription::new_custom(SymbolName::from("EUR-USD"), DataVendor::Test, Resolution::Minutes(3), MarketType::Forex, CandleType::HeikinAshi)),
+                (Some(PrimarySubscription::new(Resolution::Minutes(1), BaseDataType::QuoteBars)), DataSubscription::new_custom(SymbolName::from("EUR-USD"), DataVendor::Test, Resolution::Minutes(3), MarketType::Forex, CandleType::HeikinAshi), None),
             ],
             false,
             100,

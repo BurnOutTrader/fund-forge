@@ -33,13 +33,13 @@ async fn main() {
         Duration::hours(1), // the warmup duration, the duration of historical data we will pump through the strategy to warm up indicators etc before the strategy starts executing.
         vec![
             // Since we only have quote level test data, the 2 subscriptions will be created by consolidating the quote feed. Quote data will automatically be subscribed as primary data source.
-            DataSubscription::new(
+            (None, DataSubscription::new(
                 SymbolName::from("NAS100-USD"),
                 DataVendor::Oanda,
                 Resolution::Seconds(5),
                 BaseDataType::QuoteBars,
                 MarketType::CFD
-            ),
+            ), None),
         ],
 
         //fill forward

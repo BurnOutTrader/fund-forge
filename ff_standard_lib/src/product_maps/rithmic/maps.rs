@@ -107,7 +107,7 @@ use std::collections::HashMap;
 use lazy_static::lazy_static;
 use rust_decimal::Decimal;
 use rust_decimal_macros::dec;
-use chrono::{NaiveTime};
+use chrono::{NaiveTime, Weekday};
 use crate::messages::data_server_messaging::FundForgeError;
 use crate::standardized_types::enums::FuturesExchange;
 use crate::standardized_types::symbol_info::{CommissionInfo, SymbolInfo};
@@ -610,6 +610,7 @@ pub const CME_HOURS: TradingHours = TradingHours {
         open: None,
         close: None,
     },
+    week_start: Weekday::Sun,
 };
 // CBOT Grains Schedule
 pub const CBOT_GRAINS_HOURS: TradingHours = TradingHours {
@@ -642,6 +643,7 @@ pub const CBOT_GRAINS_HOURS: TradingHours = TradingHours {
         open: None,
         close: None,
     },
+    week_start: Weekday::Sun,
 };
 const EUREX_HOURS: TradingHours = TradingHours {
     timezone: chrono_tz::Europe::Berlin,
@@ -673,6 +675,7 @@ const EUREX_HOURS: TradingHours = TradingHours {
         open: None,
         close: None,
     },
+    week_start: Weekday::Sun,
 };
 
 
