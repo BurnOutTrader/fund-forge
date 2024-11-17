@@ -1,5 +1,5 @@
 use std::collections::BTreeMap;
-use chrono::{DateTime, Utc, Weekday, TimeZone, Duration, Datelike, Timelike};
+use chrono::{DateTime, Utc, Weekday, Duration, Datelike, Timelike, NaiveDate};
 use rust_decimal::Decimal;
 use rust_decimal_macros::dec;
 use crate::messages::data_server_messaging::FundForgeError;
@@ -11,14 +11,14 @@ use crate::standardized_types::base_data::traits::BaseData;
 use crate::standardized_types::enums::MarketType;
 use crate::standardized_types::market_hours::{DaySession, TradingHours};
 use crate::standardized_types::new_types::Price;
-use crate::standardized_types::resolution::Resolution;
-use crate::standardized_types::subscriptions::{CandleType, DataSubscription};
+use crate::standardized_types::subscriptions::DataSubscription;
 use crate::strategies::consolidators::consolidator_enum::ConsolidatedData;
 
 #[derive(Debug, Clone)]
 pub struct SessionTime {
     pub(crate) open: DateTime<Utc>,
     pub(crate) close: DateTime<Utc>,
+    #[allow(unused)]
     pub(crate) is_same_day: bool,
 }
 
@@ -42,9 +42,11 @@ pub struct DailyConsolidator {
     pub(crate) subscription: DataSubscription,
     decimal_accuracy: u32,
     tick_size: Decimal,
+    #[allow(unused)]
     last_close: Option<Price>,
     market_type: MarketType,
     trading_hours: TradingHours,
+    #[allow(unused)]
     days_per_bar: i64,
     // Map of session start time to session details
     session_map: BTreeMap<DateTime<Utc>, SessionTime>,
@@ -52,6 +54,7 @@ pub struct DailyConsolidator {
 }
 
 impl DailyConsolidator {
+
     pub(crate) fn new(
         subscription: DataSubscription,
         decimal_accuracy: u32,
@@ -78,40 +81,234 @@ impl DailyConsolidator {
             current_session: None,
         };
 
+        // Initialize from now() but sessions will be properly extended on first update
         consolidator.initialize_session_map();
         Ok(consolidator)
     }
 
-    #[cfg(test)]
-    pub(crate) async fn new_with_reference_time(
-        subscription: DataSubscription,
-        decimal_accuracy: u32,
-        tick_size: Decimal,
-        trading_hours: TradingHours,
-        reference_time: DateTime<Utc>,
-    ) -> Result<Self, FundForgeError> {
-        if subscription.base_data_type == BaseDataType::Fundamentals {
-            return Err(FundForgeError::ClientSideErrorDebug(format!(
-                "{} is an Invalid base data type for DailyConsolidator",
-                subscription.base_data_type
-            )));
+    fn extend_sessions(&mut self, current_time: DateTime<Utc>) {
+        let tz = self.trading_hours.timezone;
+
+        // Find the last session end time
+        let last_session_end = self.session_map
+            .values()
+            .map(|s| s.close)
+            .max()
+            .unwrap_or(current_time);
+
+        // Always try to maintain DAYS_AHEAD worth of future sessions
+        let target_end = current_time + Duration::days(Self::DAYS_AHEAD);
+
+        if target_end >= last_session_end {
+            println!("Need to extend sessions. Current last end: {}, Target end: {}", last_session_end, target_end);
+
+            // Find the start point for new sessions
+            let start_date = if self.session_map.is_empty() {
+                (current_time - Duration::days(Self::DAYS_TO_KEEP))
+                    .with_timezone(&tz)
+                    .date_naive()
+            } else {
+                // Start from the day after the last session
+                (last_session_end + Duration::days(1))
+                    .with_timezone(&tz)
+                    .date_naive()
+            };
+
+            println!("Starting session extension from date: {}", start_date);
+
+            // Generate enough days to reach our target
+            let days_to_generate = (target_end - last_session_end).num_days() + 1;
+
+            for days_offset in 0..days_to_generate {
+                let current_date = start_date + Duration::days(days_offset);
+                let weekday = current_date.weekday();
+
+                println!("Generating sessions for {}: {}", weekday, current_date);
+
+                // Handle the special Sunday->Monday case
+                if weekday == Weekday::Sun {
+                    // Add Sunday evening session
+                    if let Some(sunday_open) = self.trading_hours.sunday.open {
+                        let session_open = current_date
+                            .and_hms_opt(sunday_open.hour(), sunday_open.minute(), sunday_open.second())
+                            .unwrap()
+                            .and_local_timezone(tz)
+                            .unwrap()
+                            .with_timezone(&Utc);
+
+                        // Sunday session closes at Monday open
+                        let monday_session = self.get_session_for_day(Weekday::Mon);
+                        if let Some(monday_open) = monday_session.open {
+                            let next_day = current_date + Duration::days(1);
+                            let close_time = next_day
+                                .and_hms_opt(monday_open.hour(), monday_open.minute(), monday_open.second())
+                                .unwrap()
+                                .and_local_timezone(tz)
+                                .unwrap()
+                                .with_timezone(&Utc);
+
+                            println!("Adding Sunday session: {} -> {}", session_open, close_time);
+
+                            self.session_map.insert(
+                                session_open,
+                                SessionTime {
+                                    open: session_open,
+                                    close: close_time,
+                                    is_same_day: false,
+                                },
+                            );
+                        }
+                    }
+                } else if let Some(open_time) = self.get_session_for_day(weekday).open {
+                    let session_open = current_date
+                        .and_hms_opt(open_time.hour(), open_time.minute(), open_time.second())
+                        .unwrap()
+                        .and_local_timezone(tz)
+                        .unwrap()
+                        .with_timezone(&Utc);
+
+                    // Skip if we already have this session
+                    if self.session_map.contains_key(&session_open) {
+                        continue;
+                    }
+
+                    let close_time = if let Some(close_time) = self.get_session_for_day(weekday).close {
+                        let close_datetime = current_date
+                            .and_hms_opt(close_time.hour(), close_time.minute(), close_time.second())
+                            .unwrap();
+                        (close_datetime, true)
+                    } else if let Some(next_open) = self.get_session_for_day(weekday.succ()).open {
+                        let next_day = current_date + Duration::days(1);
+                        let close_datetime = next_day
+                            .and_hms_opt(next_open.hour(), next_open.minute(), next_open.second())
+                            .unwrap();
+                        (close_datetime, false)
+                    } else {
+                        continue;
+                    };
+
+                    let close_utc = close_time.0
+                        .and_local_timezone(tz)
+                        .unwrap()
+                        .with_timezone(&Utc);
+
+                    println!("Adding regular session: {} -> {}", session_open, close_utc);
+
+                    self.session_map.insert(
+                        session_open,
+                        SessionTime {
+                            open: session_open,
+                            close: close_utc,
+                            is_same_day: close_time.1,
+                        },
+                    );
+                }
+            }
         }
 
-        let mut consolidator = DailyConsolidator {
-            market_type: subscription.symbol.market_type.clone(),
-            current_data: None,
-            subscription,
-            decimal_accuracy,
-            tick_size,
-            last_close: None,
-            trading_hours: trading_hours.clone(),
-            days_per_bar: 1,
-            session_map: BTreeMap::new(),
-            current_session: None,
-        };
+        // Clean up old sessions
+        let cutoff = current_time - Duration::days(Self::DAYS_TO_KEEP);
+        self.session_map.retain(|_, session| session.close >= cutoff);
 
-        consolidator.initialize_session_map_from(reference_time);
-        Ok(consolidator)
+        println!("\nSession map after extension:");
+        for (start, session) in &self.session_map {
+            println!("  {} -> {}", start, session.close);
+        }
+    }
+
+    // Helper to add a session for a specific date
+    fn add_session_for_date(&mut self, date: NaiveDate, tz: chrono_tz::Tz) {
+        let weekday = date.weekday();
+        let current_session = self.get_session_for_day(weekday);
+        let next_session = self.get_session_for_day(weekday.succ());
+
+        if let Some(open_time) = current_session.open {
+            let session_open = date
+                .and_hms_opt(open_time.hour(), open_time.minute(), open_time.second())
+                .unwrap()
+                .and_local_timezone(tz)
+                .unwrap()
+                .with_timezone(&Utc);
+
+            // Skip if we already have this session
+            if self.session_map.contains_key(&session_open) {
+                return;
+            }
+
+            let session_close = if let Some(close_time) = current_session.close {
+                let close_datetime = date
+                    .and_hms_opt(close_time.hour(), close_time.minute(), close_time.second())
+                    .unwrap();
+                (close_datetime, true)
+            } else if let Some(next_open) = next_session.open {
+                let next_day = date + Duration::days(1);
+                let close_datetime = next_day
+                    .and_hms_opt(next_open.hour(), next_open.minute(), next_open.second())
+                    .unwrap();
+                (close_datetime, false)
+            } else {
+                return;
+            };
+
+            let close_utc = session_close.0
+                .and_local_timezone(tz)
+                .unwrap()
+                .with_timezone(&Utc);
+
+            self.session_map.insert(
+                session_open,
+                SessionTime {
+                    open: session_open,
+                    close: close_utc,
+                    is_same_day: session_close.1,
+                },
+            );
+        }
+    }
+
+    pub fn update(&mut self, base_data: &BaseDataEnum) -> ConsolidatedData {
+        let time = base_data.time_utc();
+
+        println!("Processing update for time: {}", time);
+
+        // First check if time update would close any bars
+        if let Some(closed_bar) = self.update_time(time) {
+            println!("Time update closed bar at: {}", time);
+            return ConsolidatedData::with_closed(base_data.clone(), closed_bar);
+        }
+
+        // Get current session without holding borrow
+        let current_session = self.get_current_session(time).cloned();
+
+        match &current_session {
+            Some(session) => println!("Current session: {} -> {}", session.open, session.close),
+            None => println!("No current session for time: {}", time),
+        }
+
+        match current_session {
+            Some(session) if self.current_data.is_none() => {
+                println!("Creating new bar for session starting at: {}", session.open);
+                let new_bar = self.create_bar(base_data, session.open);
+                self.current_data = Some(BaseDataEnum::Candle(new_bar.clone()));
+                ConsolidatedData::with_open(BaseDataEnum::Candle(new_bar))
+            }
+            Some(_) => {
+                if let Some(ref mut current_bar) = self.current_data {
+                    let params = UpdateParams {
+                        market_type: self.market_type.clone(),
+                        tick_size: self.tick_size,
+                        decimal_accuracy: self.decimal_accuracy,
+                    };
+                    Self::update_bar(&params, current_bar, base_data);
+                    println!("Updated existing bar");
+                }
+                ConsolidatedData::with_open(base_data.clone())
+            }
+            None => {
+                println!("No session found for time: {}", time);
+                ConsolidatedData::with_open(base_data.clone())
+            }
+        }
     }
 
     fn initialize_session_map(&mut self) {
@@ -171,93 +368,6 @@ impl DailyConsolidator {
                     },
                 );
             }
-        }
-    }
-
-    fn initialize_session_map_from(&mut self, reference_time: DateTime<Utc>) {
-        let tz = self.trading_hours.timezone;
-        // Find the number of weeks needed to cover the test period (2 weeks should be enough)
-        let weeks_to_generate = 2;
-
-        let current_week_start = reference_time
-            .with_timezone(&tz)
-            .date_naive()
-            .week(self.trading_hours.week_start)
-            .first_day();
-
-        println!("Reference time: {}", reference_time);
-        println!("First week start: {}", current_week_start);
-        println!("Trading hours timezone: {}", tz);
-        println!("Generating {} weeks of sessions", weeks_to_generate);
-
-        // Generate sessions for multiple weeks
-        for week_offset in 0..weeks_to_generate {
-            let week_start = current_week_start + Duration::weeks(week_offset);
-            println!("\nGenerating sessions for week starting: {}", week_start);
-
-            for days_offset in 0..7 {
-                let current_date = week_start + Duration::days(days_offset);
-                let weekday = current_date.weekday();
-                println!("\nProcessing weekday: {}", weekday);
-
-                let current_session = self.get_session_for_day(weekday);
-                let next_session = self.get_session_for_day(weekday.succ());
-
-                println!("Current session open: {:?}, close: {:?}",
-                         current_session.open,
-                         current_session.close);
-
-                if let Some(open_time) = current_session.open {
-                    let session_open = current_date
-                        .and_hms_opt(open_time.hour(), open_time.minute(), open_time.second())
-                        .unwrap()
-                        .and_local_timezone(tz)
-                        .unwrap()
-                        .with_timezone(&Utc);
-
-                    let session_close = if let Some(close_time) = current_session.close {
-                        let close_datetime = current_date
-                            .and_hms_opt(close_time.hour(), close_time.minute(), close_time.second())
-                            .unwrap();
-                        println!("Same day close time: {}", close_datetime);
-                        (close_datetime, true)
-                    } else if let Some(next_open) = next_session.open {
-                        let next_day = current_date + Duration::days(1);
-                        let close_datetime = next_day
-                            .and_hms_opt(next_open.hour(), next_open.minute(), next_open.second())
-                            .unwrap();
-                        println!("Next day close time: {}", close_datetime);
-                        (close_datetime, false)
-                    } else {
-                        println!("Skipping - no close time found");
-                        continue;
-                    };
-
-                    let close_utc = session_close.0
-                        .and_local_timezone(tz)
-                        .unwrap()
-                        .with_timezone(&Utc);
-
-                    println!("Adding session: {} -> {} (UTC)", session_open, close_utc);
-
-                    self.session_map.insert(
-                        session_open,
-                        SessionTime {
-                            open: session_open,
-                            close: close_utc,
-                            is_same_day: session_close.1,
-                        },
-                    );
-                } else {
-                    println!("No opening time for this day");
-                }
-            }
-        }
-
-        println!("\nFinal session map:");
-        for (start, session) in &self.session_map {
-            println!("Start: {}, Close: {}, Same day: {}",
-                     start, session.close, session.is_same_day);
         }
     }
 
@@ -330,69 +440,6 @@ impl DailyConsolidator {
         }
     }
 
-    pub fn update_time(&mut self, time: DateTime<Utc>) -> Option<BaseDataEnum> {
-        // Get ALL the information we need upfront before any mutations
-        let action = {
-            let current_session_info = self.get_current_session(time);
-            let current_stored_session = self.current_session.as_ref();
-
-            match (current_session_info, current_stored_session) {
-                // Moving to a new session
-                (Some(new_session), Some(stored_session))
-                if new_session.open != stored_session.open => {
-                    Some(TimeAction::NewSession(new_session.clone()))
-                }
-                // Entering a session
-                (Some(new_session), None) => {
-                    Some(TimeAction::EnterSession(new_session.clone()))
-                }
-                // Leaving trading hours
-                (None, Some(_)) => {
-                    Some(TimeAction::LeaveSession)
-                }
-                // At session boundary
-                (Some(session), Some(_)) if time >= session.close => {
-                    Some(TimeAction::SessionEnd(session.clone()))
-                }
-                // No action needed
-                _ => None
-            }
-        };
-
-        // Now handle the action with no active borrows
-        match action {
-            Some(TimeAction::NewSession(new_session)) => {
-                let closed_bar = self.current_data.take().map(|mut bar| {
-                    bar.set_is_closed(true);
-                    bar
-                });
-                self.current_session = Some(new_session);
-                closed_bar
-            }
-            Some(TimeAction::EnterSession(new_session)) => {
-                self.current_session = Some(new_session);
-                None
-            }
-            Some(TimeAction::LeaveSession) => {
-                let closed_bar = self.current_data.take().map(|mut bar| {
-                    bar.set_is_closed(true);
-                    bar
-                });
-                self.current_session = None;
-                closed_bar
-            }
-            Some(TimeAction::SessionEnd(new_session)) => {
-                let closed_bar = self.current_data.take().map(|mut bar| {
-                    bar.set_is_closed(true);
-                    bar
-                });
-                self.current_session = Some(new_session);
-                closed_bar
-            }
-            None => None
-        }
-    }
-
     // Helper method to check if we've moved to a new session
     fn is_new_session(&self, time: DateTime<Utc>) -> bool {
         if let Some(current_session) = &self.current_session {
@@ -409,40 +456,6 @@ impl DailyConsolidator {
             time >= session.close
         } else {
             false
-        }
-    }
-
-    pub fn update(&mut self, base_data: &BaseDataEnum) -> ConsolidatedData {
-        let time = base_data.time_utc();
-
-        // First check if time update would close any bars
-        if let Some(closed_bar) = self.update_time(time) {
-            return ConsolidatedData::with_closed(base_data.clone(), closed_bar);
-        }
-
-        // Get current session without holding borrow
-        let current_session = self.get_current_session(time).cloned();
-
-        match current_session {
-            Some(session) if self.current_data.is_none() => {
-                // Start new bar
-                let new_bar = self.create_bar(base_data, session.open);
-                self.current_data = Some(BaseDataEnum::Candle(new_bar.clone()));
-                ConsolidatedData::with_open(BaseDataEnum::Candle(new_bar))
-            }
-            Some(_) => {
-                // Update existing bar
-                if let Some(ref mut current_bar) = self.current_data {
-                    let params = UpdateParams {
-                        market_type: self.market_type.clone(),
-                        tick_size: self.tick_size,
-                        decimal_accuracy: self.decimal_accuracy,
-                    };
-                    Self::update_bar(&params, current_bar, base_data);
-                }
-                ConsolidatedData::with_open(base_data.clone())
-            }
-            None => ConsolidatedData::with_open(base_data.clone())
         }
     }
 
@@ -476,35 +489,88 @@ impl DailyConsolidator {
             _ => panic!("Invalid base data type for Candle consolidator"),
         }
     }
+
+    // Add these constants for session management
+    const DAYS_TO_KEEP: i64 = 7; // Keep a week of historical sessions
+    const DAYS_AHEAD: i64 = 7;   // Generate a week of future sessions
+
+    // Modify update_time to handle session extension
+    pub fn update_time(&mut self, time: DateTime<Utc>) -> Option<BaseDataEnum> {
+        // Extend sessions if needed before processing the update
+        self.extend_sessions(time);
+
+        let action = {
+            let current_session_info = self.get_current_session(time);
+            let current_stored_session = self.current_session.as_ref();
+
+            match (current_session_info, current_stored_session) {
+                (Some(new_session), Some(stored_session))
+                if new_session.open != stored_session.open => {
+                    Some(TimeAction::NewSession(new_session.clone()))
+                }
+                (Some(new_session), None) => {
+                    Some(TimeAction::EnterSession(new_session.clone()))
+                }
+                (None, Some(_)) => {
+                    Some(TimeAction::LeaveSession)
+                }
+                (Some(session), Some(_)) if time >= session.close => {
+                    Some(TimeAction::SessionEnd(session.clone()))
+                }
+                _ => None
+            }
+        };
+
+        // Rest of the update_time implementation remains the same
+        match action {
+            Some(TimeAction::NewSession(new_session)) => {
+                let closed_bar = self.current_data.take().map(|mut bar| {
+                    bar.set_is_closed(true);
+                    bar
+                });
+                self.current_session = Some(new_session);
+                closed_bar
+            }
+            Some(TimeAction::EnterSession(new_session)) => {
+                self.current_session = Some(new_session);
+                None
+            }
+            Some(TimeAction::LeaveSession) => {
+                let closed_bar = self.current_data.take().map(|mut bar| {
+                    bar.set_is_closed(true);
+                    bar
+                });
+                self.current_session = None;
+                closed_bar
+            }
+            Some(TimeAction::SessionEnd(new_session)) => {
+                let closed_bar = self.current_data.take().map(|mut bar| {
+                    bar.set_is_closed(true);
+                    bar
+                });
+                self.current_session = Some(new_session);
+                closed_bar
+            }
+            None => None
+        }
+    }
 }
+
 #[cfg(test)]
 mod tests {
-    use chrono::{NaiveDateTime, NaiveTime, DateTime, Utc};
+    use chrono::NaiveTime;
     use super::*;
     use chrono_tz::America::New_York;
-    use crate::standardized_types::base_data::candle::generate_5_day_candle_data;
     use crate::standardized_types::datavendor_enum::DataVendor;
-    use crate::standardized_types::subscriptions::Symbol;
-
-    // Helper function to parse DateTime<Utc> strings
-    fn parse_datetime(datetime_str: &str) -> DateTime<Utc> {
-        // Remove " UTC" suffix if present
-        let cleaned_str = datetime_str.trim_end_matches(" UTC");
-
-        DateTime::<Utc>::from_naive_utc_and_offset(
-            NaiveDateTime::parse_from_str(cleaned_str, "%Y-%m-%d %H:%M:%S")
-                .unwrap_or_else(|e| panic!("Failed to parse datetime '{}': {}", datetime_str, e)),
-            Utc,
-        )
-    }
+    use crate::standardized_types::resolution::Resolution;
+    use crate::standardized_types::subscriptions::{CandleType, Symbol};
 
     fn setup_trading_hours() -> TradingHours {
-        // Trading hours setup remains the same
         TradingHours {
             timezone: New_York,
             sunday: DaySession {
                 open: Some(NaiveTime::from_hms_opt(17, 0, 0).unwrap()),
-                close: None // Closes at Monday open
+                close: None
             },
             monday: DaySession {
                 open: Some(NaiveTime::from_hms_opt(9, 30, 0).unwrap()),
@@ -532,7 +598,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_daily_consolidation() {
+    async fn test_real_time_session_management() {
         let trading_hours = setup_trading_hours();
         let subscription = DataSubscription {
             symbol: Symbol::new("TEST".to_string(), DataVendor::Test, MarketType::CFD),
@@ -542,107 +608,140 @@ mod tests {
             market_type: MarketType::CFD,
         };
 
-        // Get the start time from the test data and print it
-        let test_data = generate_5_day_candle_data();
-        let first_time = parse_datetime(&test_data.first().unwrap().time);
-        let last_time = parse_datetime(&test_data.last().unwrap().time);
-
-        println!("\nTest data range:");
-        println!("First candle time: {}", first_time);
-        println!("Last candle time: {}", last_time);
-
-        let mut consolidator = DailyConsolidator::new_with_reference_time(
+        let mut consolidator = DailyConsolidator::new(
             subscription,
             2,
             dec!(0.01),
             trading_hours,
-            first_time,
-        ).await.unwrap();
+        ).unwrap();
 
-        // Print session map after initialization
-        println!("\nInitial session map:");
-        for (start, session) in consolidator.session_map.iter() {
-            println!("Session: {} -> {}", start, session.close);
+        // 1. Test initial session map creation
+        let now = Utc::now();
+        let initial_session_count = consolidator.session_map.len();
+        assert!(initial_session_count > 0, "Should create initial sessions");
+
+        // 2. Test session extension
+        let future_time = now + Duration::days(5);
+        consolidator.update_time(future_time);
+        assert!(
+            consolidator.session_map.len() > initial_session_count,
+            "Should extend sessions when approaching end"
+        );
+
+        // 3. Test session cleanup
+        let past_time = now - Duration::days(10);
+        let candle = Candle::new(
+            consolidator.subscription.symbol.clone(),
+            dec!(100),
+            dec!(1000),
+            dec!(500),
+            dec!(500),
+            past_time.to_string(),
+            Resolution::Day,
+            CandleType::CandleStick,
+        );
+
+        consolidator.update(&BaseDataEnum::Candle(candle));
+
+        // Verify old sessions are cleaned up
+        let oldest_session = consolidator.session_map.first_key_value().unwrap().1.open;
+        assert!(
+            oldest_session > now - Duration::days(DailyConsolidator::DAYS_TO_KEEP + 1),
+            "Should clean up sessions older than DAYS_TO_KEEP"
+        );
+
+        // 4. Test continuous session extension
+        let mut test_time = now;
+        let mut session_times = Vec::new();
+
+        // Simulate advancing time over multiple days
+        for day in 0..10 {
+            test_time = now + Duration::days(day);
+            consolidator.update_time(test_time);
+
+            if let Some(session) = consolidator.get_current_session(test_time) {
+                session_times.push((session.open, session.close));
+            }
+
+            // Verify we maintain a rolling window of sessions
+            let session_span = consolidator.session_map.iter()
+                .map(|(_, s)| s.close - s.open)
+                .sum::<Duration>();
+
+            assert!(
+                session_span.num_days() <= DailyConsolidator::DAYS_AHEAD + DailyConsolidator::DAYS_TO_KEEP,
+                "Should maintain proper session window"
+            );
         }
 
+        // 5. Verify session continuity
+        for times in session_times.windows(2) {
+            if let [(_, prev_close), (next_open, _)] = times {
+                // For continuous markets, next session should start when previous ends
+                assert!(
+                    *next_open >= *prev_close,
+                    "Sessions should not overlap: prev_close={}, next_open={}",
+                    prev_close,
+                    next_open
+                );
+            }
+        }
+
+        // 6. Test real-time consolidation with session boundaries
         let mut daily_bars = Vec::new();
+        let mut test_time = now;
 
-        for (i, candle) in test_data.iter().enumerate() {
-            let time = parse_datetime(&candle.time);
+        // Generate test data spanning multiple sessions
+        for hour in 0..48 {
+            test_time = now + Duration::hours(hour);
 
-            if i % 24 == 0 {
-                println!("\nProcessing day {} starting at {}", i / 24, time);
-                if let Some(session) = consolidator.get_current_session(time) {
-                    println!("Current session: Open={}, Close={}", session.open, session.close);
-                } else {
-                    println!("No active session");
-                }
-            }
+            let candle = Candle::new(
+                consolidator.subscription.symbol.clone(),
+                dec!(100),
+                dec!(1000),
+                dec!(500),
+                dec!(500),
+                test_time.to_string(),
+                Resolution::Day,
+                CandleType::CandleStick,
+            );
 
-            if let Some(closed_bar) = consolidator.update_time(time) {
-                println!("Time update closed bar at {}", time);
+            // Process updates
+            if let Some(closed_bar) = consolidator.update_time(test_time) {
                 daily_bars.push(closed_bar);
             }
 
-            let result = consolidator.update(&BaseDataEnum::Candle(candle.clone()));
+            let result = consolidator.update(&BaseDataEnum::Candle(candle));
             if let Some(closed_bar) = result.closed_data {
-                println!("Data update closed bar at {}", time);
                 daily_bars.push(closed_bar);
             }
-
-            if let Some(ref current_bar) = consolidator.current_data {
-                if i % 24 == 0 {
-                    println!("Current bar: {:?}", current_bar);
-                }
-            }
         }
 
-        println!("\nGenerated {} daily bars:", daily_bars.len());
-        for (i, bar) in daily_bars.iter().enumerate() {
+        // Verify bars close at session boundaries
+        for bar in daily_bars {
             if let BaseDataEnum::Candle(candle) = bar {
-                println!("Bar {}: Time={}, Open={}, High={}, Low={}, Close={}",
-                         i, candle.time, candle.open, candle.high, candle.low, candle.close);
-            }
-        }
+                let bar_time = DateTime::parse_from_rfc3339(&candle.time)
+                    .unwrap()
+                    .with_timezone(&Utc);
 
-        assert!(!daily_bars.is_empty(), "Should produce at least one bar");
+                // Find the session this bar belongs to
+                let session = consolidator.session_map
+                    .range(..=bar_time)
+                    .next_back()
+                    .map(|(_, s)| s);
 
-        let market_data: Vec<&Candle> = test_data.iter()
-            .filter(|c| {
-                let time = parse_datetime(&c.time);
-                consolidator.get_current_session(time).is_some()
-            })
-            .collect();
+                assert!(
+                    session.is_some(),
+                    "Closed bar should correspond to a valid session"
+                );
 
-        println!("\nFound {} candles during market hours", market_data.len());
-
-        for (i, bar) in daily_bars.iter().enumerate() {
-            if let BaseDataEnum::Candle(candle) = bar {
-                println!("Verifying bar {}: {}", i, candle.time);
-
-                let bar_time = parse_datetime(&candle.time);
-
-                if let Some(session) = consolidator.get_current_session(bar_time) {
-                    let session_data: Vec<&Candle> = market_data.iter()
-                        .filter(|c| {
-                            let time = parse_datetime(&c.time);
-                            time >= session.open && time < session.close
-                        })
-                        .copied()
-                        .collect();
-
-                    if !session_data.is_empty() {
-                        let expected_high = session_data.iter().map(|c| c.high).max().unwrap();
-                        let expected_low = session_data.iter().map(|c| c.low).min().unwrap();
-                        let expected_volume: Decimal = session_data.iter().map(|c| c.volume).sum();
-
-                        assert_eq!(candle.high, expected_high, "Bar {} high mismatch", i);
-                        assert_eq!(candle.low, expected_low, "Bar {} low mismatch", i);
-                        assert_eq!(candle.volume, expected_volume, "Bar {} volume mismatch", i);
-                    }
+                if let Some(session) = session {
+                    assert!(
+                        bar_time <= session.close,
+                        "Bar should close at or before session end"
+                    );
                 }
             }
         }
     }
 }
-

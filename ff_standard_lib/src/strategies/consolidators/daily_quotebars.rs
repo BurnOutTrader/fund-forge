@@ -1,7 +1,6 @@
 use std::collections::BTreeMap;
-use chrono::{DateTime, Datelike, Duration, TimeZone, Timelike, Utc, Weekday};
+use chrono::{DateTime, Datelike, Duration, NaiveDate, Timelike, Utc, Weekday};
 use rust_decimal::Decimal;
-use rust_decimal_macros::dec;
 use crate::messages::data_server_messaging::FundForgeError;
 use crate::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use crate::standardized_types::base_data::base_data_type::BaseDataType;
@@ -10,7 +9,6 @@ use crate::standardized_types::base_data::traits::BaseData;
 use crate::standardized_types::enums::MarketType;
 use crate::standardized_types::market_hours::{DaySession, TradingHours};
 use crate::standardized_types::new_types::Price;
-use crate::standardized_types::resolution::Resolution;
 use crate::standardized_types::subscriptions::{CandleType, DataSubscription};
 use crate::strategies::consolidators::consolidator_enum::ConsolidatedData;
 use crate::strategies::consolidators::daily_candles::{SessionTime, TimeAction, UpdateParams};
@@ -60,6 +58,161 @@ impl DailyQuoteConsolidator {
 
         consolidator.initialize_session_map();
         Ok(consolidator)
+    }
+
+    fn extend_sessions(&mut self, current_time: DateTime<Utc>) {
+        let tz = self.trading_hours.timezone;
+
+        // Get the earliest time we need to have sessions for
+        let earliest_needed = current_time - Duration::days(Self::DAYS_TO_KEEP);
+
+        // If we have no sessions or our earliest session is too late, reinitialize
+        if self.session_map.is_empty() ||
+            self.session_map.first_key_value().map(|(t, _)| *t).unwrap_or(current_time) > earliest_needed {
+            println!("Reinitializing quote session map for time: {}", current_time);
+
+            // Start from earliest needed time
+            let start_week = earliest_needed
+                .with_timezone(&tz)
+                .date_naive()
+                .week(self.trading_hours.week_start)
+                .first_day();
+
+            // Generate enough weeks to cover our window plus future sessions
+            let total_days = Self::DAYS_TO_KEEP + Self::DAYS_AHEAD;
+
+            for days_offset in 0..total_days {
+                let current_date = start_week + Duration::days(days_offset);
+                self.add_session_for_date(current_date, tz);
+            }
+        } else {
+            // Extend forward if needed
+            let last_session_end = self.session_map
+                .values()
+                .map(|s| s.close)
+                .max()
+                .unwrap_or(current_time);
+
+            if current_time + Duration::days(1) >= last_session_end {
+                println!("Extending quote sessions forward from: {}", last_session_end);
+
+                let extension_start = last_session_end
+                    .with_timezone(&tz)
+                    .date_naive();
+
+                for days_offset in 0..Self::DAYS_AHEAD {
+                    let current_date = extension_start + Duration::days(days_offset);
+                    self.add_session_for_date(current_date, tz);
+                }
+            }
+        }
+
+        // Clean up old sessions
+        let cutoff = current_time - Duration::days(Self::DAYS_TO_KEEP);
+        self.session_map.retain(|_, session| session.close >= cutoff);
+
+        println!("Quote session map after extension:");
+        for (start, session) in &self.session_map {
+            println!("  {} -> {}", start, session.close);
+        }
+    }
+
+    // Helper to add a session for a specific date
+    fn add_session_for_date(&mut self, date: NaiveDate, tz: chrono_tz::Tz) {
+        let weekday = date.weekday();
+        let current_session = self.get_session_for_day(weekday);
+        let next_session = self.get_session_for_day(weekday.succ());
+
+        if let Some(open_time) = current_session.open {
+            let session_open = date
+                .and_hms_opt(open_time.hour(), open_time.minute(), open_time.second())
+                .unwrap()
+                .and_local_timezone(tz)
+                .unwrap()
+                .with_timezone(&Utc);
+
+            // Skip if we already have this session
+            if self.session_map.contains_key(&session_open) {
+                return;
+            }
+
+            let session_close = if let Some(close_time) = current_session.close {
+                let close_datetime = date
+                    .and_hms_opt(close_time.hour(), close_time.minute(), close_time.second())
+                    .unwrap();
+                (close_datetime, true)
+            } else if let Some(next_open) = next_session.open {
+                let next_day = date + Duration::days(1);
+                let close_datetime = next_day
+                    .and_hms_opt(next_open.hour(), next_open.minute(), next_open.second())
+                    .unwrap();
+                (close_datetime, false)
+            } else {
+                return;
+            };
+
+            let close_utc = session_close.0
+                .and_local_timezone(tz)
+                .unwrap()
+                .with_timezone(&Utc);
+
+            // Handle special case for Sunday -> Monday
+            let is_sunday_evening = weekday == Weekday::Sun;
+
+            self.session_map.insert(
+                session_open,
+                SessionTime {
+                    open: session_open,
+                    close: close_utc,
+                    is_same_day: !is_sunday_evening && session_close.1,
+                },
+            );
+        }
+    }
+
+    pub fn update(&mut self, base_data: &BaseDataEnum) -> ConsolidatedData {
+        let time = base_data.time_utc();
+
+        println!("Processing quote update for time: {}", time);
+
+        // First check if time update would close any bars
+        if let Some(closed_bar) = self.update_time(time) {
+            println!("Time update closed quote bar at: {}", time);
+            return ConsolidatedData::with_closed(base_data.clone(), closed_bar);
+        }
+
+        // Get current session without holding borrow
+        let current_session = self.get_current_session(time).cloned();
+
+        match &current_session {
+            Some(session) => println!("Current quote session: {} -> {}", session.open, session.close),
+            None => println!("No current quote session for time: {}", time),
+        }
+
+        match current_session {
+            Some(session) if self.current_data.is_none() => {
+                println!("Creating new quote bar for session starting at: {}", session.open);
+                let new_bar = self.create_bar(base_data, session.open);
+                self.current_data = Some(BaseDataEnum::QuoteBar(new_bar.clone()));
+                ConsolidatedData::with_open(BaseDataEnum::QuoteBar(new_bar))
+            }
+            Some(_) => {
+                if let Some(ref mut current_bar) = self.current_data {
+                    let params = UpdateParams {
+                        market_type: self.market_type.clone(),
+                        tick_size: self.tick_size,
+                        decimal_accuracy: self.decimal_accuracy,
+                    };
+                    Self::update_bar(&params, current_bar, base_data);
+                    println!("Updated existing quote bar");
+                }
+                ConsolidatedData::with_open(base_data.clone())
+            }
+            None => {
+                println!("No quote session found for time: {}", time);
+                ConsolidatedData::with_open(base_data.clone())
+            }
+        }
     }
 
     #[cfg(test)]
@@ -283,7 +436,15 @@ impl DailyQuoteConsolidator {
         }
     }
 
+    // Add these constants for session management
+    const DAYS_TO_KEEP: i64 = 7; // Keep a week of historical sessions
+    const DAYS_AHEAD: i64 = 7;   // Generate a week of future sessions
+
+    // Modify update_time to handle session extension
     pub fn update_time(&mut self, time: DateTime<Utc>) -> Option<BaseDataEnum> {
+        // Extend sessions if needed before processing the update
+        self.extend_sessions(time);
+
         let action = {
             let current_session_info = self.get_current_session(time);
             let current_stored_session = self.current_session.as_ref();
@@ -306,6 +467,7 @@ impl DailyQuoteConsolidator {
             }
         };
 
+        // Rest of the update_time implementation remains the same
         match action {
             Some(TimeAction::NewSession(new_session)) => {
                 let closed_bar = self.current_data.take().map(|mut bar| {
@@ -364,41 +526,6 @@ impl DailyQuoteConsolidator {
             _ => panic!("Invalid base data type for QuoteBar consolidator"),
         }
     }
-
-
-    pub fn update(&mut self, base_data: &BaseDataEnum) -> ConsolidatedData {
-        let time = base_data.time_utc();
-
-        // First check if time update would close any bars
-        if let Some(closed_bar) = self.update_time(time) {
-            return ConsolidatedData::with_closed(base_data.clone(), closed_bar);
-        }
-
-        // Get current session without holding borrow
-        let current_session = self.get_current_session(time).cloned();
-
-        match current_session {
-            Some(session) if self.current_data.is_none() => {
-                // Start new bar
-                let new_bar = self.create_bar(base_data, session.open);
-                self.current_data = Some(BaseDataEnum::QuoteBar(new_bar.clone()));
-                ConsolidatedData::with_open(BaseDataEnum::QuoteBar(new_bar))
-            }
-            Some(_) => {
-                // Update existing bar
-                if let Some(ref mut current_bar) = self.current_data {
-                    let params = UpdateParams {
-                        market_type: self.market_type.clone(),
-                        tick_size: self.tick_size,
-                        decimal_accuracy: self.decimal_accuracy,
-                    };
-                    Self::update_bar(&params, current_bar, base_data);
-                }
-                ConsolidatedData::with_open(base_data.clone())
-            }
-            None => ConsolidatedData::with_open(base_data.clone())
-        }
-    }
 }
 
 #[cfg(test)]
@@ -406,8 +533,10 @@ mod tests {
     use chrono::{NaiveDateTime, NaiveTime, DateTime, Utc};
     use super::*;
     use chrono_tz::America::New_York;
+    use rust_decimal_macros::dec;
     use crate::standardized_types::base_data::quotebar::generate_5_day_quote_bar_data;
     use crate::standardized_types::datavendor_enum::DataVendor;
+    use crate::standardized_types::resolution::Resolution;
     use crate::standardized_types::subscriptions::Symbol;
 
     // Helper function to parse DateTime<Utc> strings
