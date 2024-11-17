@@ -511,9 +511,6 @@ impl HybridStorage {
                                     continue //skip move start date back if we have no existing data
                                 }
                             };
-                            if from_back && start_time >= end_time - chrono::Duration::days(3) {
-                                continue;
-                            }
                             // Only skip if we're moving backwards and we've already reached our target or we have updated data to the present
                             if start_time >= end_time - chrono::Duration::days(3) || end_time.date_naive() > Utc::now().date_naive() - chrono::Duration::days(3) || latest_date < Utc::now() - chrono::Duration::days(3)  {
                                 continue;
