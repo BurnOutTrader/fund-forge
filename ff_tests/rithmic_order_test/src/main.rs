@@ -1,4 +1,5 @@
 use chrono::{Duration, NaiveDate};
+use chrono_tz::Australia;
 use chrono_tz::Tz::UTC;
 use colored::Colorize;
 use rust_decimal::Decimal;
@@ -11,7 +12,7 @@ use ff_standard_lib::strategies::fund_forge_strategy::FundForgeStrategy;
 use rust_decimal_macros::dec;
 use tokio::sync::mpsc;
 use ff_standard_lib::apis::rithmic::rithmic_systems::RithmicSystem;
-use ff_standard_lib::product_maps::rithmic::maps::get_futures_trading_hours;
+use ff_standard_lib::product_maps::rithmic::maps::{get_exchange_by_symbol_name, get_futures_trading_hours};
 use ff_standard_lib::product_maps::rithmic::rollover::get_front_month;
 use ff_standard_lib::standardized_types::accounts::{Account, AccountId, Currency};
 use ff_standard_lib::standardized_types::base_data::base_data_type::BaseDataType;
@@ -29,29 +30,31 @@ async fn main() {
 
     let symbol_name = SymbolName::from("MNQ");
     let market_hours = get_futures_trading_hours(&symbol_name).unwrap();
+    let exchange = get_exchange_by_symbol_name(&symbol_name).unwrap();
+
     let strategy = FundForgeStrategy::initialize(
         StrategyMode::Backtest,
         dec!(100000),
         Currency::USD,
         NaiveDate::from_ymd_opt(2019, 07, 1).unwrap().and_hms_opt(1, 0, 0).unwrap(),
         NaiveDate::from_ymd_opt(2019, 07, 10).unwrap().and_hms_opt(23, 0, 0).unwrap(),
-        UTC,
+        Australia::Sydney,
         Duration::hours(1),
         vec![
             (None, DataSubscription::new (
                 symbol_name.clone(),
                 DataVendor::Rithmic,
-                Resolution::Ticks(1),
-                BaseDataType::Ticks,
-                MarketType::Futures(FuturesExchange::CME),
+                Resolution::Minutes(1),
+                BaseDataType::Candles,
+                MarketType::Futures(exchange),
             ), None),
 
-            (Some(PrimarySubscription::new(Resolution::Ticks(1), BaseDataType::Ticks)), DataSubscription::new (
+            (Some(PrimarySubscription::new(Resolution::Minutes(1), BaseDataType::Candles)), DataSubscription::new (
                 symbol_name.clone(),
                 DataVendor::Rithmic,
-                Resolution::Days(1),
+                Resolution::Day,
                 BaseDataType::Candles,
-                MarketType::Futures(FuturesExchange::CME),
+                MarketType::Futures(exchange),
             ), Some(market_hours.clone())),
         ],
         false,
@@ -102,7 +105,7 @@ pub async fn on_data_received(
                             let symbol_code = get_front_month(&candle.symbol.name, strategy.time_utc()).unwrap();
                             // Place trades based on the AUD-CAD Heikin Ashi Candles
                             if candle.is_closed == true {
-                                let msg = format!("{} {} {} Close: {}, {}", candle.symbol.name, candle.resolution, candle.candle_type, candle.close, candle.time_closed_local(strategy.time_zone()));
+                                let msg = format!("{} {} {} Close: {}, {}", candle.symbol.name, candle.resolution, candle.candle_type, candle.close, candle.time_local(strategy.time_zone()));
                                 if candle.close == candle.open {
                                     println!("{}", msg.as_str().blue())
                                 } else {
