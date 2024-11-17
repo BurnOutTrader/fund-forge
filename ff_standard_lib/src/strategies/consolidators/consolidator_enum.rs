@@ -9,12 +9,21 @@ use chrono::{DateTime, Datelike, Duration, Utc, Weekday};
 use crate::product_maps::rithmic::maps::extract_symbol_from_contract;
 use crate::standardized_types::base_data::base_data_type::BaseDataType;
 use crate::standardized_types::base_data::history::{get_compressed_historical_data};
+use crate::standardized_types::market_hours::TradingHours;
 use crate::standardized_types::resolution::Resolution;
+use crate::strategies::consolidators::daily_candles::DailyConsolidator;
+use crate::strategies::consolidators::daily_quotebars::DailyQuoteConsolidator;
+use crate::strategies::consolidators::weekly::WeeklyCandleConsolidator;
+use crate::strategies::consolidators::weekly_quotebars::WeeklyQuoteConsolidator;
 
 pub enum ConsolidatorEnum {
     Count(CountConsolidator),
     CandleStickConsolidator(CandleStickConsolidator),
     HeikinAshi(HeikinAshiConsolidator),
+    DailyCandles(DailyConsolidator),
+    DailyQuoteBars(DailyQuoteConsolidator),
+    WeeklyCandles(WeeklyCandleConsolidator),
+    WeeklyQuoteBars(WeeklyQuoteConsolidator),
 }
 
 impl ConsolidatorEnum {
@@ -22,20 +31,63 @@ impl ConsolidatorEnum {
     pub async fn create_consolidator(
         subscription: DataSubscription,
         fill_forward: bool,
+        hours: Option<TradingHours>,
     ) -> ConsolidatorEnum {
-        //todo handle errors here gracefully
-        let is_tick = match subscription.resolution {
-            Resolution::Ticks(_) => true,
-            _ => false,
-        };
 
         let symbol_name = match subscription.market_type {
             MarketType::Futures(_) => extract_symbol_from_contract(&subscription.symbol.name),
             _ => subscription.symbol.name.clone(),
         };
-
         let decimal_accuracy = subscription.symbol.data_vendor.decimal_accuracy(symbol_name.clone()).await.unwrap();
         let tick_size = subscription.symbol.data_vendor.tick_size(symbol_name.clone()).await.unwrap();
+
+        match subscription.resolution {
+            Resolution::Days(_) => {
+                match subscription.base_data_type {
+                    BaseDataType::QuoteBars => {
+                        return ConsolidatorEnum::DailyQuoteBars(
+                            DailyQuoteConsolidator::new(subscription.clone(), fill_forward, decimal_accuracy, tick_size,hours.unwrap())
+                                .await
+                                .unwrap(),
+                        );
+                    }
+                    BaseDataType::Candles => {
+                        return ConsolidatorEnum::DailyCandles(
+                            DailyConsolidator::new(subscription.clone(), fill_forward, decimal_accuracy, tick_size,hours.unwrap())
+                                .await
+                                .unwrap(),
+                        );
+                    }
+                    _ => {}
+                }
+            }
+            Resolution::Weeks(_) => {
+                match subscription.base_data_type {
+                    BaseDataType::QuoteBars => {
+                        return ConsolidatorEnum::WeeklyQuoteBars(
+                            WeeklyQuoteConsolidator::new(subscription.clone(), decimal_accuracy, tick_size, hours.clone().unwrap(), hours.unwrap().week_start)
+                                .await
+                                .unwrap(),
+                        );
+                    }
+                    BaseDataType::Candles => {
+                        return ConsolidatorEnum::WeeklyCandles(
+                            WeeklyCandleConsolidator::new(subscription.clone(), decimal_accuracy, tick_size, hours.clone().unwrap(), hours.unwrap().week_start)
+                                .await
+                                .unwrap(),
+                        );
+                    }
+                    _ => {}
+                }
+            }
+            _ => {}
+        }
+
+        //todo handle errors here gracefully
+        let is_tick = match subscription.resolution {
+            Resolution::Ticks(_) => true,
+            _ => false,
+        };
 
         if is_tick {
            return ConsolidatorEnum::Count(
@@ -74,6 +126,10 @@ impl ConsolidatorEnum {
             ConsolidatorEnum::HeikinAshi(heikin_ashi_consolidator) => {
                 heikin_ashi_consolidator.update(base_data)
             }
+            ConsolidatorEnum::DailyCandles(consolidator) => consolidator.update(base_data),
+            ConsolidatorEnum::DailyQuoteBars(consolidator) => consolidator.update(base_data),
+            ConsolidatorEnum::WeeklyCandles(consolidator) => consolidator.update(base_data),
+            ConsolidatorEnum::WeeklyQuoteBars(consolidator) => consolidator.update(base_data),
         }
     }
 
@@ -87,6 +143,10 @@ impl ConsolidatorEnum {
             ConsolidatorEnum::HeikinAshi(heikin_ashi_consolidator) => {
                 &heikin_ashi_consolidator.subscription
             }
+            ConsolidatorEnum::DailyCandles(consolidator) => &consolidator.subscription,
+            ConsolidatorEnum::DailyQuoteBars(consolidator) => &consolidator.subscription,
+            ConsolidatorEnum::WeeklyCandles(consolidator) => &consolidator.subscription,
+            ConsolidatorEnum::WeeklyQuoteBars(consolidator) => &consolidator.subscription,
         }
     }
 
@@ -102,6 +162,18 @@ impl ConsolidatorEnum {
             ConsolidatorEnum::HeikinAshi(heikin_ashi_consolidator) => {
                 &heikin_ashi_consolidator.subscription.resolution
             }
+            ConsolidatorEnum::DailyCandles(consolidator) => {
+                &consolidator.subscription.resolution
+            }
+            ConsolidatorEnum::DailyQuoteBars(consolidator) => {
+                &consolidator.subscription.resolution
+            }
+            ConsolidatorEnum::WeeklyCandles(consolidator) => {
+                &consolidator.subscription.resolution
+            }
+            ConsolidatorEnum::WeeklyQuoteBars(consolidator) => {
+                &consolidator.subscription.resolution
+            }
         }
     }
 
@@ -114,6 +186,18 @@ impl ConsolidatorEnum {
             }
             ConsolidatorEnum::HeikinAshi(heikin_ashi_consolidator) => {
                 heikin_ashi_consolidator.update_time(time)
+            }
+            ConsolidatorEnum::DailyCandles(consolidator) => {
+                consolidator.update_time(time)
+            }
+            ConsolidatorEnum::DailyQuoteBars(consolidator) => {
+                consolidator.update_time(time)
+            }
+            ConsolidatorEnum::WeeklyCandles(consolidator) => {
+                consolidator.update_time(time)
+            }
+            ConsolidatorEnum::WeeklyQuoteBars(consolidator) => {
+                consolidator.update_time(time)
             }
         }
     }

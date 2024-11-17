@@ -387,4 +387,37 @@ impl DailyQuoteConsolidator {
             _ => panic!("Only Quotes and QuoteBars are supported for daily quote consolidation"),
         }
     }
+
+    pub fn update_time(&mut self, time: DateTime<Utc>) -> Option<BaseDataEnum> {
+        // Check time ordering
+        if let Some(current_bar) = &self.current_data {
+            if time < current_bar.time_utc() {
+                return None;
+            }
+        }
+
+        // Evaluate bar closure conditions before mutable borrow
+        let should_close = self.is_session_end(time) || self.should_start_new_bar(time);
+
+        if should_close {
+            if let Some(current_data) = self.current_data.as_mut() {
+                let mut return_data = current_data.clone();
+                return_data.set_is_closed(true);
+
+                // Store last prices before closing
+                if let BaseDataEnum::QuoteBar(quote_bar) = &return_data {
+                    self.last_ask_close = Some(quote_bar.ask_close.clone());
+                    self.last_bid_close = Some(quote_bar.bid_close.clone());
+                }
+
+                self.current_data = None;
+                self.fill_forward(time);
+                return Some(return_data);
+            }
+        } else if self.current_data.is_none() {
+            self.fill_forward(time);
+        }
+
+        None
+    }
 }
