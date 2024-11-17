@@ -27,13 +27,9 @@ fn example() {
       Some(Color::new(50,50,50)) //plot color rgb for charting 
     ).await;
   
-  // auto subscribe will subscribe the strategy to the indicators required data feed if it is not already, 
-  // if this is false and you don't have the subscription, the strategy will panic instead.
-  // if true then the new data subscription will also show up in the strategy event loop
-  let auto_subscribe: bool = false;
-  
-  //subscribe the strategy to auto manage the indicator
-  strategy.subscribe_indicator(heikin_atr_5, auto_subscribe).await;
+  //subscribe the strategy to auto manage the indicator, we also have Option<TradingHours>, this is for indicators which are using a daily or weekly resolution, 
+    // this is used to warm up the indicator and should be the same as the hours used for the data subscription, intraday subscriptions do not need this.
+  strategy.subscribe_indicator(heikin_atr_5, None).await;
 }
 ```
 
