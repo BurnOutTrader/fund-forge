@@ -18,6 +18,7 @@
 - [Placing Orders](#placing-orders)
 - [Currency Conversion](#currency-conversion)
 - [Debugging Strategies](#debugging-strategies)
+- [Trading Hours](#trading-hours)
 
 ## Important Info
 The test strategies might appear to be frozen before warm up,
@@ -1336,3 +1337,193 @@ This won't happen in backtesting, but it does happen in live markets.
 One way to await order fill events would be to use and Option<OrderId> to store the order_id after placing an order, and then await the order fill, cancel or rejection event and set order_id back to None.
 
 
+# Trading Hours
+
+This guide shows how to create trading hours for different market scenarios using the `TradingHours` struct.
+
+## Basic Structure
+```rust
+use chrono::{NaiveTime, Weekday};
+use chrono_tz::America::New_York;
+
+let trading_hours = TradingHours {
+    timezone: New_York,
+    sunday: DaySession { open: None, close: None },
+    monday: DaySession { open: None, close: None },
+    tuesday: DaySession { open: None, close: None },
+    wednesday: DaySession { open: None, close: None },
+    thursday: DaySession { open: None, close: None },
+    friday: DaySession { open: None, close: None },
+    saturday: DaySession { open: None, close: None },
+    week_start: Weekday::Mon,
+};
+```
+
+## Common Market Examples
+
+### Regular US Stock Market Hours (NYSE/NASDAQ)
+```rust
+use chrono::NaiveTime;
+use chrono_tz::America::New_York;
+
+let regular_market = TradingHours {
+    timezone: New_York,
+    sunday: DaySession { open: None, close: None },
+    monday: DaySession {
+        open: Some(NaiveTime::from_hms_opt(9, 30, 0).unwrap()),
+        close: Some(NaiveTime::from_hms_opt(16, 0, 0).unwrap()),
+    },
+    tuesday: DaySession {
+        open: Some(NaiveTime::from_hms_opt(9, 30, 0).unwrap()),
+        close: Some(NaiveTime::from_hms_opt(16, 0, 0).unwrap()),
+    },
+    wednesday: DaySession {
+        open: Some(NaiveTime::from_hms_opt(9, 30, 0).unwrap()),
+        close: Some(NaiveTime::from_hms_opt(16, 0, 0).unwrap()),
+    },
+    thursday: DaySession {
+        open: Some(NaiveTime::from_hms_opt(9, 30, 0).unwrap()),
+        close: Some(NaiveTime::from_hms_opt(16, 0, 0).unwrap()),
+    },
+    friday: DaySession {
+        open: Some(NaiveTime::from_hms_opt(9, 30, 0).unwrap()),
+        close: Some(NaiveTime::from_hms_opt(16, 0, 0).unwrap()),
+    },
+    saturday: DaySession { open: None, close: None },
+    week_start: Weekday::Mon,
+};
+```
+
+### CME E-mini S&P 500 Futures (ES)
+```rust
+use chrono::NaiveTime;
+use chrono_tz::America::Chicago;
+
+let es_futures = TradingHours {
+    timezone: Chicago,
+    sunday: DaySession {
+        open: Some(NaiveTime::from_hms_opt(17, 0, 0).unwrap()),
+        close: None, // Overnight session
+    },
+    monday: DaySession {
+        open: None, // Continues from Sunday
+        close: Some(NaiveTime::from_hms_opt(16, 0, 0).unwrap()),
+    },
+    tuesday: DaySession {
+        open: Some(NaiveTime::from_hms_opt(17, 0, 0).unwrap()),
+        close: Some(NaiveTime::from_hms_opt(16, 0, 0).unwrap()),
+    },
+    wednesday: DaySession {
+        open: Some(NaiveTime::from_hms_opt(17, 0, 0).unwrap()),
+        close: Some(NaiveTime::from_hms_opt(16, 0, 0).unwrap()),
+    },
+    thursday: DaySession {
+        open: Some(NaiveTime::from_hms_opt(17, 0, 0).unwrap()),
+        close: Some(NaiveTime::from_hms_opt(16, 0, 0).unwrap()),
+    },
+    friday: DaySession {
+        open: Some(NaiveTime::from_hms_opt(17, 0, 0).unwrap()),
+        close: Some(NaiveTime::from_hms_opt(16, 0, 0).unwrap()),
+    },
+    saturday: DaySession { open: None, close: None },
+    week_start: Weekday::Sun,  // Week starts Sunday at 5pm CT
+};
+```
+
+### Forex Market (24/5)
+```rust
+use chrono::NaiveTime;
+use chrono_tz::America::New_York;
+
+let forex_market = TradingHours {
+    timezone: New_York,
+    sunday: DaySession {
+        open: Some(NaiveTime::from_hms_opt(17, 0, 0).unwrap()),
+        close: None,
+    },
+    monday: DaySession {
+        open: None,
+        close: None,  // 24-hour trading
+    },
+    tuesday: DaySession {
+        open: None,
+        close: None,  // 24-hour trading
+    },
+    wednesday: DaySession {
+        open: None,
+        close: None,  // 24-hour trading
+    },
+    thursday: DaySession {
+        open: None,
+        close: None,  // 24-hour trading
+    },
+    friday: DaySession {
+        open: None,
+        close: Some(NaiveTime::from_hms_opt(17, 0, 0).unwrap()),
+    },
+    saturday: DaySession { open: None, close: None },
+    week_start: Weekday::Sun,
+};
+```
+
+## Usage Examples
+
+### Checking If Market Is Open
+```rust
+use chrono::{DateTime, Utc};
+
+let current_time = Utc::now();
+if trading_hours.is_market_open(current_time) {
+    println!("Market is open!");
+} else {
+    println!("Market is closed.");
+}
+```
+
+### Getting Time Until Market Close
+```rust
+if let Some(seconds) = trading_hours.seconds_until_close(current_time) {
+    println!("Market closes in {} seconds", seconds);
+    println!("Market closes in {} minutes", seconds / 60);
+    println!("Market closes in {} hours", seconds / 3600);
+} else {
+    println!("Market is closed or has no defined closing time");
+}
+```
+
+## Special Cases
+
+### Market with Multiple Sessions
+```rust
+// Example: Market with morning and afternoon sessions
+let dual_session_market = TradingHours {
+    timezone: New_York,
+    monday: DaySession {
+        open: Some(NaiveTime::from_hms_opt(9, 30, 0).unwrap()),
+        close: Some(NaiveTime::from_hms_opt(16, 0, 0).unwrap()),
+    },
+    // ... other days
+    week_start: Weekday::Mon,
+};
+```
+
+### Continuous Market (24/7)
+```rust
+let continuous_market = TradingHours {
+    timezone: New_York,
+    sunday: DaySession { open: Some(NaiveTime::from_hms_opt(0, 0, 0).unwrap()), close: None },
+    monday: DaySession { open: None, close: None },
+    tuesday: DaySession { open: None, close: None },
+    wednesday: DaySession { open: None, close: None },
+    thursday: DaySession { open: None, close: None },
+    friday: DaySession { open: None, close: None },
+    saturday: DaySession { open: None, close: None },
+    week_start: Weekday::Sun,
+};
+```
+
+Remember:
+- Open/close times are in the specified timezone
+- When close time is None, session runs until next session's open
+- For 24-hour sessions, use open: None, close: None after initial open
+- Week start affects weekly bar consolidation
