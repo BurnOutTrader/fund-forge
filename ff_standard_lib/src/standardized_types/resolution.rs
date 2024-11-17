@@ -15,6 +15,8 @@ pub enum Resolution {
     Seconds(u64),
     Minutes(u64),
     Hours(u64),
+    Days(u64),
+    Weeks(u64),
 }
 
 impl Default for Resolution {
@@ -52,6 +54,8 @@ impl FromStr for Resolution {
             Some('S') => Ok(Resolution::Seconds(number)),
             Some('M') => Ok(Resolution::Minutes(number)),
             Some('H') => Ok(Resolution::Hours(number)),
+            Some('D') => Ok(Resolution::Days(number)),
+            Some('W') => Ok(Resolution::Weeks(number)),
             Some(c) => Err(format!("Invalid resolution type '{}' in {}", c, s)),
             None => Err(format!("Empty resolution type in {}", s)),
         }
@@ -69,6 +73,8 @@ impl Resolution {
             Resolution::Seconds(val) => Duration::seconds(*val as i64),
             Resolution::Minutes(val) => Duration::minutes(*val as i64),
             Resolution::Hours(val) => Duration::hours(*val as i64),
+            Resolution::Days(val) => Duration::days(*val as i64),
+            Resolution::Weeks(val) => Duration::weeks(*val as i64),
         }
     }
 
@@ -79,6 +85,8 @@ impl Resolution {
             Resolution::Seconds(val) => val.clone(),
             Resolution::Minutes(val) => val.clone(),
             Resolution::Hours(val) => val.clone(),
+            Resolution::Days(val) => val.clone(),
+            Resolution::Weeks(val) => val.clone(),
         }
     }
 
@@ -106,6 +114,8 @@ impl Resolution {
             Resolution::Seconds(val) => format!("{}-S", val),
             Resolution::Minutes(val) => format!("{}-M", val),
             Resolution::Hours(val) => format!("{}-H", val),
+            Resolution::Days(val) => format!("{}-D", val),
+            Resolution::Weeks(val) => format!("{}-W", val),
         }
     }
 }
@@ -119,6 +129,8 @@ impl fmt::Display for Resolution {
             Resolution::Seconds(val) => write!(f, "{}-Second", val),
             Resolution::Minutes(val) => write!(f, "{}-Minute", val),
             Resolution::Hours(val) => write!(f, "{}-Hour", val),
+            Resolution::Days(val) => write!(f, "{}-Days", val),
+            Resolution::Weeks(val) => write!(f, "{}-Week", val),
         }
     }
 }

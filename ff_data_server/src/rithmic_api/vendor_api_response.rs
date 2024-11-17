@@ -378,6 +378,7 @@ impl VendorApiResponse for RithmicBrokerageClient {
             Resolution::Minutes(interval) => min(Duration::hours(24 * interval as i64), Duration::hours(48)),
             Resolution::Hours(interval) => min(Duration::hours(72 * interval as i64), Duration::hours(48)),
             Resolution::Ticks(_) | Resolution::Instant => Duration::hours(4),
+            _ => return Err(FundForgeError::ClientSideErrorDebug(format!("Unsupported resolution: {}", resolution))),
         };
 
         // Calculate how many complete download windows we need
