@@ -1,4 +1,5 @@
-use chrono::{DateTime, Datelike, TimeZone, Timelike, Utc, Weekday};
+use std::collections::BTreeMap;
+use chrono::{DateTime, Datelike, Duration, TimeZone, Timelike, Utc, Weekday};
 use rust_decimal::Decimal;
 use rust_decimal_macros::dec;
 use crate::messages::data_server_messaging::FundForgeError;
@@ -12,7 +13,8 @@ use crate::standardized_types::new_types::Price;
 use crate::standardized_types::resolution::Resolution;
 use crate::standardized_types::subscriptions::{CandleType, DataSubscription};
 use crate::strategies::consolidators::consolidator_enum::ConsolidatedData;
-
+use crate::strategies::consolidators::daily_candles::{SessionTime, TimeAction, UpdateParams};
+#[derive(Debug, Clone)]
 pub struct DailyQuoteConsolidator {
     current_data: Option<BaseDataEnum>,
     pub(crate) subscription: DataSubscription,
@@ -20,59 +22,195 @@ pub struct DailyQuoteConsolidator {
     tick_size: Decimal,
     last_ask_close: Option<Price>,
     last_bid_close: Option<Price>,
-    fill_forward: bool,
     market_type: MarketType,
-    last_bar_open: DateTime<Utc>,
     trading_hours: TradingHours,
     days_per_bar: i64,
-    current_bar_start_day: Option<DateTime<Utc>>,
+    session_map: BTreeMap<DateTime<Utc>, SessionTime>,
+    current_session: Option<SessionTime>,
 }
-#[allow(dead_code)]
+
 impl DailyQuoteConsolidator {
-    pub(crate) async fn new(
+    pub(crate) fn new(
         subscription: DataSubscription,
-        fill_forward: bool,
         decimal_accuracy: u32,
         tick_size: Decimal,
         trading_hours: TradingHours,
     ) -> Result<Self, FundForgeError> {
-        println!("Creating Daily Quote Consolidator For: {}", subscription);
-
-        if subscription.base_data_type == BaseDataType::Fundamentals
-            || subscription.base_data_type == BaseDataType::Ticks
-            || subscription.base_data_type == BaseDataType::Candles {
+        if subscription.base_data_type != BaseDataType::Quotes
+            && subscription.base_data_type != BaseDataType::QuoteBars {
             return Err(FundForgeError::ClientSideErrorDebug(format!(
                 "{} is an Invalid base data type for DailyQuoteConsolidator",
                 subscription.base_data_type
             )));
         }
 
-        let days_per_bar = match subscription.resolution {
-            Resolution::Days(days) => days as i64,
-            _ => return Err(FundForgeError::ClientSideErrorDebug(
-                "DailyQuoteConsolidator requires Resolution::Daily".to_string()
-            )),
-        };
-
-        let market_type = subscription.symbol.market_type.clone();
-
-        Ok(DailyQuoteConsolidator {
+        let mut consolidator = DailyQuoteConsolidator {
+            market_type: subscription.symbol.market_type.clone(),
             current_data: None,
-            market_type,
             subscription,
             decimal_accuracy,
             tick_size,
             last_ask_close: None,
             last_bid_close: None,
-            fill_forward,
-            last_bar_open: DateTime::<Utc>::MIN_UTC,
-            trading_hours,
-            days_per_bar,
-            current_bar_start_day: None,
-        })
+            trading_hours: trading_hours.clone(),
+            days_per_bar: 1,
+            session_map: BTreeMap::new(),
+            current_session: None,
+        };
+
+        consolidator.initialize_session_map();
+        Ok(consolidator)
     }
 
-    // Reuse all the session management methods from DailyConsolidator
+    #[cfg(test)]
+    pub(crate) fn new_with_reference_time(
+        subscription: DataSubscription,
+        decimal_accuracy: u32,
+        tick_size: Decimal,
+        trading_hours: TradingHours,
+        reference_time: DateTime<Utc>,
+    ) -> Result<Self, FundForgeError> {
+        if subscription.base_data_type != BaseDataType::Quotes
+            && subscription.base_data_type != BaseDataType::QuoteBars {
+            return Err(FundForgeError::ClientSideErrorDebug(format!(
+                "{} is an Invalid base data type for DailyQuoteConsolidator",
+                subscription.base_data_type
+            )));
+        }
+
+        let mut consolidator = DailyQuoteConsolidator {
+            market_type: subscription.symbol.market_type.clone(),
+            current_data: None,
+            subscription,
+            decimal_accuracy,
+            tick_size,
+            last_ask_close: None,
+            last_bid_close: None,
+            trading_hours: trading_hours.clone(),
+            days_per_bar: 1,
+            session_map: BTreeMap::new(),
+            current_session: None,
+        };
+
+        consolidator.initialize_session_map_from(reference_time);
+        Ok(consolidator)
+    }
+
+    fn initialize_session_map(&mut self) {
+        // Start from week_start and generate for 7 days
+        let tz = self.trading_hours.timezone;
+        let now = Utc::now();
+        let current_week_start = now
+            .with_timezone(&tz)
+            .date_naive()
+            .week(self.trading_hours.week_start)
+            .first_day();
+
+        for days_offset in 0..7 {
+            let current_date = current_week_start + Duration::days(days_offset);
+            let weekday = current_date.weekday();
+            let current_session = self.get_session_for_day(weekday);
+            let next_session = self.get_session_for_day(weekday.succ());
+
+            if let Some(open_time) = current_session.open {
+                let session_open = current_date
+                    .and_hms_opt(open_time.hour(), open_time.minute(), open_time.second())
+                    .unwrap()
+                    .and_local_timezone(tz)
+                    .unwrap()
+                    .with_timezone(&Utc);
+
+                let session_close = if let Some(close_time) = current_session.close {
+                    let close_datetime = current_date
+                        .and_hms_opt(close_time.hour(), close_time.minute(), close_time.second())
+                        .unwrap();
+                    (close_datetime, true)
+                } else if let Some(next_open) = next_session.open {
+                    let next_day = current_date + Duration::days(1);
+                    let close_datetime = next_day
+                        .and_hms_opt(next_open.hour(), next_open.minute(), next_open.second())
+                        .unwrap();
+                    (close_datetime, false)
+                } else {
+                    continue;
+                };
+
+                let close_utc = session_close.0
+                    .and_local_timezone(tz)
+                    .unwrap()
+                    .with_timezone(&Utc);
+
+                self.session_map.insert(
+                    session_open,
+                    SessionTime {
+                        open: session_open,
+                        close: close_utc,
+                        is_same_day: session_close.1,
+                    },
+                );
+            }
+        }
+    }
+
+    fn initialize_session_map_from(&mut self, reference_time: DateTime<Utc>) {
+        let tz = self.trading_hours.timezone;
+        let weeks_to_generate = 2;
+
+        let current_week_start = reference_time
+            .with_timezone(&tz)
+            .date_naive()
+            .week(self.trading_hours.week_start)
+            .first_day();
+
+        for week_offset in 0..weeks_to_generate {
+            let week_start = current_week_start + Duration::weeks(week_offset);
+            for days_offset in 0..7 {
+                let current_date = week_start + Duration::days(days_offset);
+                let weekday = current_date.weekday();
+                let current_session = self.get_session_for_day(weekday);
+                let next_session = self.get_session_for_day(weekday.succ());
+
+                if let Some(open_time) = current_session.open {
+                    let session_open = current_date
+                        .and_hms_opt(open_time.hour(), open_time.minute(), open_time.second())
+                        .unwrap()
+                        .and_local_timezone(tz)
+                        .unwrap()
+                        .with_timezone(&Utc);
+
+                    let session_close = if let Some(close_time) = current_session.close {
+                        let close_datetime = current_date
+                            .and_hms_opt(close_time.hour(), close_time.minute(), close_time.second())
+                            .unwrap();
+                        (close_datetime, true)
+                    } else if let Some(next_open) = next_session.open {
+                        let next_day = current_date + Duration::days(1);
+                        let close_datetime = next_day
+                            .and_hms_opt(next_open.hour(), next_open.minute(), next_open.second())
+                            .unwrap();
+                        (close_datetime, false)
+                    } else {
+                        continue;
+                    };
+
+                    let close_utc = session_close.0
+                        .and_local_timezone(tz)
+                        .unwrap()
+                        .with_timezone(&Utc);
+
+                    self.session_map.insert(
+                        session_open,
+                        SessionTime {
+                            open: session_open,
+                            close: close_utc,
+                            is_same_day: session_close.1,
+                        },
+                    );
+                }
+            }
+        }
+    }
+
     fn get_session_for_day(&self, weekday: Weekday) -> &DaySession {
         match weekday {
             Weekday::Mon => &self.trading_hours.monday,
@@ -85,339 +223,359 @@ impl DailyQuoteConsolidator {
         }
     }
 
-    fn get_next_market_open(&self, from_time: DateTime<Utc>) -> Option<DateTime<Utc>> {
-        // Same implementation as DailyConsolidator
-        let mut check_time = from_time.with_timezone(&self.trading_hours.timezone);
-
-        for _ in 0..14 {
-            let current_session = self.get_session_for_day(check_time.weekday());
-
-            if let Some(open_time) = current_session.open {
-                let current_time = check_time.time();
-                let market_datetime = if current_time >= open_time {
-                    check_time.date_naive().succ_opt().unwrap()
-                        .and_hms_opt(open_time.hour(), open_time.minute(), open_time.second())
-                        .unwrap()
-                } else {
-                    check_time.date_naive()
-                        .and_hms_opt(open_time.hour(), open_time.minute(), open_time.second())
-                        .unwrap()
-                };
-
-                if let Some(tz_datetime) = self.trading_hours.timezone.from_local_datetime(&market_datetime).latest() {
-                    return Some(tz_datetime.with_timezone(&Utc));
-                }
-            }
-
-            check_time = check_time.date_naive().succ_opt().unwrap()
-                .and_hms_opt(0, 0, 0)
-                .unwrap()
-                .and_local_timezone(self.trading_hours.timezone)
-                .unwrap();
-        }
-
-        None
+    fn get_current_session(&self, time: DateTime<Utc>) -> Option<&SessionTime> {
+        self.session_map
+            .range(..=time)
+            .next_back()
+            .map(|(_, session)| session)
+            .filter(|session| time < session.close)
     }
 
-    // Reuse bar timing logic from DailyConsolidator
-    fn should_start_new_bar(&self, time: DateTime<Utc>) -> bool {
-        if self.current_bar_start_day.is_none() {
-            return true;
-        }
-
-        let start_day = self.current_bar_start_day.unwrap();
-        let days_elapsed = (time - start_day).num_days();
-
-        days_elapsed >= self.days_per_bar
-    }
-
-    fn is_session_end(&self, time: DateTime<Utc>) -> bool {
-        let market_time = time.with_timezone(&self.trading_hours.timezone);
-        let current_session = self.get_session_for_day(market_time.weekday());
-
-        if let Some(close_time) = current_session.close {
-            // If there's a close time, check if we've reached it
-            return market_time.time() >= close_time;
-        }
-
-        // For sessions without explicit close time, we need to find the next trading session
-        let mut check_time = market_time;
-        let mut found_next_session = false;
-
-        // Look through next 7 days to find next session
-        for _ in 0..7 {
-            check_time = check_time.date_naive().succ_opt().unwrap()
-                .and_hms_opt(0, 0, 0)
-                .unwrap()
-                .and_local_timezone(self.trading_hours.timezone)
-                .unwrap();
-
-            let next_session = self.get_session_for_day(check_time.weekday());
-
-            // First non-empty session we find is our boundary
-            if next_session.open.is_some() {
-                found_next_session = true;
-
-                // Compare trading hours
-                match (current_session.open, next_session.open) {
-                    (Some(curr_open), Some(next_open)) => {
-                        // Different open times indicate a session boundary
-                        if curr_open != next_open {
-                            return true;
-                        }
-                        // Same open time, this is a continuation of the same session
-                        break;
-                    }
-                    _ => return true, // Trading hours change
-                }
-            }
-        }
-
-        // If we couldn't find any future sessions, this isn't a session end
-        if !found_next_session {
-            return false;
-        }
-
-        // If we got here, we found future sessions with the same trading hours
-        false
-    }
-
-    fn fill_forward(&mut self, time: DateTime<Utc>) {
-        if self.fill_forward {
-            match self.subscription.base_data_type {
-                BaseDataType::QuoteBars => {
-                    if let (Some(last_bid_close), Some(last_ask_close)) = (self.last_bid_close, self.last_ask_close) {
-                        let time = if let Some(next_open) = self.get_next_market_open(time) {
-                            next_open
-                        } else {
-                            time
-                        };
-
-                        if time == self.last_bar_open {
-                            return;
-                        }
-
-                        self.last_bar_open = time.clone();
-                        let spread = self.market_type.round_price(
-                            last_ask_close - last_bid_close,
-                            self.tick_size,
-                            self.decimal_accuracy
-                        );
-
-                        self.current_data = Some(BaseDataEnum::QuoteBar(QuoteBar {
-                            symbol: self.subscription.symbol.clone(),
-                            ask_open: last_ask_close,
-                            ask_high: last_ask_close,
-                            ask_low: last_ask_close,
-                            ask_close: last_ask_close,
-                            bid_open: last_bid_close,
-                            bid_high: last_bid_close,
-                            bid_low: last_bid_close,
-                            bid_close: last_bid_close,
-                            volume: dec!(0.0),
-                            ask_volume: dec!(0.0),
-                            bid_volume: dec!(0.0),
-                            time: time.to_string(),
-                            resolution: self.subscription.resolution.clone(),
-                            is_closed: false,
-                            range: dec!(0.0),
-                            spread,
-                            candle_type: CandleType::CandleStick,
-                        }));
-                    }
-                }
-                _ => {}
-            }
-        }
-    }
-
-    fn update_quote_bars(&mut self, base_data: &BaseDataEnum) -> ConsolidatedData {
-        if !self.trading_hours.is_market_open(base_data.time_utc()) {
-            return ConsolidatedData::with_open(base_data.clone());
-        }
-
-        if self.current_data.is_none() {
-            let data = self.new_quote_bar(base_data);
-            self.current_bar_start_day = Some(base_data.time_utc());
-            self.current_data = Some(BaseDataEnum::QuoteBar(data.clone()));
-            return ConsolidatedData::with_open(BaseDataEnum::QuoteBar(data));
-        }
-
-        let time = base_data.time_utc();
-
-        // Check time ordering before any other operations
-        if let Some(current_bar) = &self.current_data {
-            if time < current_bar.time_utc() {
-                return ConsolidatedData::with_open(base_data.clone());
-            }
-        }
-
-        // Evaluate session end condition before taking mutable borrow
-        let should_close = self.is_session_end(time) || self.should_start_new_bar(time);
-
-        if should_close {
-            // Now we can safely handle the closing of the bar
-            if let Some(current_bar) = self.current_data.as_mut() {
-                let mut consolidated_bar = current_bar.clone();
-                consolidated_bar.set_is_closed(true);
-
-                // Store last prices before we create new bar
-                match &consolidated_bar {
-                    BaseDataEnum::QuoteBar(quote_bar) => {
-                        self.last_ask_close = Some(quote_bar.ask_close.clone());
-                        self.last_bid_close = Some(quote_bar.bid_close.clone());
-                    }
-                    _ => {}
-                }
-
-                let new_bar = self.new_quote_bar(base_data);
-                self.current_bar_start_day = Some(time);
-                self.current_data = Some(BaseDataEnum::QuoteBar(new_bar.clone()));
-
-                return ConsolidatedData::with_closed(
-                    BaseDataEnum::QuoteBar(new_bar),
-                    consolidated_bar
+    fn update_bar(
+        params: &UpdateParams,
+        current_bar: &mut BaseDataEnum,
+        new_data: &BaseDataEnum
+    ) {
+        match (current_bar, new_data) {
+            (BaseDataEnum::QuoteBar(quote_bar), BaseDataEnum::Quote(quote)) => {
+                quote_bar.ask_high = quote_bar.ask_high.max(quote.ask);
+                quote_bar.ask_low = quote_bar.ask_low.min(quote.ask);
+                quote_bar.bid_high = quote_bar.bid_high.max(quote.bid);
+                quote_bar.bid_low = quote_bar.bid_low.min(quote.bid);
+                quote_bar.ask_close = quote.ask;
+                quote_bar.bid_close = quote.bid;
+                quote_bar.volume += quote.ask_volume + quote.bid_volume;
+                quote_bar.ask_volume += quote.ask_volume;
+                quote_bar.bid_volume += quote.bid_volume;
+                quote_bar.range = params.market_type.round_price(
+                    quote_bar.ask_high - quote_bar.bid_low,
+                    params.tick_size,
+                    params.decimal_accuracy,
+                );
+                quote_bar.spread = params.market_type.round_price(
+                    quote_bar.ask_close - quote_bar.bid_close,
+                    params.tick_size,
+                    params.decimal_accuracy,
                 );
             }
-        }
-
-        // Update existing bar
-        if let Some(current_bar) = self.current_data.as_mut() {
-            match current_bar {
-                BaseDataEnum::QuoteBar(quote_bar) => match base_data {
-                    BaseDataEnum::Quote(quote) => {
-                        quote_bar.ask_high = quote_bar.ask_high.max(quote.ask);
-                        quote_bar.ask_low = quote_bar.ask_low.min(quote.ask);
-                        quote_bar.bid_high = quote_bar.bid_high.max(quote.bid);
-                        quote_bar.bid_low = quote_bar.bid_low.min(quote.bid);
-                        quote_bar.ask_close = quote.ask;
-                        quote_bar.bid_close = quote.bid;
-                        quote_bar.volume += quote.ask_volume + quote.bid_volume;
-                        quote_bar.ask_volume += quote.ask_volume;
-                        quote_bar.bid_volume += quote.bid_volume;
-                        quote_bar.range = self.market_type.round_price(
-                            quote_bar.ask_high - quote_bar.bid_low,
-                            self.tick_size,
-                            self.decimal_accuracy,
-                        );
-                        quote_bar.spread = self.market_type.round_price(
-                            quote_bar.ask_close - quote_bar.bid_close,
-                            self.tick_size,
-                            self.decimal_accuracy,
-                        );
-                        ConsolidatedData::with_open(base_data.clone())
-                    }
-                    BaseDataEnum::QuoteBar(new_quote_bar) => {
-                        quote_bar.ask_high = quote_bar.ask_high.max(new_quote_bar.ask_high);
-                        quote_bar.ask_low = quote_bar.ask_low.min(new_quote_bar.ask_low);
-                        quote_bar.bid_high = quote_bar.bid_high.max(new_quote_bar.bid_high);
-                        quote_bar.bid_low = quote_bar.bid_low.min(new_quote_bar.bid_low);
-                        quote_bar.ask_close = new_quote_bar.ask_close;
-                        quote_bar.bid_close = new_quote_bar.bid_close;
-                        quote_bar.volume += new_quote_bar.volume;
-                        quote_bar.ask_volume += new_quote_bar.ask_volume;
-                        quote_bar.bid_volume += new_quote_bar.bid_volume;
-                        quote_bar.range = self.market_type.round_price(
-                            quote_bar.ask_high - quote_bar.bid_low,
-                            self.tick_size,
-                            self.decimal_accuracy,
-                        );
-                        quote_bar.spread = self.market_type.round_price(
-                            quote_bar.ask_close - quote_bar.bid_close,
-                            self.tick_size,
-                            self.decimal_accuracy,
-                        );
-                        ConsolidatedData::with_open(base_data.clone())
-                    }
-                    _ => panic!(
-                        "Invalid base data type for QuoteBar consolidator: {}",
-                        base_data.base_data_type()
-                    ),
-                },
-                _ => panic!(
-                    "Invalid base data type for QuoteBar consolidator: {}",
-                    base_data.base_data_type()
-                ),
+            (BaseDataEnum::QuoteBar(current), BaseDataEnum::QuoteBar(new)) => {
+                current.ask_high = current.ask_high.max(new.ask_high);
+                current.ask_low = current.ask_low.min(new.ask_low);
+                current.bid_high = current.bid_high.max(new.bid_high);
+                current.bid_low = current.bid_low.min(new.bid_low);
+                current.ask_close = new.ask_close;
+                current.bid_close = new.bid_close;
+                current.volume += new.volume;
+                current.ask_volume += new.ask_volume;
+                current.bid_volume += new.bid_volume;
+                current.range = params.market_type.round_price(
+                    current.ask_high - current.bid_low,
+                    params.tick_size,
+                    params.decimal_accuracy,
+                );
+                current.spread = params.market_type.round_price(
+                    current.ask_close - current.bid_close,
+                    params.tick_size,
+                    params.decimal_accuracy,
+                );
             }
-        } else {
-            panic!(
-                "Invalid base data type for QuoteBar consolidator: {}",
-                base_data.base_data_type()
-            );
+            _ => panic!("Invalid base data type combination for update"),
         }
     }
 
-    fn new_quote_bar(&mut self, new_data: &BaseDataEnum) -> QuoteBar {
-        let time = if let Some(next_open) = self.get_next_market_open(new_data.time_utc()) {
-            next_open
-        } else {
-            new_data.time_utc()
+    pub fn update_time(&mut self, time: DateTime<Utc>) -> Option<BaseDataEnum> {
+        let action = {
+            let current_session_info = self.get_current_session(time);
+            let current_stored_session = self.current_session.as_ref();
+
+            match (current_session_info, current_stored_session) {
+                (Some(new_session), Some(stored_session))
+                if new_session.open != stored_session.open => {
+                    Some(TimeAction::NewSession(new_session.clone()))
+                }
+                (Some(new_session), None) => {
+                    Some(TimeAction::EnterSession(new_session.clone()))
+                }
+                (None, Some(_)) => {
+                    Some(TimeAction::LeaveSession)
+                }
+                (Some(session), Some(_)) if time >= session.close => {
+                    Some(TimeAction::SessionEnd(session.clone()))
+                }
+                _ => None
+            }
         };
 
-        self.last_bar_open = time;
+        match action {
+            Some(TimeAction::NewSession(new_session)) => {
+                let closed_bar = self.current_data.take().map(|mut bar| {
+                    bar.set_is_closed(true);
+                    bar
+                });
+                self.current_session = Some(new_session);
+                closed_bar
+            }
+            Some(TimeAction::EnterSession(new_session)) => {
+                self.current_session = Some(new_session);
+                None
+            }
+            Some(TimeAction::LeaveSession) => {
+                let closed_bar = self.current_data.take().map(|mut bar| {
+                    bar.set_is_closed(true);
+                    bar
+                });
+                self.current_session = None;
+                closed_bar
+            }
+            Some(TimeAction::SessionEnd(new_session)) => {
+                let closed_bar = self.current_data.take().map(|mut bar| {
+                    bar.set_is_closed(true);
+                    bar
+                });
+                self.current_session = Some(new_session);
+                closed_bar
+            }
+            None => None
+        }
+    }
 
-        match new_data {
+    fn create_bar(&self, base_data: &BaseDataEnum, session_open: DateTime<Utc>) -> QuoteBar {
+        match base_data {
             BaseDataEnum::Quote(quote) => {
                 QuoteBar::new(
                     self.subscription.symbol.clone(),
-                    quote.bid,
                     quote.ask,
-                    quote.bid_volume + quote.ask_volume,
+                    quote.bid,
                     quote.ask_volume,
                     quote.bid_volume,
-                    time.to_string(),
+                    quote.bid_volume + quote.ask_volume,
+                    session_open.to_string(),
                     self.subscription.resolution.clone(),
-                    CandleType::CandleStick,
+                    CandleType::CandleStick
                 )
             }
             BaseDataEnum::QuoteBar(quote_bar) => {
-                let mut consolidated_bar = quote_bar.clone();
-                consolidated_bar.is_closed = false;
-                consolidated_bar.resolution = self.subscription.resolution.clone();
-                consolidated_bar.time = time.to_string();
-                consolidated_bar
+                let mut new_quote_bar = quote_bar.clone();
+                new_quote_bar.is_closed = false;
+                new_quote_bar.resolution = self.subscription.resolution.clone();
+                new_quote_bar.time = session_open.to_string();
+                new_quote_bar
             }
             _ => panic!("Invalid base data type for QuoteBar consolidator"),
         }
     }
 
+
     pub fn update(&mut self, base_data: &BaseDataEnum) -> ConsolidatedData {
-        match base_data.base_data_type() {
-            BaseDataType::Quotes | BaseDataType::QuoteBars => self.update_quote_bars(base_data),
-            _ => panic!("Only Quotes and QuoteBars are supported for daily quote consolidation"),
+        let time = base_data.time_utc();
+
+        // First check if time update would close any bars
+        if let Some(closed_bar) = self.update_time(time) {
+            return ConsolidatedData::with_closed(base_data.clone(), closed_bar);
+        }
+
+        // Get current session without holding borrow
+        let current_session = self.get_current_session(time).cloned();
+
+        match current_session {
+            Some(session) if self.current_data.is_none() => {
+                // Start new bar
+                let new_bar = self.create_bar(base_data, session.open);
+                self.current_data = Some(BaseDataEnum::QuoteBar(new_bar.clone()));
+                ConsolidatedData::with_open(BaseDataEnum::QuoteBar(new_bar))
+            }
+            Some(_) => {
+                // Update existing bar
+                if let Some(ref mut current_bar) = self.current_data {
+                    let params = UpdateParams {
+                        market_type: self.market_type.clone(),
+                        tick_size: self.tick_size,
+                        decimal_accuracy: self.decimal_accuracy,
+                    };
+                    Self::update_bar(&params, current_bar, base_data);
+                }
+                ConsolidatedData::with_open(base_data.clone())
+            }
+            None => ConsolidatedData::with_open(base_data.clone())
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use chrono::{NaiveDateTime, NaiveTime, DateTime, Utc};
+    use super::*;
+    use chrono_tz::America::New_York;
+    use crate::standardized_types::base_data::quotebar::generate_5_day_quote_bar_data;
+    use crate::standardized_types::datavendor_enum::DataVendor;
+    use crate::standardized_types::subscriptions::Symbol;
+
+    // Helper function to parse DateTime<Utc> strings
+    fn parse_datetime(datetime_str: &str) -> DateTime<Utc> {
+        // Remove " UTC" suffix if present
+        let cleaned_str = datetime_str.trim_end_matches(" UTC");
+
+        DateTime::<Utc>::from_naive_utc_and_offset(
+            NaiveDateTime::parse_from_str(cleaned_str, "%Y-%m-%d %H:%M:%S")
+                .unwrap_or_else(|e| panic!("Failed to parse datetime '{}': {}", datetime_str, e)),
+            Utc,
+        )
+    }
+
+    fn setup_trading_hours() -> TradingHours {
+        TradingHours {
+            timezone: New_York,
+            sunday: DaySession {
+                open: Some(NaiveTime::from_hms_opt(17, 0, 0).unwrap()),
+                close: None // Closes at Monday open
+            },
+            monday: DaySession {
+                open: Some(NaiveTime::from_hms_opt(9, 30, 0).unwrap()),
+                close: Some(NaiveTime::from_hms_opt(16, 0, 0).unwrap()),
+            },
+            tuesday: DaySession {
+                open: Some(NaiveTime::from_hms_opt(9, 30, 0).unwrap()),
+                close: Some(NaiveTime::from_hms_opt(16, 0, 0).unwrap()),
+            },
+            wednesday: DaySession {
+                open: Some(NaiveTime::from_hms_opt(9, 30, 0).unwrap()),
+                close: Some(NaiveTime::from_hms_opt(16, 0, 0).unwrap()),
+            },
+            thursday: DaySession {
+                open: Some(NaiveTime::from_hms_opt(9, 30, 0).unwrap()),
+                close: Some(NaiveTime::from_hms_opt(16, 0, 0).unwrap()),
+            },
+            friday: DaySession {
+                open: Some(NaiveTime::from_hms_opt(9, 30, 0).unwrap()),
+                close: Some(NaiveTime::from_hms_opt(16, 0, 0).unwrap()),
+            },
+            saturday: DaySession { open: None, close: None },
+            week_start: Weekday::Sun,
         }
     }
 
-    pub fn update_time(&mut self, time: DateTime<Utc>) -> Option<BaseDataEnum> {
-        // Check time ordering
-        if let Some(current_bar) = &self.current_data {
-            if time < current_bar.time_utc() {
-                return None;
-            }
+    #[tokio::test]
+    async fn test_daily_quote_consolidation() {
+        let trading_hours = setup_trading_hours();
+        let subscription = DataSubscription {
+            symbol: Symbol::new("TEST".to_string(), DataVendor::Test, MarketType::CFD),
+            base_data_type: BaseDataType::QuoteBars,
+            resolution: Resolution::Day,
+            candle_type: Some(CandleType::CandleStick),
+            market_type: MarketType::CFD,
+        };
+
+        // Get the start time from the test data and print it
+        let test_data = generate_5_day_quote_bar_data();
+        let first_time = parse_datetime(&test_data.first().unwrap().time);
+        let last_time = parse_datetime(&test_data.last().unwrap().time);
+
+        println!("\nTest data range:");
+        println!("First quote bar time: {}", first_time);
+        println!("Last quote bar time: {}", last_time);
+
+        let mut consolidator = DailyQuoteConsolidator::new_with_reference_time(
+            subscription,
+            2,
+            dec!(0.01),
+            trading_hours,
+            first_time,
+        ).unwrap();
+
+        // Print session map after initialization
+        println!("\nInitial session map:");
+        for (start, session) in consolidator.session_map.iter() {
+            println!("Session: {} -> {}", start, session.close);
         }
 
-        // Evaluate bar closure conditions before mutable borrow
-        let should_close = self.is_session_end(time) || self.should_start_new_bar(time);
+        let mut daily_bars = Vec::new();
 
-        if should_close {
-            if let Some(current_data) = self.current_data.as_mut() {
-                let mut return_data = current_data.clone();
-                return_data.set_is_closed(true);
+        for (i, quote_bar) in test_data.iter().enumerate() {
+            let time = parse_datetime(&quote_bar.time);
 
-                // Store last prices before closing
-                if let BaseDataEnum::QuoteBar(quote_bar) = &return_data {
-                    self.last_ask_close = Some(quote_bar.ask_close.clone());
-                    self.last_bid_close = Some(quote_bar.bid_close.clone());
+            if i % 24 == 0 {
+                println!("\nProcessing day {} starting at {}", i / 24, time);
+                if let Some(session) = consolidator.get_current_session(time) {
+                    println!("Current session: Open={}, Close={}", session.open, session.close);
+                } else {
+                    println!("No active session");
                 }
-
-                self.current_data = None;
-                self.fill_forward(time);
-                return Some(return_data);
             }
-        } else if self.current_data.is_none() {
-            self.fill_forward(time);
+
+            if let Some(closed_bar) = consolidator.update_time(time) {
+                println!("Time update closed bar at {}", time);
+                daily_bars.push(closed_bar);
+            }
+
+            let result = consolidator.update(&BaseDataEnum::QuoteBar(quote_bar.clone()));
+            if let Some(closed_bar) = result.closed_data {
+                println!("Data update closed bar at {}", time);
+                daily_bars.push(closed_bar);
+            }
+
+            if let Some(ref current_bar) = consolidator.current_data {
+                if i % 24 == 0 {
+                    println!("Current bar: {:?}", current_bar);
+                }
+            }
         }
 
-        None
+        println!("\nGenerated {} daily quote bars:", daily_bars.len());
+        for (i, bar) in daily_bars.iter().enumerate() {
+            if let BaseDataEnum::QuoteBar(quote_bar) = bar {
+                println!("Bar {}: Time={}, Ask(O={},H={},L={},C={}), Bid(O={},H={},L={},C={})",
+                         i, quote_bar.time,
+                         quote_bar.ask_open, quote_bar.ask_high, quote_bar.ask_low, quote_bar.ask_close,
+                         quote_bar.bid_open, quote_bar.bid_high, quote_bar.bid_low, quote_bar.bid_close
+                );
+            }
+        }
+
+        assert!(!daily_bars.is_empty(), "Should produce at least one bar");
+
+        let market_data: Vec<&QuoteBar> = test_data.iter()
+            .filter(|qb| {
+                let time = parse_datetime(&qb.time);
+                consolidator.get_current_session(time).is_some()
+            })
+            .collect();
+
+        println!("\nFound {} quote bars during market hours", market_data.len());
+
+        for (i, bar) in daily_bars.iter().enumerate() {
+            if let BaseDataEnum::QuoteBar(quote_bar) = bar {
+                println!("Verifying bar {}: {}", i, quote_bar.time);
+
+                let bar_time = parse_datetime(&quote_bar.time);
+
+                if let Some(session) = consolidator.get_current_session(bar_time) {
+                    let session_data: Vec<&QuoteBar> = market_data.iter()
+                        .filter(|qb| {
+                            let time = parse_datetime(&qb.time);
+                            time >= session.open && time < session.close
+                        })
+                        .copied()
+                        .collect();
+
+                    if !session_data.is_empty() {
+                        let expected_ask_high = session_data.iter().map(|qb| qb.ask_high).max().unwrap();
+                        let expected_ask_low = session_data.iter().map(|qb| qb.ask_low).min().unwrap();
+                        let expected_bid_high = session_data.iter().map(|qb| qb.bid_high).max().unwrap();
+                        let expected_bid_low = session_data.iter().map(|qb| qb.bid_low).min().unwrap();
+                        let expected_volume: Decimal = session_data.iter().map(|qb| qb.volume).sum();
+                        let expected_ask_volume: Decimal = session_data.iter().map(|qb| qb.ask_volume).sum();
+                        let expected_bid_volume: Decimal = session_data.iter().map(|qb| qb.bid_volume).sum();
+
+                        assert_eq!(quote_bar.ask_high, expected_ask_high, "Bar {} ask high mismatch", i);
+                        assert_eq!(quote_bar.ask_low, expected_ask_low, "Bar {} ask low mismatch", i);
+                        assert_eq!(quote_bar.bid_high, expected_bid_high, "Bar {} bid high mismatch", i);
+                        assert_eq!(quote_bar.bid_low, expected_bid_low, "Bar {} bid low mismatch", i);
+                        assert_eq!(quote_bar.volume, expected_volume, "Bar {} volume mismatch", i);
+                        assert_eq!(quote_bar.ask_volume, expected_ask_volume, "Bar {} ask volume mismatch", i);
+                        assert_eq!(quote_bar.bid_volume, expected_bid_volume, "Bar {} bid volume mismatch", i);
+                    }
+                }
+            }
+        }
     }
 }

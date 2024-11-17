@@ -94,7 +94,7 @@ If your subscriptions are empty, you will need to add some at the start of your 
 
 We are passing in a tuple where PrimarySubscription is an Optional, this is used when the broker does not have the resolution we want to subscribe to, we can pass in the resolution and data type that we want to consolidate data from.
 
-The TradingHours is also an optional input, and must be used for `Resolution::Days(_)` or `Resolution::Weeks(_)`
+The TradingHours is also an optional input, and must be used for `Resolution::Day` or `Resolution::Week`
 Trading hours are used to define daily or weekly open and close times.
 
 There are helper functions for trading hours `get_futures_trading_hours(symbol: &str)` or you can construct your own custom object.

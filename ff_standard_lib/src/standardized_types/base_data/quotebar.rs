@@ -1,12 +1,13 @@
 use crate::standardized_types::base_data::base_data_type::BaseDataType;
 use crate::standardized_types::enums::MarketType;
 use crate::standardized_types::subscriptions::{CandleType, DataSubscription, Symbol};
-use chrono::{DateTime, TimeZone, Utc};
+use chrono::{DateTime, NaiveDate, NaiveDateTime, TimeZone, Utc};
 use chrono_tz::Tz;
 use rkyv::{Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv};
 use std::fmt;
 use std::fmt::{Debug, Display};
 use std::str::FromStr;
+use rust_decimal::Decimal;
 use rust_decimal_macros::dec;
 use crate::standardized_types::datavendor_enum::DataVendor;
 use crate::standardized_types::base_data::traits::BaseData;
@@ -275,4 +276,62 @@ impl Debug for QuoteBar {
             self.resolution , self.symbol, self.bid_high, self.bid_low, self.bid_open, self.bid_close, self.ask_high, self.ask_low, self.ask_open, self.ask_close, self.volume, self.ask_volume, self.bid_volume ,self.range, self.spread, self.time, self.is_closed
         )
     }
+}
+
+pub fn generate_5_day_quote_bar_data() -> Vec<QuoteBar> {
+    let mut test_data = Vec::new();
+    let base_date = NaiveDate::from_ymd_opt(2024, 11, 10).unwrap();
+
+    for day in 0..5 {
+        for hour in 0..24 {
+            // Generate time using DateTime<Utc>
+            let naive_time = NaiveDateTime::new(
+                base_date + chrono::Duration::days(day as i64),
+                chrono::NaiveTime::from_hms_opt(hour, 0, 0).unwrap(),
+            );
+            let utc_time: DateTime<Utc> = Utc.from_utc_datetime(&naive_time);
+
+            // Simulate bid and ask values
+            let bid_open = Decimal::from(100 + day as i32 * 10 + hour as i32);
+            let bid_close = bid_open + Decimal::from(-5i32 + (hour % 2) as i32 * 10);
+            let bid_high = bid_open.max(bid_close) + Decimal::from(2);
+            let bid_low = bid_open.min(bid_close) - Decimal::from(2);
+
+            let ask_open = bid_open + Decimal::from(1);
+            let ask_close = bid_close + Decimal::from(1);
+            let ask_high = ask_open.max(ask_close) + Decimal::from(2);
+            let ask_low = ask_open.min(ask_close) - Decimal::from(2);
+
+            // Simulate volumes
+            let volume = Decimal::from(1000 + day as i32 * 100 + hour as i32 * 10);
+            let ask_volume = volume / Decimal::from(2);
+            let bid_volume = volume / Decimal::from(2);
+
+            // Calculate range and spread
+            let range = (ask_high + bid_high) - (ask_low + bid_low);
+            let spread = ask_close - bid_close;
+
+            test_data.push(QuoteBar {
+                symbol: Symbol::new("TEST".to_string(), DataVendor::Test, MarketType::CFD), // Example symbol
+                bid_high,
+                bid_low,
+                bid_open,
+                bid_close,
+                ask_high,
+                ask_low,
+                ask_open,
+                ask_close,
+                volume,
+                ask_volume,
+                bid_volume,
+                range,
+                time: utc_time.to_string(),         // Generate time string from DateTime<Utc>
+                spread,
+                is_closed: true,                    // Assume quote bars are closed
+                resolution: Resolution::Hours(1),   // 1-hour resolution
+                candle_type: CandleType::CandleStick,  // Quote bar type
+            });
+        }
+    }
+    test_data
 }

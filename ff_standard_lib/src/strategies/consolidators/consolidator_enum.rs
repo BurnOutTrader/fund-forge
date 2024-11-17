@@ -47,7 +47,6 @@ impl ConsolidatorEnum {
                     BaseDataType::QuoteBars => {
                         return ConsolidatorEnum::DailyQuoteBars(
                             DailyQuoteConsolidator::new(subscription.clone(), decimal_accuracy, tick_size,hours.unwrap())
-                                .await
                                 .unwrap(),
                         );
                     }

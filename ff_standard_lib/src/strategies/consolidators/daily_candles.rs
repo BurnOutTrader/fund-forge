@@ -19,13 +19,13 @@ use crate::strategies::consolidators::consolidator_enum::ConsolidatedData;
 pub struct SessionTime {
     pub(crate) open: DateTime<Utc>,
     pub(crate) close: DateTime<Utc>,
-    is_same_day: bool,
+    pub(crate) is_same_day: bool,
 }
 
 pub struct UpdateParams {
-    market_type: MarketType,
-    tick_size: Decimal,
-    decimal_accuracy: u32,
+    pub(crate) market_type: MarketType,
+    pub(crate) tick_size: Decimal,
+    pub(crate) decimal_accuracy: u32,
 }
 
 #[derive(Debug)]
@@ -645,3 +645,4 @@ mod tests {
         }
     }
 }
+
