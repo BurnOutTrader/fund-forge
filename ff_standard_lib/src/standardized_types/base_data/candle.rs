@@ -2,12 +2,13 @@ use crate::standardized_types::base_data::base_data_type::BaseDataType;
 use crate::standardized_types::base_data::quotebar::QuoteBar;
 use crate::standardized_types::enums::MarketType;
 use crate::standardized_types::subscriptions::{CandleType, DataSubscription, Symbol};
-use chrono::{DateTime, TimeZone, Utc};
+use chrono::{DateTime, NaiveDate, NaiveDateTime, TimeZone, Utc};
 use chrono_tz::Tz;
 use rkyv::{Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv};
 use std::fmt;
 use std::fmt::{Display, Formatter};
 use std::str::FromStr;
+use rust_decimal::Decimal;
 use rust_decimal_macros::dec;
 use crate::standardized_types::datavendor_enum::DataVendor;
 use crate::standardized_types::base_data::traits::BaseData;
@@ -268,4 +269,47 @@ impl fmt::Debug for Candle {
             self.resolution, self.symbol, self.high, self.low, self.open, self.close, self.volume, self.ask_volume, self.bid_volume, self.range, self.time, self.is_closed, self.candle_type
         )
     }
+}
+
+pub fn generate_5_day_candle_data() -> Vec<Candle> {
+    let mut test_data = Vec::new();
+    let base_date = NaiveDate::from_ymd_opt(2024, 11, 10).unwrap();
+
+    for day in 0..5 {
+        for hour in 0..24 {
+            // Generate time using DateTime<Utc>
+            let naive_time = NaiveDateTime::new(
+                base_date + chrono::Duration::days(day as i64),
+                chrono::NaiveTime::from_hms_opt(hour, 0, 0).unwrap(),
+            );
+            let utc_time: DateTime<Utc> = Utc.from_utc_datetime(&naive_time);
+
+            // Simulate values
+            let open = Decimal::from(100 + day as i32 * 10 + hour as i32);
+            let close = open + Decimal::from(-5i32 + (hour % 2) as i32 * 10); // Fluctuate up and down
+            let high = open.max(close) + Decimal::from(2); // Simulate high
+            let low = open.min(close) - Decimal::from(2);  // Simulate low
+            let volume = Decimal::from(1000 + day as i32 * 100 + hour as i32 * 10);
+            let ask_volume = volume / Decimal::from(2);
+            let bid_volume = volume / Decimal::from(2);
+            let range = high - low;
+
+            test_data.push(Candle {
+                symbol: Symbol::new("TEST".to_string(), DataVendor::Test, MarketType::CFD), // Example symbol
+                high,
+                low,
+                open,
+                close,
+                volume,
+                ask_volume,
+                bid_volume,
+                range,
+                time: utc_time.to_string(),        // Generate time string from DateTime<Utc>
+                is_closed: true,                   // Assume candles are closed
+                resolution: Resolution::Hours(1),  // 1-hour resolution
+                candle_type: CandleType::CandleStick, // Assume standard candles
+            });
+        }
+    }
+    test_data
 }
