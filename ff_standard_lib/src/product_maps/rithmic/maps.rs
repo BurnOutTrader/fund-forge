@@ -610,7 +610,7 @@ pub const CME_HOURS: TradingHours = TradingHours {
         open: None,
         close: None,
     },
-    week_start: Weekday::Mon,
+    week_start: Weekday::Sun,
 };
 // CBOT Grains Schedule
 pub const CBOT_GRAINS_HOURS: TradingHours = TradingHours {
@@ -643,7 +643,7 @@ pub const CBOT_GRAINS_HOURS: TradingHours = TradingHours {
         open: None,
         close: None,
     },
-    week_start: Weekday::Mon,
+    week_start: Weekday::Sun,
 };
 const EUREX_HOURS: TradingHours = TradingHours {
     timezone: chrono_tz::Europe::Berlin,
@@ -675,7 +675,7 @@ const EUREX_HOURS: TradingHours = TradingHours {
         open: None,
         close: None,
     },
-    week_start: Weekday::Mon,
+    week_start: Weekday::Sun,
 };
 
 
