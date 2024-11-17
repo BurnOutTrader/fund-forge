@@ -42,26 +42,25 @@ impl ConsolidatorEnum {
         let tick_size = subscription.symbol.data_vendor.tick_size(symbol_name.clone()).await.unwrap();
 
         match subscription.resolution {
-            Resolution::Days(_) => {
+            Resolution::Day => {
                 match subscription.base_data_type {
                     BaseDataType::QuoteBars => {
                         return ConsolidatorEnum::DailyQuoteBars(
-                            DailyQuoteConsolidator::new(subscription.clone(), fill_forward, decimal_accuracy, tick_size,hours.unwrap())
+                            DailyQuoteConsolidator::new(subscription.clone(), decimal_accuracy, tick_size,hours.unwrap())
                                 .await
                                 .unwrap(),
                         );
                     }
                     BaseDataType::Candles => {
                         return ConsolidatorEnum::DailyCandles(
-                            DailyConsolidator::new(subscription.clone(), fill_forward, decimal_accuracy, tick_size,hours.unwrap())
-                                .await
+                            DailyConsolidator::new(subscription.clone(), decimal_accuracy, tick_size,hours.unwrap())
                                 .unwrap(),
                         );
                     }
                     _ => {}
                 }
             }
-            Resolution::Weeks(_) => {
+            Resolution::Week => {
                 match subscription.base_data_type {
                     BaseDataType::QuoteBars => {
                         return ConsolidatorEnum::WeeklyQuoteBars(
