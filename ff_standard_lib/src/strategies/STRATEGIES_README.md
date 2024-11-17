@@ -1524,6 +1524,6 @@ let continuous_market = TradingHours {
 
 Remember:
 - Open/close times are in the specified timezone
-- When close time is None, session runs until next session's open
+- When close time is None, session runs until next close
 - For 24-hour sessions, use open: None, close: None after initial open
 - Week start affects weekly bar consolidation
