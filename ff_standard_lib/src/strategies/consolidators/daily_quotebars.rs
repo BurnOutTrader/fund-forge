@@ -12,6 +12,7 @@ use crate::standardized_types::new_types::Price;
 use crate::standardized_types::subscriptions::{CandleType, DataSubscription};
 use crate::strategies::consolidators::consolidator_enum::ConsolidatedData;
 use crate::strategies::consolidators::daily_candles::{SessionTime, TimeAction, UpdateParams};
+
 #[derive(Debug, Clone)]
 pub struct DailyQuoteConsolidator {
     current_data: Option<BaseDataEnum>,
