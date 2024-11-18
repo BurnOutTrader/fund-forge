@@ -1,5 +1,4 @@
 use std::collections::BTreeMap;
-use std::fmt::{self, Display, Formatter};
 use rust_decimal::Decimal;
 use rust_decimal_macros::dec;
 use crate::gui_types::settings::Color;
