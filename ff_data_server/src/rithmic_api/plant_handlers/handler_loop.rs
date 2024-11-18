@@ -76,7 +76,7 @@ pub fn handle_rithmic_responses(
                         Message::Ping(ping) => println!("{:?}", ping),
                         Message::Pong(pong) => println!("{:?}", pong),
                         Message::Close(close_frame) => {
-                            println!("Received close message: {:?}", close_frame);
+                            println!("Received close message: {:?}. Attempting reconnection.", close_frame);
                             if let Some(new_reader) = attempt_reconnect(&client, plant.clone()).await {
                                 reader = new_reader;
                             } else {
