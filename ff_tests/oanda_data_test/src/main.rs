@@ -1,6 +1,7 @@
 use std::cmp::PartialEq;
 use std::collections::HashMap;
-use chrono::{Duration, NaiveDate};
+use chrono::{Duration, NaiveDate, NaiveTime};
+use chrono_tz::America::Chicago;
 use chrono_tz::Australia;
 use colored::Colorize;
 use rust_decimal::Decimal;
@@ -12,10 +13,12 @@ use ff_standard_lib::standardized_types::subscriptions::{DataSubscription, Symbo
 use ff_standard_lib::strategies::fund_forge_strategy::FundForgeStrategy;
 use rust_decimal_macros::dec;
 use tokio::sync::mpsc;
+use ff_standard_lib::product_maps::rithmic::maps::CME_HOURS;
 use ff_standard_lib::standardized_types::accounts::{Account, Currency};
 use ff_standard_lib::standardized_types::base_data::base_data_type::BaseDataType;
 use ff_standard_lib::standardized_types::broker_enum::Brokerage;
 use ff_standard_lib::standardized_types::datavendor_enum::DataVendor;
+use ff_standard_lib::standardized_types::market_hours::{DaySession, TradingHours};
 use ff_standard_lib::standardized_types::orders::OrderUpdateEvent;
 use ff_standard_lib::standardized_types::position::PositionUpdateEvent;
 use ff_standard_lib::standardized_types::resolution::Resolution;
@@ -39,11 +42,11 @@ async fn main() {
              DataSubscription::new(
                 SymbolName::from("EUR-USD"),
                 DataVendor::Oanda,
-                Resolution::Hours(4),
+                Resolution::Day,
                 BaseDataType::QuoteBars,
                 MarketType::Forex
-            ), None),
-            (Some(PrimarySubscription::new(Resolution::Hours(1), BaseDataType::QuoteBars)),
+            ), Some(CME_HOURS)),
+            /*(Some(PrimarySubscription::new(Resolution::Hours(1), BaseDataType::QuoteBars)),
              DataSubscription::new(
                 SymbolName::from("USD-CAD"),
                 DataVendor::Oanda,
@@ -74,7 +77,7 @@ async fn main() {
                 Resolution::Hours(4),
                 BaseDataType::QuoteBars,
                 MarketType::Forex
-            ), None),
+            ), None),*/
         ],
 
         //fill forward
@@ -126,7 +129,7 @@ pub async fn on_data_received(
                 for base_data in time_slice.iter() {
                     match base_data {
                         BaseDataEnum::QuoteBar(qb) => {
-                            if qb.is_closed == true && qb.resolution == Resolution::Hours(4) {
+                            if qb.is_closed == true && qb.resolution == Resolution::Day {
                                 let msg = format!("{} {} {} Close: {}, {}", qb.symbol.name, qb.resolution, qb.candle_type, qb.bid_close, qb.time_closed_local(strategy.time_zone()));
                                 if qb.bid_close == qb.bid_open {
                                     println!("{}", msg.as_str().blue())

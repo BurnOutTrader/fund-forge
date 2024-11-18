@@ -104,7 +104,7 @@ pub async fn on_data_received(
                         BaseDataEnum::Candle(candle) => {
                             let symbol_code = get_front_month(&candle.symbol.name, strategy.time_utc()).unwrap();
                             // Place trades based on the AUD-CAD Heikin Ashi Candles
-                            if candle.is_closed == true {
+                            if candle.is_closed == true && candle.resolution == Resolution::Day {
                                 let msg = format!("{} {} {} Close: {}, {}", candle.symbol.name, candle.resolution, candle.candle_type, candle.close, candle.time_local(strategy.time_zone()));
                                 if candle.close == candle.open {
                                     println!("{}", msg.as_str().blue())
