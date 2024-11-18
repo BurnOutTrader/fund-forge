@@ -9,7 +9,7 @@ members = [
     "ff_tests/ledger_test",
     "ff_tests/rithmic_order_test",
     "ff_tests/renko_pyramid",
-    "ff_tests/oanda_data_test",
+    "ff_tests/oanda_data_test", "ff_tests/price_action",
 ]
 
 

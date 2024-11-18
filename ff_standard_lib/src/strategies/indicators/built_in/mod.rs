@@ -34,3 +34,4 @@ pub mod fibonacci_retracement;
 pub mod volume_profile_distribution;
 pub mod donchian_momentum_indicator;
 pub mod market_exhaustion;
+pub mod close_strength;
