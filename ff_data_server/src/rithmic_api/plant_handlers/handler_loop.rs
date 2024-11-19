@@ -40,7 +40,7 @@ pub fn handle_rithmic_responses(
     let mut shutdown_receiver = subscribe_server_shutdown();
 
     tokio::spawn(async move {
-        loop {
+        'main_loop: loop {
             tokio::select! {
                 Some(Ok(message)) = reader.next() => {
                     match message {
@@ -77,22 +77,22 @@ pub fn handle_rithmic_responses(
                         Message::Pong(pong) => println!("{:?}", pong),
                         Message::Close(close_frame) => {
                             println!("Received close message: {:?}. Attempting reconnection.", close_frame);
-                            if let Some(new_reader) = attempt_reconnect(&client, plant.clone()).await {
-                                reader = new_reader;
-                            } else {
-                                println!("Failed to reconnect after close message. Exiting.");
-                                break;
+                            loop {
+                                if let Some(new_reader) = attempt_reconnect(&client, plant.clone()).await {
+                                    reader = new_reader;
+                                    continue 'main_loop
+                                }
                             }
                         }
                         Message::Frame(frame) => {
                             let frame_str = format!("{:?}", frame);
                             if frame_str.contains("CloseFrame") {
                                 println!("Received close frame. Attempting reconnection.");
-                                if let Some(new_reader) = attempt_reconnect(&client, plant.clone()).await {
-                                    reader = new_reader;
-                                } else {
-                                    println!("Failed to reconnect. Exiting.");
-                                    break;
+                                loop {
+                                    if let Some(new_reader) = attempt_reconnect(&client, plant.clone()).await {
+                                        reader = new_reader;
+                                        continue 'main_loop
+                                    }
                                 }
                             } else {
                                 println!("Received frame: {:?}", frame);
