@@ -2,8 +2,14 @@
 name = "ff_standard_lib"
 version = "0.1.0"
 edition = "2021"
-authors = ["Kevin Monaghan"]
+authors = ["Kevin Monaghan <BurnOutTrader@Outlook.com>"]
 license-file = "LICENCE.md"
+description = "Algorithmic Trading Engine"
+repository = "https://github.com/BurnOutTrader/fund-forge"
+keywords = ["trading", "algorithmic-trading", "rithmic", "oanda"]
+categories = ["algorithms"]
+readme = "README.md"
+
 
 [dependencies]
 thiserror = "2.0.3"
