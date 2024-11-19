@@ -170,7 +170,7 @@ impl Ledger {
                         static_self.timeslice_update(time_slice).await;
                     }
                     LedgerMessage::LiveAccountUpdate { cash_value, cash_available, cash_used } => {
-                        static_self.update(cash_value, cash_available, cash_used).await;
+                        static_self.update(cash_value, cash_available, cash_used);
                     }
                     LedgerMessage::ExitPaperPosition { symbol_code, time, market_fill_price, tag } => {
                         static_self.paper_exit_position(&symbol_code, time, market_fill_price, tag).await;
