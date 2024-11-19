@@ -1,8 +1,8 @@
 
 #[derive(Clone, Debug)]
 pub struct RollingWindow<T> {
-    pub(crate) history: Vec<T>,
-    pub(crate) number: u64,
+    pub history: Vec<T>,
+    pub number: u64,
 }
 
 impl<T: std::clone::Clone> RollingWindow<T> {
