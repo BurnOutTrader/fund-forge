@@ -796,6 +796,10 @@ impl FundForgeStrategy {
         self.indicator_handler.current(name)
     }
 
+    pub fn balance(&self, account: &Account) -> Decimal {
+        self.ledger_service.balance(account)
+    }
+
     /// see the indicator_enum.rs for more details
     pub async fn indicator_history(
         &self,

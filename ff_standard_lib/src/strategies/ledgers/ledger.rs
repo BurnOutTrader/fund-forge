@@ -134,7 +134,11 @@ impl Ledger {
         dec!(1.0)
     }
 
-    pub async fn update(&mut self, cash_value: Decimal, cash_available: Decimal, cash_used: Decimal) {
+    pub fn balance(&self) -> Decimal {
+        self.cash_value.clone()
+    }
+
+    pub fn update(&mut self, cash_value: Decimal, cash_available: Decimal, cash_used: Decimal) {
         self.cash_value = cash_value;
         self.cash_used = cash_used;
         self.cash_available = cash_available;

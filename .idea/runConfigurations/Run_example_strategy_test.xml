@@ -1,5 +1,6 @@
 <component name="ProjectRunConfigurationManager">
   <configuration default="false" name="Run example_strategy_test" type="CargoCommandRunConfiguration" factoryName="Cargo Command" singleton="false">
+    <option name="buildProfileId" value="dev" />
     <option name="command" value="run" />
     <option name="workingDirectory" value="file://$PROJECT_DIR$/ff_tests/example_test_strategy" />
     <envs />

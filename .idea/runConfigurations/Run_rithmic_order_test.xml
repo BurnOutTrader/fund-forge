@@ -1,5 +1,6 @@
 <component name="ProjectRunConfigurationManager">
   <configuration default="false" name="Run rithmic_order_test" type="CargoCommandRunConfiguration" factoryName="Cargo Command">
+    <option name="buildProfileId" value="dev" />
     <option name="command" value="run --package rithmic_order_test --bin rithmic_order_test" />
     <option name="workingDirectory" value="file://$PROJECT_DIR$/ff_tests/rithmic_order_test" />
     <envs />

@@ -25,6 +25,7 @@
       <sourceFolder url="file://$MODULE_DIR$/ff_tests/renko_pyramid/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/ff_tests/oanda_data_test/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/ff_tests/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/ff_tests/price_action/src" isTestSource="false" />
       <excludeFolder url="file://$MODULE_DIR$/ff-data-server/target" />
       <excludeFolder url="file://$MODULE_DIR$/ff-registry-server/target" />
       <excludeFolder url="file://$MODULE_DIR$/ff_application/target" />

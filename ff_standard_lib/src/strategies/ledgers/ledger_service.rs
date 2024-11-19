@@ -43,6 +43,12 @@ impl LedgerService {
         }
     }
 
+    pub fn balance(&self, account: &Account) -> Decimal {
+        self.ledgers.get(account)
+            .map(|ledger| ledger.balance())
+            .unwrap_or_else(|| dec!(0))
+    }
+
     pub(crate) async fn update_or_create_position(
         &self,
         account: &Account,
