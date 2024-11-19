@@ -10,7 +10,6 @@ keywords = ["trading", "algorithmic-trading", "rithmic", "oanda"]
 categories = ["algorithms"]
 readme = "README.md"
 
-
 [dependencies]
 thiserror = "2.0.3"
 flate2 = "1.0.35"
