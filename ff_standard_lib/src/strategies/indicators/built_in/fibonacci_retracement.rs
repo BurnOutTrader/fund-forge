@@ -68,7 +68,6 @@ pub struct FibonacciRetracement {
     tick_size: Decimal,
     decimal_accuracy: u32,
     is_ready: bool,
-    level_colors: Vec<Color>,
     tick_rounding: bool,
     lookback_period: u64,          // Period to identify swings
     swing_threshold: Decimal,      // Minimum price move to identify swing
@@ -76,6 +75,7 @@ pub struct FibonacciRetracement {
     last_swing_low: Option<(DateTime<Utc>, Decimal)>,
     trend_direction: Option<bool>, // true for uptrend
     fib_levels: Vec<Decimal>,     // Standard Fibonacci levels
+    level_color: Color
 }
 
 impl Display for FibonacciRetracement {
@@ -96,7 +96,7 @@ impl FibonacciRetracement {
         history_to_retain: usize,
         lookback_period: u64,
         swing_threshold: Decimal,
-        level_colors: Vec<Color>,
+        level_color: Color,
         tick_rounding: bool,
     ) -> Self {
         let symbol_name = match subscription.market_type {
@@ -114,7 +114,7 @@ impl FibonacciRetracement {
             base_data_history: RollingWindow::new(lookback_period as usize),
             is_ready: false,
             tick_size,
-            level_colors,
+            level_color,
             decimal_accuracy,
             tick_rounding,
             lookback_period,
@@ -310,7 +310,7 @@ impl Indicators for FibonacciRetracement {
 
             // Add each Fibonacci level
             for (i, (level_str, price)) in levels.iter().enumerate() {
-                let color = &self.level_colors[i % self.level_colors.len()];
+                //let color = &self.level_colors[i % self.level_colors.len()];
                 let description = self.get_level_description(self.fib_levels[i]);
 
                 plots.insert(
@@ -318,7 +318,7 @@ impl Indicators for FibonacciRetracement {
                     IndicatorPlot::new(
                         format!("{} ({})", description, level_str),
                         *price,
-                        color.clone(),
+                        self.level_color.clone(),
                     ),
                 );
             }
@@ -329,7 +329,7 @@ impl Indicators for FibonacciRetracement {
                 IndicatorPlot::new(
                     if trend_up { "Uptrend" } else { "Downtrend" }.to_string(),
                     end_price,
-                    self.level_colors[0].clone(),
+                    self.level_color.clone(),
                 ),
             );
 
