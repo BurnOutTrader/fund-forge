@@ -999,7 +999,8 @@ impl HybridStorage {
             .filter_map(|e| e.ok())
             .filter(|e| e.path().is_dir())
             .collect();
-        years.sort_by(|a, b| b.path().cmp(&a.path()));
+        years.sort_by_key(|e| e.path().file_name().and_then(|s| s.to_str()).and_then(|s| s.parse::<u32>().ok()));
+        years.reverse(); // Descending order
 
         for year_dir in years {
             // Get months in descending order
@@ -1007,7 +1008,8 @@ impl HybridStorage {
                 .filter_map(|e| e.ok())
                 .filter(|e| e.path().is_dir())
                 .collect();
-            months.sort_by(|a, b| b.path().cmp(&a.path()));
+            months.sort_by_key(|e| e.path().file_name().and_then(|s| s.to_str()).and_then(|s| s.parse::<u32>().ok()));
+            months.reverse(); // Descending order
 
             for month_dir in months {
                 // Get days in descending order
@@ -1015,7 +1017,8 @@ impl HybridStorage {
                     .filter_map(|e| e.ok())
                     .filter(|e| e.path().extension().and_then(|s| s.to_str()) == Some("bin"))
                     .collect();
-                days.sort_by(|a, b| b.path().cmp(&a.path()));
+                days.sort_by_key(|e| e.path().file_name().and_then(|s| s.to_str()).and_then(|s| s.parse::<u32>().ok()));
+                days.reverse(); // Descending order
 
                 // Check first (latest) file in this month
                 if let Some(latest_file) = days.first() {
@@ -1040,30 +1043,33 @@ impl HybridStorage {
     ) -> Result<Option<DateTime<Utc>>, Box<dyn std::error::Error>> {
         let base_path = self.get_base_path(symbol, resolution, data_type, false);
 
-        // Get latest year
+        // Get years in descending order
         let mut years: Vec<_> = fs::read_dir(&base_path)?
             .filter_map(|e| e.ok())
             .filter(|e| e.path().is_dir())
             .collect();
-        years.sort_by_key(|e| e.path());
+        years.sort_by_key(|e| e.path().file_name().and_then(|s| s.to_str()).and_then(|s| s.parse::<u32>().ok()));
+        years.reverse(); // Descending order
 
-        if let Some(year_dir) = years.last() {
-            // Get latest month in latest year
+        if let Some(year_dir) = years.first() {
+            // Get months in descending order
             let mut months: Vec<_> = fs::read_dir(year_dir.path())?
                 .filter_map(|e| e.ok())
                 .filter(|e| e.path().is_dir())
                 .collect();
-            months.sort_by_key(|e| e.path());
+            months.sort_by_key(|e| e.path().file_name().and_then(|s| s.to_str()).and_then(|s| s.parse::<u32>().ok()));
+            months.reverse(); // Descending order
 
-            if let Some(month_dir) = months.last() {
-                // Get latest day file in latest month
+            if let Some(month_dir) = months.first() {
+                // Get days in descending order
                 let mut days: Vec<_> = fs::read_dir(month_dir.path())?
                     .filter_map(|e| e.ok())
                     .filter(|e| e.path().extension().and_then(|s| s.to_str()) == Some("bin"))
                     .collect();
-                days.sort_by_key(|e| e.path());
+                days.sort_by_key(|e| e.path().file_name().and_then(|s| s.to_str()).and_then(|s| s.parse::<u32>().ok()));
+                days.reverse(); // Descending order
 
-                if let Some(latest_file) = days.last() {
+                if let Some(latest_file) = days.first() {
                     if let Ok(mmap) = self.get_or_create_mmap(&latest_file.path()).await {
                         if let Ok(day_data) = BaseDataEnum::from_array_bytes(&mmap.to_vec()) {
                             return Ok(day_data.into_iter().map(|d| d.time_closed_utc()).max());
@@ -1081,68 +1087,38 @@ impl HybridStorage {
         resolution: &Resolution,
         data_type: &BaseDataType,
     ) -> Result<Option<DateTime<Utc>>, Box<dyn std::error::Error>> {
-        // Start from Jan 1st of the earliest year in base_path
         let base_path = self.get_base_path(symbol, resolution, data_type, false);
 
-        // Get earliest year directory
-        let mut entries = tokio::fs::read_dir(&base_path).await?;
-        let mut years = Vec::new();
-        while let Ok(Some(entry)) = entries.next_entry().await {
-            if entry.file_type().await.map(|ft| ft.is_dir()).unwrap_or(false) {
-                years.push(entry);
-            }
-        }
+        // Get years in ascending order
+        let mut years: Vec<_> = fs::read_dir(&base_path)?
+            .filter_map(|e| e.ok())
+            .filter(|e| e.path().is_dir())
+            .collect();
+        years.sort_by_key(|e| e.path().file_name().and_then(|s| s.to_str()).and_then(|s| s.parse::<u32>().ok()));
 
-        if years.is_empty() {
-            return Ok(None);
-        }
-
-        // Sort to get_requests earliest year
-        let years = tokio::task::spawn_blocking(move || {
-            let mut years = years;
-            years.sort_by_key(|e| e.path());
-            years
-        }).await?;
-
-        // Start with January 1st of the earliest year
         if let Some(year_dir) = years.first() {
-            let year: i32 = year_dir.file_name()
-                .to_string_lossy()
-                .parse()
-                .unwrap_or(2000);
+            // Get months in ascending order
+            let mut months: Vec<_> = fs::read_dir(year_dir.path())?
+                .filter_map(|e| e.ok())
+                .filter(|e| e.path().is_dir())
+                .collect();
+            months.sort_by_key(|e| e.path().file_name().and_then(|s| s.to_str()).and_then(|s| s.parse::<u32>().ok()));
 
-            let mut current_date = DateTime::<Utc>::from_naive_utc_and_offset(
-                NaiveDate::from_ymd_opt(year, 1, 1)
-                    .unwrap()
-                    .and_hms_opt(0, 0, 0)
-                    .unwrap(),
-                Utc,
-            );
+            if let Some(month_dir) = months.first() {
+                // Get days in ascending order
+                let mut days: Vec<_> = fs::read_dir(month_dir.path())?
+                    .filter_map(|e| e.ok())
+                    .filter(|e| e.path().extension().and_then(|s| s.to_str()) == Some("bin"))
+                    .collect();
+                days.sort_by_key(|e| e.path().file_name().and_then(|s| s.to_str()).and_then(|s| s.parse::<u32>().ok()));
 
-            // Try each day until we find data or reach end of year
-            while current_date.year() == year {
-                let file_path = self.get_file_path(symbol, resolution, data_type, &current_date, false);
-
-                if file_path.exists() {
-                    if let Ok(mmap) = self.get_or_create_mmap(&file_path).await {
-                        if let Ok(day_data) = BaseDataEnum::from_array_bytes(&mmap[..].to_vec()) {
-                            if let Some(earliest) = day_data.into_iter()
-                                .map(|d| d.time_closed_utc())
-                                .min() {
-                                return Ok(Some(earliest));
-                            }
+                if let Some(earliest_file) = days.first() {
+                    if let Ok(mmap) = self.get_or_create_mmap(&earliest_file.path()).await {
+                        if let Ok(day_data) = BaseDataEnum::from_array_bytes(&mmap.to_vec()) {
+                            return Ok(day_data.into_iter().map(|d| d.time_closed_utc()).min());
                         }
                     }
                 }
-
-                current_date = DateTime::<Utc>::from_naive_utc_and_offset(
-                    current_date.date_naive()
-                        .succ_opt() // This properly handles month/year boundaries
-                        .unwrap()
-                        .and_hms_opt(0, 0, 0)
-                        .unwrap(),
-                    Utc,
-                );
             }
         }
 
