@@ -70,74 +70,7 @@ impl VendorApiResponse for TestApiClient {
     }
 
     async fn data_feed_subscribe(&self, stream_name: StreamName, subscription: DataSubscription) -> DataServerResponse {
-        let available_subscription_1 = DataSubscription::new(SymbolName::from("AUD-CAD"), DataVendor::Test, Resolution::Instant, BaseDataType::Quotes, MarketType::Forex);
-        let available_subscription_2 = DataSubscription::new(SymbolName::from("EUR-USD"), DataVendor::Test, Resolution::Instant, BaseDataType::Quotes, MarketType::Forex);
-
-        if subscription != available_subscription_1 && subscription != available_subscription_2 {
-            return DataServerResponse::SubscribeResponse{ success: false, subscription: subscription.clone(), reason: Some(format!("This subscription is not available with DataVendor::Test: {}", subscription))}
-        }
-
-        if !self.data_feed_broadcasters.contains_key(&subscription) {
-            let (sender, receiver) = broadcast::channel(100);
-            // We can use the subscribe stream function to pass the new receiver to our stream handler task for the stream_name.
-            subscribe_stream(&stream_name, subscription.clone(), receiver).await;
-            self.data_feed_broadcasters.insert(subscription.clone(), sender);
-            println!("Subscribing: {}", subscription);
-        } else {
-            // If we already have a running task, we don't need a new one, we just subscribe to the broadcaster
-            if let Some(broadcaster) = self.data_feed_broadcasters.get(&subscription) {
-                let receiver = broadcaster.value().subscribe();
-                // We can use the subscribe stream function to pass the new receiver to our stream handler task for the stream_name.
-                subscribe_stream(&stream_name, subscription.clone(), receiver).await;
-            }
-            return DataServerResponse::SubscribeResponse{ success: true, subscription: subscription.clone(), reason: None}
-        }
-
-        println!("data_feed_subscribe Starting loop");
-        let subscription_clone = subscription.clone();
-        let subscription_clone_2 = subscription.clone();
-        let broadcasters = self.data_feed_broadcasters.clone();
-        let broadcaster = self.data_feed_broadcasters.get(&subscription).unwrap().value().clone();
-        self.data_feed_tasks.insert(subscription.clone(), tokio::task::spawn(async move {
-            let naive_dt_1 = NaiveDate::from_ymd_opt(2024, 6, 01).unwrap().and_hms_opt(0, 0, 0).unwrap();
-            let from_time = Utc.from_utc_datetime(&naive_dt_1);
-
-            let naive_dt_2 = NaiveDate::from_ymd_opt(2024, 6, 6).unwrap().and_hms_opt(0, 0, 0).unwrap();
-            let to_time = Utc.from_utc_datetime(&naive_dt_2);
-
-            let mut last_time = from_time;
-            'main_loop: while last_time < to_time {
-                let data = match DATA_STORAGE.get().expect("DATA_STORAGE not initialized").get_data_range(&subscription.symbol, &subscription.resolution, &subscription.base_data_type, from_time, to_time).await {
-                    Ok(data) => data,
-                    Err(e) => {
-                        eprintln!("Failed to get_requests test data: {}", e);
-                        return
-                    }
-                };
-
-                for mut base_data in data {
-                    last_time = base_data.time_closed_utc();
-                    match base_data {
-                        BaseDataEnum::Quote(ref mut quote) => {
-                            if broadcaster.receiver_count() > 0 {
-                                quote.time = Utc::now().to_string();
-                                match broadcaster.send(base_data) {
-                                    Ok(_) => {}
-                                    Err(_) => {}
-                                }
-                                sleep(Duration::from_millis(5)).await;
-                            } else {
-                                println!("No subscribers");
-                                break 'main_loop;
-                            }
-                        }
-                        _ => {}
-                    }
-                }
-            }
-            broadcasters.remove(&subscription_clone);
-        }));
-        DataServerResponse::SubscribeResponse{ success: true, subscription: subscription_clone_2.clone(), reason: None}
+       todo!()
     }
 
     async fn data_feed_unsubscribe(&self, stream_name: StreamName, subscription: DataSubscription) -> DataServerResponse {
