@@ -200,7 +200,6 @@ impl HybridStorage {
         }
 
         while self.download_tasks.contains_key(&key) {
-            was_downloading = true;
             sleep(Duration::from_secs(1)).await;
         }
     }

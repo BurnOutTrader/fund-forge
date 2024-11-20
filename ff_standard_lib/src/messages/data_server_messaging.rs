@@ -1,4 +1,3 @@
-use std::collections::{BTreeMap};
 use crate::standardized_types::enums::{MarketType, OrderSide, StrategyMode, PrimarySubscription};
 use crate::standardized_types::subscriptions::{DataSubscription, Symbol, SymbolName};
 use crate::standardized_types::bytes_trait::Bytes;
@@ -14,7 +13,6 @@ use crate::standardized_types::new_types::{Price};
 use crate::standardized_types::orders::{OrderRequest, OrderUpdateEvent};
 use crate::standardized_types::position::Position;
 use crate::standardized_types::symbol_info::{CommissionInfo, FrontMonthInfo, SymbolInfo};
-use crate::standardized_types::time_slices::TimeSlice;
 
 /// An Api key String
 pub type ApiKey = String;

@@ -11,7 +11,6 @@ use ff_standard_lib::StreamName;
 use chrono::{DateTime,Utc};
 use indicatif::{ProgressBar};
 use rust_decimal_macros::dec;
-use ff_standard_lib::standardized_types::base_data::traits::BaseData;
 use crate::stream_tasks::{unsubscribe_stream};
 use crate::test_api::api_client::TestApiClient;
 
@@ -64,6 +63,7 @@ impl VendorApiResponse for TestApiClient {
         }
     }
 
+    #[allow(unused)]
     async fn data_feed_subscribe(&self, stream_name: StreamName, subscription: DataSubscription) -> DataServerResponse {
        todo!()
     }

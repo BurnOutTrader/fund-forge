@@ -19,10 +19,13 @@ pub struct DailyQuoteConsolidator {
     pub(crate) subscription: DataSubscription,
     decimal_accuracy: u32,
     tick_size: Decimal,
+    #[allow(unused)]
     last_ask_close: Option<Price>,
+    #[allow(unused)]
     last_bid_close: Option<Price>,
     market_type: MarketType,
     trading_hours: TradingHours,
+    #[allow(unused)]
     days_per_bar: i64,
     session_map: BTreeMap<DateTime<Utc>, SessionTime>,
     current_session: Option<SessionTime>,
@@ -306,6 +309,7 @@ impl DailyQuoteConsolidator {
         }
     }
 
+    #[allow(dead_code)]
     fn initialize_session_map_from(&mut self, reference_time: DateTime<Utc>) {
         let tz = self.trading_hours.timezone;
         let weeks_to_generate = 2;

@@ -22,6 +22,7 @@ pub struct WeeklyCandleConsolidator {
     market_type: MarketType,
     trading_hours: TradingHours,
     week_start_day: Weekday,
+    #[allow(unused)]
     week_start_session: Option<(Weekday, NaiveTime)>,
     week_end_session: Option<(Weekday, NaiveTime)>,
 }

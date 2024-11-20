@@ -216,6 +216,7 @@ impl DailyConsolidator {
         }
     }
 
+    #[allow(dead_code)]
     // Helper to add a session for a specific date
     fn add_session_for_date(&mut self, date: NaiveDate, tz: chrono_tz::Tz) {
         let weekday = date.weekday();
@@ -391,6 +392,7 @@ impl DailyConsolidator {
             .filter(|session| time < session.close)
     }
 
+    #[allow(dead_code)]
     fn is_session_end(&self, time: DateTime<Utc>) -> bool {
         if let Some(session) = self.get_current_session(time) {
             time >= session.close
@@ -440,6 +442,7 @@ impl DailyConsolidator {
         }
     }
 
+    #[allow(dead_code)]
     // Helper method to check if we've moved to a new session
     fn is_new_session(&self, time: DateTime<Utc>) -> bool {
         if let Some(current_session) = &self.current_session {
@@ -450,6 +453,7 @@ impl DailyConsolidator {
         false
     }
 
+    #[allow(dead_code)]
     // Helper method to check if we're at a session boundary
     fn is_session_boundary(&self, time: DateTime<Utc>) -> bool {
         if let Some(session) = &self.current_session {
