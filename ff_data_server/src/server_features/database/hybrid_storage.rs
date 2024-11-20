@@ -545,4 +545,162 @@ mod tests {
             }
         }
     }
+
+    #[tokio::test]
+    async fn test_get_latest_data_time() {
+        let (storage, _temp) = setup_test_storage();
+        let test_data = generate_5_day_candle_data().iter()
+            .map(|c| BaseDataEnum::Candle(c.clone()))
+            .collect::<Vec<_>>();
+
+        // Save bulk data to storage
+        storage.save_data_bulk(test_data.clone(), true).await.unwrap();
+
+        // Expected latest timestamp from test data
+        let expected_latest = test_data.last().unwrap().time_closed_utc();
+
+        // Call `get_latest_data_time` and verify the result
+        let latest_time = storage.get_latest_data_time(
+            test_data[0].symbol(),
+            &Resolution::Hours(1),
+            &BaseDataType::Candles
+        ).await.unwrap();
+
+        assert_eq!(
+            latest_time,
+            Some(expected_latest),
+            "Expected latest time: {}, but got: {:?}",
+            expected_latest,
+            latest_time
+        );
+    }
+
+    #[tokio::test]
+    async fn test_get_earliest_data_time() {
+        let (storage, _temp) = setup_test_storage();
+        let test_data = generate_5_day_candle_data().iter()
+            .map(|c| BaseDataEnum::Candle(c.clone()))
+            .collect::<Vec<_>>();
+
+        // Save bulk data to storage
+        storage.save_data_bulk(test_data.clone(), true).await.unwrap();
+
+        // Expected earliest timestamp from test data
+        let expected_earliest = test_data.first().unwrap().time_closed_utc();
+
+        // Call `get_earliest_data_time` and verify the result
+        let earliest_time = storage.get_earliest_data_time(
+            test_data[0].symbol(),
+            &Resolution::Hours(1),
+            &BaseDataType::Candles
+        ).await.unwrap();
+
+        assert_eq!(
+            earliest_time,
+            Some(expected_earliest),
+            "Expected earliest time: {}, but got: {:?}",
+            expected_earliest,
+            earliest_time
+        );
+    }
+
+    #[tokio::test]
+    async fn test_get_data_range() {
+        let (storage, _temp) = setup_test_storage();
+        let test_data = generate_5_day_candle_data().iter()
+            .map(|c| BaseDataEnum::Candle(c.clone()))
+            .collect::<Vec<_>>();
+
+        // Save bulk data to storage
+        storage.save_data_bulk(test_data.clone(), true).await.unwrap();
+
+        // Define test ranges
+        let day1_start = test_data.first().unwrap().time_closed_utc();
+        let day1_end = test_data[23].time_closed_utc(); // Last candle of day 1
+        let next_day_start = test_data[24].time_closed_utc(); // First candle of day 2
+        let next_day_mid = test_data[36].time_closed_utc(); // Middle of day 2
+        let last_day = test_data.last().unwrap().time_closed_utc();
+
+        // Adjust expected counts based on 1-hour resolution
+        let ranges = vec![
+            (day1_start, day1_end, 24),                      // First day only
+            (day1_start, next_day_mid, 37),                 // Day 1 start to middle of day 2
+            (next_day_start, last_day, test_data.len() - 24), // Day 2 start to last candle
+            (day1_start, last_day, test_data.len()),        // Entire range
+        ];
+
+        for (start, end, expected_count) in ranges {
+            let data = storage.get_data_range(
+                test_data[0].symbol(),
+                &Resolution::Hours(1),
+                &BaseDataType::Candles,
+                start,
+                end
+            ).await.unwrap();
+
+            assert_eq!(
+                data.len(),
+                expected_count,
+                "Expected {} candles between {} and {}, but got {}",
+                expected_count,
+                start,
+                end,
+                data.len()
+            );
+
+            // Ensure data is sorted and within the range
+            assert!(data.iter().all(|d| d.time_closed_utc() >= start && d.time_closed_utc() <= end),
+                    "Data contains timestamps outside the specified range.");
+            assert!(data.windows(2).all(|w| w[0].time_closed_utc() <= w[1].time_closed_utc()),
+                    "Data is not sorted by time.");
+        }
+    }
+
+    #[tokio::test]
+    async fn test_get_data_point_asof() {
+        let (storage, _temp) = setup_test_storage();
+        let test_data = generate_5_day_candle_data().iter()
+            .map(|c| BaseDataEnum::Candle(c.clone()))
+            .collect::<Vec<_>>();
+
+        // Save bulk data to storage
+        storage.save_data_bulk(test_data.clone(), true).await.unwrap();
+
+        // Define test cases
+        let target_times = vec![
+            test_data[5].time_closed_utc(), // Specific point in day 1
+            test_data[23].time_closed_utc(), // Last point in day 1
+            test_data[24].time_closed_utc(), // First point in day 2
+            test_data[36].time_closed_utc(), // Middle of day 2
+            test_data.last().unwrap().time_closed_utc(), // Last point in the range
+            test_data[5].time_closed_utc() - chrono::Duration::minutes(30), // No exact match, look earlier
+        ];
+
+        for target_time in target_times {
+            // Expected result: the latest data point <= target_time
+            let expected_point = test_data
+                .iter()
+                .filter(|d| d.time_closed_utc() <= target_time)
+                .max_by_key(|d| d.time_closed_utc())
+                .cloned();
+
+            // Call get_data_point_asof
+            let result = storage.get_data_point_asof(
+                test_data[0].symbol(),
+                &Resolution::Hours(1),
+                &BaseDataType::Candles,
+                target_time
+            ).await.unwrap();
+
+            // Validate result
+            assert_eq!(
+                result,
+                expected_point,
+                "For target time {}: expected {:?}, got {:?}",
+                target_time,
+                expected_point,
+                result
+            );
+        }
+    }
 }
