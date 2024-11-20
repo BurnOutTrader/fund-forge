@@ -19,10 +19,11 @@ pub async fn data_bento_init(options: ServerLaunchOptions) -> Result<(), FundFor
     DATA_BENTO_CLIENT.set(Arc::new(client)).map_err(|_| {
         FundForgeError::ServerErrorDebug("Failed to set Data Bento client".to_string())
     })?;
+    println!("Data Bento client initialized");
     Ok(())
 }
 
-pub async fn get_data_bento_client() -> Result<Arc<DataBentoClient>, FundForgeError> {
+pub fn get_data_bento_client() -> Result<Arc<DataBentoClient>, FundForgeError> {
     DATA_BENTO_CLIENT.get().cloned().ok_or_else(|| {
         FundForgeError::ServerErrorDebug("Data Bento client not initialized".to_string())
     })

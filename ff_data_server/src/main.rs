@@ -15,6 +15,7 @@ use tokio::{signal, task};
 use tokio::sync::{broadcast, OnceCell};
 use tokio_rustls::server::TlsStream;
 use server_features::database::hybrid_storage::{HybridStorage, DATA_STORAGE};
+use crate::data_bento_api::api_client::data_bento_init;
 use crate::oanda_api::api_client::{oanda_init};
 use crate::rithmic_api::api_client::{RithmicBrokerageClient, RITHMIC_CLIENTS};
 
@@ -188,6 +189,10 @@ async fn main() -> io::Result<()> {
 
     RithmicBrokerageClient::init_rithmic_apis(options.clone()).await;
     oanda_init(options.clone()).await;
+    match data_bento_init(options.clone()).await {
+        Ok(_) => eprintln!("Data Bento Initialized"),
+        Err(e) => eprintln!("Data Bento Failed: {}", e),
+    }
 
     run_servers(config, options.clone());
 

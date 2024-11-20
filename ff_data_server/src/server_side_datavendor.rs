@@ -297,7 +297,7 @@ pub async fn data_feed_subscribe(
             DataVendor::DataBento => {
                 return match get_data_bento_client() {
                     Ok(client) => client.data_feed_subscribe(stream_name, subscription.clone()).await,
-                    Err(e) => DataServerResponse::SubscribeResponse { success: false, subscription, reason: Some(format!("{}", e))}
+                    Err(e) => DataServerResponse::SubscribeResponse { success: false, subscription: subscription.clone(), reason: Some(format!("{}", e))}
                 }
             }
             DataVendor::Bitget => {
@@ -343,7 +343,7 @@ pub async fn data_feed_unsubscribe(
             DataVendor::DataBento => {
                 return match get_data_bento_client() {
                     Ok(client) => client.data_feed_unsubscribe(stream_name, subscription.clone()).await,
-                    Err(e) => DataServerResponse::UnSubscribeResponse { success: false, subscription, reason: Some(format!("{}", e))}
+                    Err(e) => DataServerResponse::UnSubscribeResponse { success: false, subscription: subscription.clone(), reason: Some(format!("{}", e))}
                 }
             }
             DataVendor::Bitget => {
