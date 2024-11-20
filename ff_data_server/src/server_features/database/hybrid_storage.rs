@@ -285,7 +285,8 @@ impl HybridStorage {
         file.read_to_end(&mut compressed_data)?;
 
         let existing_data = if !compressed_data.is_empty() {
-            let mut decoder = GzDecoder::new(&compressed_data[..]);
+            let cursor = std::io::Cursor::new(compressed_data);
+            let mut decoder = GzDecoder::new(cursor);
             let mut decompressed = Vec::new();
             decoder.read_to_end(&mut decompressed)?;
             BaseDataEnum::from_array_bytes(&decompressed)
@@ -309,15 +310,20 @@ impl HybridStorage {
         let bytes = BaseDataEnum::vec_to_bytes(all_data);
 
         // Compress the serialized data
-        let mut encoder = GzEncoder::new(Vec::new(), Compression::default());
-        encoder.write_all(&bytes)?;
-        let compressed = encoder.finish()?;
+        // Compress the serialized data using a Cursor
+        let mut compressed_buffer = Vec::new();
+        {
+            let cursor = std::io::Cursor::new(&mut compressed_buffer);
+            let mut encoder = GzEncoder::new(cursor, Compression::default());
+            encoder.write_all(&bytes)?;
+            encoder.finish()?; // Ensure compression is completed
+        }
 
         // Write to file
         file.seek(SeekFrom::Start(0))?;
         file.set_len(0)?;
 
-        match file.write_all(&compressed) {
+        match file.write_all(&compressed_buffer) {
             Ok(_) => {
                 file.sync_all()?;
             },
