@@ -6389,7 +6389,7 @@ pub struct RequestOrderSessionConfig {
     pub template_id: i32,
     #[prost(string, repeated, tag = "132760")]
     pub user_msg: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
-    /// used only when the server has to fetch refdata from the system instead from it's own database.
+    /// used only when the server has to fetch refdata from the system instead from it's own hybrid_storage.
     #[prost(bool, optional, tag = "157750")]
     pub should_defer_request: ::core::option::Option<bool>,
 }

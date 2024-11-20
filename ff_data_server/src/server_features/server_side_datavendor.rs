@@ -187,7 +187,7 @@ pub trait VendorApiResponse: Sync + Send {
     /// use std::sync::Arc;
     /// use chrono::{DateTime, Utc};
     /// use tokio::sync::OnceCell;
-    /// use ff_data_server::::database::HybridStorage;
+    /// use ff_data_server::::hybrid_storage::HybridStorage;
     /// use ff_standard_lib::standardized_types::base_data::base_data_type::BaseDataType;
     /// use ff_standard_lib::standardized_types::datavendor_enum::DataVendor;
     /// use ff_standard_lib::standardized_types::enums::MarketType;

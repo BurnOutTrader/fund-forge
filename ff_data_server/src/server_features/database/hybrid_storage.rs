@@ -805,35 +805,37 @@ impl HybridStorage {
         }
 
         // Get oldest file outside of any locks
-        let oldest_path = if self.mmap_cache.len() >= 200 {
-            self.cache_last_accessed
-                .iter()
-                .min_by_key(|entry| entry.value().clone())
-                .map(|entry| entry.key().clone())
-        } else {
-            None
-        };
+        {
+            let oldest_path = if self.mmap_cache.len() >= 200 {
+                self.cache_last_accessed
+                    .iter()
+                    .min_by_key(|entry| entry.value().clone())
+                    .map(|entry| entry.key().clone())
+            } else {
+                None
+            };
 
-        // Remove oldest file if needed
-        if let Some(oldest_path) = oldest_path {
-            // Get (don't remove) the semaphore first
-            if let Some(semaphore) = self.file_locks.get(&oldest_path) {
-                let permit = semaphore.value().acquire().await.map_err(|e| {
-                    io::Error::new(
-                        io::ErrorKind::Other,
-                        format!("Error acquiring lock for cache cleanup: {}", e)
-                    )
-                })?;
+            // Remove oldest file if needed
+            if let Some(oldest_path) = oldest_path {
+                // Get (don't remove) the semaphore first
+                if let Some(semaphore) = self.file_locks.get(&oldest_path) {
+                    let permit = semaphore.value().acquire().await.map_err(|e| {
+                        io::Error::new(
+                            io::ErrorKind::Other,
+                            format!("Error acquiring lock for cache cleanup: {}", e)
+                        )
+                    })?;
 
-                // Now safely remove from caches
-                if let Some((_, mmap)) = self.mmap_cache.remove(&file_path.to_string_lossy().to_string()) {
-                    drop(mmap); // Explicitly drop the mmap
+                    // Now safely remove from caches
+                    if let Some((_, mmap)) = self.mmap_cache.remove(&file_path.to_string_lossy().to_string()) {
+                        drop(mmap); // Explicitly drop the mmap
+                    }
+                    self.cache_last_accessed.remove(&oldest_path);
+                    drop(permit);
                 }
-                self.cache_last_accessed.remove(&oldest_path);
-                drop(permit);
+                // Finally remove the semaphore
+                self.file_locks.remove(&oldest_path);
             }
-            // Finally remove the semaphore
-            self.file_locks.remove(&oldest_path);
         }
 
         let mut file = File::open(file_path)?;

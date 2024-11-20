@@ -16,7 +16,7 @@ use tokio::time::{timeout, Duration};
 use ff_standard_lib::standardized_types::datavendor_enum::DataVendor;
 use ff_standard_lib::standardized_types::orders::OrderUpdateEvent::OrderUpdateRejected;
 use crate::oanda_api::api_client::{get_oanda_client, OANDA_CLIENT};
-use crate::server_features::database::DATA_STORAGE;
+use crate::server_features::database::hybrid_storage::DATA_STORAGE;
 
 pub const TIMEOUT_DURATION: Duration = Duration::from_secs(10);
 
