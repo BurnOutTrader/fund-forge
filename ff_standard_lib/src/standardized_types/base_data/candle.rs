@@ -272,7 +272,9 @@ impl fmt::Debug for Candle {
 }
 
 pub fn generate_5_day_candle_data() -> Vec<Candle> {
-    let mut test_data = Vec::new();
+    use std::collections::BTreeMap;
+
+    let mut test_data = BTreeMap::new();
     let base_date = NaiveDate::from_ymd_opt(2024, 11, 10).unwrap();
 
     for day in 0..5 {
@@ -294,7 +296,7 @@ pub fn generate_5_day_candle_data() -> Vec<Candle> {
             let bid_volume = volume / Decimal::from(2);
             let range = high - low;
 
-            test_data.push(Candle {
+            test_data.insert(utc_time, Candle {
                 symbol: Symbol::new("TEST".to_string(), DataVendor::Test, MarketType::CFD), // Example symbol
                 high,
                 low,
@@ -311,5 +313,7 @@ pub fn generate_5_day_candle_data() -> Vec<Candle> {
             });
         }
     }
-    test_data
+
+    // Convert ordered map to Vec
+    test_data.into_values().collect()
 }
