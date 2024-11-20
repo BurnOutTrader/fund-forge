@@ -361,7 +361,7 @@ pub async fn subscribe_to_my_atr_example(strategy: &FundForgeStrategy) {
         IndicatorName::from("quote_bar_atr10_15min"),
         DataSubscription::new(
             SymbolName::from("EUR-USD"),
-            DataVendor::Test,
+            DataVendor::DataBento,
             Resolution::Minutes(15),
             BaseDataType::QuoteBars,
             MarketType::Forex,
@@ -392,7 +392,7 @@ pub async fn subscribe_to_new_candles_example(strategy: &FundForgeStrategy) {
 
     let minute_15_ha_candles = DataSubscription::new_custom(
         SymbolName::from("AUD-CAD"),
-        DataVendor::Test,
+        DataVendor::DataBento,
         Resolution::Minutes(15),
         MarketType::Forex,
         CandleType::HeikinAshi

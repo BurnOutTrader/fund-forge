@@ -11,7 +11,6 @@ use ff_standard_lib::standardized_types::accounts::{Account, AccountId, Currency
 use ff_standard_lib::StreamName;
 use crate::bitget_api::api_client::BITGET_CLIENT;
 use crate::rithmic_api::api_client::{get_rithmic_client, RITHMIC_CLIENTS};
-use crate::test_api::api_client::TEST_CLIENT;
 use tokio::time::{timeout, Duration};
 use ff_standard_lib::standardized_types::datavendor_enum::DataVendor;
 use ff_standard_lib::standardized_types::orders::OrderUpdateEvent::OrderUpdateRejected;
@@ -53,7 +52,7 @@ pub async fn commission_info_response(mode: StrategyMode, brokerage: Brokerage, 
                     return client.value().commission_info_response(mode, stream_name, symbol_name, callback_id).await
                 }
             },
-            Brokerage::Test => return TEST_CLIENT.commission_info_response(mode, stream_name, symbol_name, callback_id).await,
+            Brokerage::Test => return DataServerResponse::Error { callback_id, error: FundForgeError::ServerErrorDebug("Test Brokerage Can Not Place Live Orders".to_string())} ,
             Brokerage::Bitget => {
                 if let Some(client) = BITGET_CLIENT.get() {
                     return client.commission_info_response(mode, stream_name, symbol_name, callback_id).await
@@ -85,7 +84,7 @@ pub async fn symbol_names_response(
                     return client.value().symbol_names_response(mode, time, stream_name, callback_id).await
                 }
             },
-            Brokerage::Test => return TEST_CLIENT.symbol_names_response(mode, time, stream_name, callback_id).await,
+            Brokerage::Test => return DataServerResponse::Error { callback_id, error: FundForgeError::ServerErrorDebug("Test Brokerage Can Not Place Live Orders".to_string())} ,
             Brokerage::Bitget => {
                 if let Some(client) = BITGET_CLIENT.get() {
                     return client.symbol_names_response(mode, time, stream_name, callback_id).await
@@ -117,7 +116,7 @@ pub async fn account_info_response(
                     return client.account_info_response(mode, stream_name, account_id, callback_id).await
                 }
             },
-            Brokerage::Test => return TEST_CLIENT.account_info_response(mode, stream_name, account_id, callback_id).await,
+            Brokerage::Test => return DataServerResponse::Error { callback_id, error: FundForgeError::ServerErrorDebug("Test Brokerage Can Not Place Live Orders".to_string())} ,
             Brokerage::Bitget => {
                 if let Some(client) = BITGET_CLIENT.get() {
                     return client.account_info_response(mode, stream_name, account_id, callback_id).await
@@ -146,7 +145,7 @@ pub async fn symbol_info_response(brokerage: Brokerage, mode: StrategyMode, stre
                     return client.symbol_info_response(mode, stream_name, symbol_name, callback_id).await
                 }
             }
-            Brokerage::Test => return TEST_CLIENT.symbol_info_response(mode, stream_name, symbol_name, callback_id).await,
+            Brokerage::Test => return DataServerResponse::Error { callback_id, error: FundForgeError::ServerErrorDebug("Test Brokerage Can Not Place Live Orders".to_string())} ,
             Brokerage::Oanda => if let Some(client) = get_oanda_client() {
                 return client.symbol_info_response(mode, stream_name, symbol_name, callback_id).await
             }
@@ -172,7 +171,7 @@ pub async fn accounts_response(brokerage: Brokerage, mode: StrategyMode, stream_
                     return client.accounts_response(mode, stream_name, callback_id).await
                 }
             }
-            Brokerage::Test => return TEST_CLIENT.accounts_response(mode, stream_name, callback_id).await,
+            Brokerage::Test => return DataServerResponse::Error { callback_id, error: FundForgeError::ServerErrorDebug("Test Brokerage Can Not Place Live Orders".to_string())} ,
             Brokerage::Oanda => if let Some(client) = get_oanda_client() {
                 return client.accounts_response(mode, stream_name, callback_id).await
             },
@@ -198,7 +197,7 @@ pub async fn logout_command(brokerage: Brokerage, stream_name: StreamName) {
                 client.logout_command(stream_name).await
             }
         }
-        Brokerage::Test => TEST_CLIENT.logout_command(stream_name).await,
+        Brokerage::Test => return,
         Brokerage::Oanda => if let Some(client) = OANDA_CLIENT.get() {
             client.logout_command(stream_name).await
         },

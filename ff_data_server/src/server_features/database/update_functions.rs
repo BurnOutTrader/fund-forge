@@ -217,7 +217,7 @@ impl HybridStorage {
                 DataVendor::Oanda if !OANDA_IS_CONNECTED.load(Ordering::SeqCst) => {
                     continue
                 },
-                DataVendor::Test | DataVendor::Bitget => {
+                DataVendor::DataBento | DataVendor::Bitget => {
                     continue
                 },
                 _ => (),

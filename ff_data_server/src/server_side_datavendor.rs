@@ -7,8 +7,8 @@ use ff_standard_lib::standardized_types::subscriptions::{DataSubscription, Symbo
 use ff_standard_lib::StreamName;
 use crate::bitget_api::api_client::BITGET_CLIENT;
 use crate::rithmic_api::api_client::{get_rithmic_market_data_system, RITHMIC_CLIENTS};
-use crate::test_api::api_client::TEST_CLIENT;
 use tokio::time::{timeout, Duration};
+use crate::data_bento_api::api_client::DATA_BENTO_CLIENT;
 use crate::oanda_api::api_client::OANDA_CLIENT;
 use crate::server_features::server_side_datavendor::VendorApiResponse;
 
@@ -32,7 +32,7 @@ pub async fn session_market_hours_response(mode: StrategyMode, data_vendor: Data
                     return client.value().session_market_hours_response(mode, stream_name, symbol_name, time, callback_id).await
                 }
             },
-            DataVendor::Test => return TEST_CLIENT.session_market_hours_response(mode, stream_name, symbol_name, time, callback_id).await,
+            DataVendor::DataBento => return DATA_BENTO_CLIENT.session_market_hours_response(mode, stream_name, symbol_name, time, callback_id).await,
             DataVendor::Bitget => {
                 if let Some(client) = BITGET_CLIENT.get() {
                     return client.session_market_hours_response(mode, stream_name, symbol_name, time, callback_id).await
@@ -72,7 +72,7 @@ pub async fn symbols_response(
                     return client.symbols_response(mode, stream_name, market_type, time, callback_id).await
                 }
             },
-            DataVendor::Test => return TEST_CLIENT.symbols_response(mode, stream_name, market_type, time, callback_id).await,
+            DataVendor::DataBento => return DATA_BENTO_CLIENT.symbols_response(mode, stream_name, market_type, time, callback_id).await,
             DataVendor::Bitget => {
                 if let Some(client) = BITGET_CLIENT.get() {
                     return client.symbols_response(mode, stream_name, market_type, time, callback_id).await;
@@ -114,7 +114,7 @@ pub async fn resolutions_response(
                     return client.resolutions_response(mode, stream_name, market_type, callback_id).await
                 }
             },
-            DataVendor::Test => return TEST_CLIENT.resolutions_response(mode, stream_name, market_type, callback_id).await,
+            DataVendor::DataBento => return DATA_BENTO_CLIENT.resolutions_response(mode, stream_name, market_type, callback_id).await,
             DataVendor::Bitget => {
                 if let Some(client) = BITGET_CLIENT.get() {
                     return client.resolutions_response(mode, stream_name, market_type, callback_id).await;
@@ -151,7 +151,7 @@ pub async fn markets_response(
                     return client.markets_response(mode, stream_name, callback_id).await
                 }
             },
-            DataVendor::Test => return TEST_CLIENT.markets_response(mode, stream_name, callback_id).await,
+            DataVendor::DataBento => return DATA_BENTO_CLIENT.markets_response(mode, stream_name, callback_id).await,
             DataVendor::Bitget => {
                 if let Some(client) = BITGET_CLIENT.get() {
                     return client.markets_response(mode, stream_name, callback_id).await;
@@ -190,7 +190,7 @@ pub async fn decimal_accuracy_response(
                     return client.decimal_accuracy_response(mode, stream_name, symbol_name, callback_id).await
                 }
             },
-            DataVendor::Test => return TEST_CLIENT.decimal_accuracy_response(mode, stream_name, symbol_name, callback_id).await,
+            DataVendor::DataBento => return DATA_BENTO_CLIENT.decimal_accuracy_response(mode, stream_name, symbol_name, callback_id).await,
             DataVendor::Bitget => {
                 if let Some(client) = BITGET_CLIENT.get() {
                     return client.decimal_accuracy_response(mode, stream_name, symbol_name, callback_id).await;
@@ -228,7 +228,7 @@ pub async fn tick_size_response(
                     return client.tick_size_response(mode, stream_name, symbol_name, callback_id).await
                 }
             },
-            DataVendor::Test => return TEST_CLIENT.tick_size_response(mode, stream_name, symbol_name, callback_id).await,
+            DataVendor::DataBento => return DATA_BENTO_CLIENT.tick_size_response(mode, stream_name, symbol_name, callback_id).await,
             DataVendor::Bitget => {
                 if let Some(client) = BITGET_CLIENT.get() {
                     return client.tick_size_response(mode, stream_name, symbol_name, callback_id).await;
@@ -264,7 +264,7 @@ pub async fn data_feed_subscribe(
                     return client.data_feed_subscribe(stream_name, subscription.clone()).await
                 }
             },
-            DataVendor::Test => return TEST_CLIENT.data_feed_subscribe(stream_name, subscription.clone()).await,
+            DataVendor::DataBento => return DATA_BENTO_CLIENT.data_feed_subscribe(stream_name, subscription.clone()).await,
             DataVendor::Bitget => {
                 if let Some(client) = BITGET_CLIENT.get() {
                     return client.data_feed_subscribe(stream_name, subscription.clone()).await;
@@ -305,7 +305,7 @@ pub async fn data_feed_unsubscribe(
                     return client.data_feed_unsubscribe(stream_name, subscription.clone()).await
                 }
             },
-            DataVendor::Test => return TEST_CLIENT.data_feed_unsubscribe(stream_name, subscription.clone()).await,
+            DataVendor::DataBento => return DATA_BENTO_CLIENT.data_feed_unsubscribe(stream_name, subscription.clone()).await,
             DataVendor::Bitget => {
                 if let Some(client) = BITGET_CLIENT.get() {
                     return client.data_feed_unsubscribe(stream_name, subscription.clone()).await;
@@ -346,7 +346,7 @@ pub async fn base_data_types_response(
                     return client.base_data_types_response(mode, stream_name, callback_id).await
                 }
             },
-            DataVendor::Test => return TEST_CLIENT.base_data_types_response(mode, stream_name, callback_id).await,
+            DataVendor::DataBento => return DATA_BENTO_CLIENT.base_data_types_response(mode, stream_name, callback_id).await,
             DataVendor::Bitget => {
                 if let Some(client) = BITGET_CLIENT.get() {
                     return client.base_data_types_response(mode, stream_name, callback_id).await;
@@ -379,7 +379,7 @@ pub async fn logout_command_vendors(data_vendor: DataVendor, stream_name: Stream
                     client.logout_command_vendors(stream_name).await
                 }
             },
-            DataVendor::Test => TEST_CLIENT.logout_command_vendors(stream_name).await,
+            DataVendor::DataBento => DATA_BENTO_CLIENT.logout_command_vendors(stream_name).await,
             DataVendor::Bitget => {
                 if let Some(client) = BITGET_CLIENT.get() {
                     client.logout_command_vendors(stream_name).await;

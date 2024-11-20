@@ -12,7 +12,7 @@ use crate::messages::data_server_messaging::FundForgeError;
 /// The `DataVendor` is used to specify the data vendor that is being used to feed a `Subscription`.
 /// Each `DataVendor` implements its own logic to fetch the data from the source, this logic can be modified in the `ff_data_server` crate.
 pub enum DataVendor {
-    Test, //DO NOT CHANGE ORDER
+    DataBento, //DO NOT CHANGE ORDER
     Rithmic,
     Bitget,
     Oanda
@@ -21,7 +21,7 @@ pub enum DataVendor {
 impl fmt::Display for DataVendor {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let s = match self {
-            DataVendor::Test => "Test".to_string(),
+            DataVendor::DataBento => "DataBento".to_string(),
             DataVendor::Rithmic => "Rithmic".to_string(),
             DataVendor::Bitget => "Bitget".to_string(),
             DataVendor::Oanda => "Oanda".to_string(),
@@ -34,8 +34,8 @@ impl FromStr for DataVendor {
     type Err = FundForgeError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        if s == "Test" {
-            Ok(DataVendor::Test)
+        if s == "DataBento" {
+            Ok(DataVendor::DataBento)
         } else if s.starts_with("Rithmic") {
             Ok(DataVendor::Rithmic)
         } else if s == "BitGet" {

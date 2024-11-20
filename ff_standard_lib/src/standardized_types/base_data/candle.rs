@@ -297,7 +297,7 @@ pub fn generate_5_day_candle_data() -> Vec<Candle> {
             let range = high - low;
 
             test_data.insert(utc_time, Candle {
-                symbol: Symbol::new("TEST".to_string(), DataVendor::Test, MarketType::CFD), // Example symbol
+                symbol: Symbol::new("TEST".to_string(), DataVendor::DataBento, MarketType::CFD), // Example symbol
                 high,
                 low,
                 open,

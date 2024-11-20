@@ -312,7 +312,7 @@ pub fn generate_5_day_quote_bar_data() -> Vec<QuoteBar> {
             let spread = ask_close - bid_close;
 
             test_data.push(QuoteBar {
-                symbol: Symbol::new("TEST".to_string(), DataVendor::Test, MarketType::CFD), // Example symbol
+                symbol: Symbol::new("TEST".to_string(), DataVendor::DataBento, MarketType::CFD), // Example symbol
                 bid_high,
                 bid_low,
                 bid_open,

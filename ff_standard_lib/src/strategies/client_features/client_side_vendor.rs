@@ -178,7 +178,7 @@ impl DataVendor {
 
     pub async fn tick_size(&self, symbol_name: SymbolName) -> Result<Price, FundForgeError> {
         match self {
-            DataVendor::Test => {}
+            DataVendor::DataBento => {}
             DataVendor::Rithmic => {
                 return match get_rithmic_symbol_info(&symbol_name) {
                     Ok(info) => Ok(info.tick_size),

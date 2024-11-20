@@ -17,13 +17,12 @@ use tokio_rustls::server::TlsStream;
 use server_features::database::hybrid_storage::{HybridStorage, DATA_STORAGE};
 use crate::oanda_api::api_client::{oanda_init};
 use crate::rithmic_api::api_client::{RithmicBrokerageClient, RITHMIC_CLIENTS};
-use crate::test_api::api_client::TEST_CLIENT;
 
 pub mod request_handlers;
 mod stream_listener;
 mod async_listener;
 pub mod rithmic_api;
-pub mod test_api;
+pub mod data_bento_api;
 pub mod rate_limiter;
 pub mod server_side_brokerage;
 pub mod server_side_datavendor;
@@ -203,8 +202,6 @@ async fn main() -> io::Result<()> {
         Ok(_) => eprintln!("Shutdown Signal Sent"),
         Err(e) =>  eprintln!("Shutdown Signal Failed: {}", e),
     }
-
-    TEST_CLIENT.shutdown();
 
     // Perform logout
     logout_apis().await;

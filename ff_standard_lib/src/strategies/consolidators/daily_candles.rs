@@ -605,7 +605,7 @@ mod tests {
     async fn test_real_time_session_management() {
         let trading_hours = setup_trading_hours();
         let subscription = DataSubscription {
-            symbol: Symbol::new("TEST".to_string(), DataVendor::Test, MarketType::CFD),
+            symbol: Symbol::new("TEST".to_string(), DataVendor::DataBento, MarketType::CFD),
             base_data_type: BaseDataType::Candles,
             resolution: Resolution::Day,
             candle_type: Some(CandleType::CandleStick),
