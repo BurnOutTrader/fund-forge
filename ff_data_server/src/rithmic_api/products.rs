@@ -351,136 +351,124 @@ lazy_static! {
     static ref COMMISSION_PER_CONTRACT: HashMap<&'static str, CommissionInfo> = {
         let mut map = HashMap::new();
 
-        // Stock Index Futures
-        map.insert("YM", CommissionInfo { per_side: dec!(1.90), currency: Currency::USD });
-        map.insert("ZDJ", CommissionInfo { per_side: dec!(1.54), currency: Currency::USD });
-        map.insert("M2K", CommissionInfo { per_side: dec!(0.50), currency: Currency::USD });
-        map.insert("MES", CommissionInfo { per_side: dec!(0.50), currency: Currency::USD });
-        map.insert("FDXS", CommissionInfo { per_side: dec!(0.27), currency: Currency::EUR });
-        map.insert("MYM", CommissionInfo { per_side: dec!(0.50), currency: Currency::USD });
-        map.insert("FSXE", CommissionInfo { per_side: dec!(0.23), currency: Currency::EUR });
-        map.insert("ES", CommissionInfo { per_side: dec!(1.90), currency: Currency::USD });
-        map.insert("MJNK", CommissionInfo { per_side: dec!(39.90), currency: Currency::JPY });
-        map.insert("MNQ", CommissionInfo { per_side: dec!(0.50), currency: Currency::USD });
-        map.insert("NQ", CommissionInfo { per_side: dec!(1.90), currency: Currency::USD });
-        map.insert("EMD", CommissionInfo { per_side: dec!(1.85), currency: Currency::USD });
-        map.insert("NKD", CommissionInfo { per_side: dec!(2.88), currency: Currency::USD });
-        map.insert("SP", CommissionInfo { per_side: dec!(2.88), currency: Currency::USD });
-        map.insert("ZND", CommissionInfo { per_side: dec!(2.88), currency: Currency::USD });
-        map.insert("FXXP", CommissionInfo { per_side: dec!(0.90), currency: Currency::EUR });
-        map.insert("FDAX", CommissionInfo { per_side: dec!(1.77), currency: Currency::EUR });
-        map.insert("FESB", CommissionInfo { per_side: dec!(0.80), currency: Currency::EUR });
-        map.insert("FESX", CommissionInfo { per_side: dec!(0.90), currency: Currency::EUR });
-        map.insert("FDXM", CommissionInfo { per_side: dec!(0.76), currency: Currency::EUR });
-        map.insert("RTY", CommissionInfo { per_side: dec!(1.90), currency: Currency::USD });
-        map.insert("VX", CommissionInfo { per_side: dec!(2.27), currency: Currency::USD });
-        map.insert("FVS", CommissionInfo { per_side: dec!(0.72), currency: Currency::EUR });
-        map.insert("VXM", CommissionInfo { per_side: dec!(0.35), currency: Currency::USD });
+        // Stock Index Futures (Exchange Fee: 0.50 USD)
+        map.insert("YM", CommissionInfo { per_side: dec!(1.90) + dec!(0.50), currency: Currency::USD });
+        map.insert("ZDJ", CommissionInfo { per_side: dec!(1.54) + dec!(0.50), currency: Currency::USD });
+        map.insert("M2K", CommissionInfo { per_side: dec!(0.50) + dec!(0.20), currency: Currency::USD });
+        map.insert("MES", CommissionInfo { per_side: dec!(0.50) + dec!(0.20), currency: Currency::USD });
+        map.insert("FDXS", CommissionInfo { per_side: dec!(0.27) + dec!(0.10), currency: Currency::EUR });
+        map.insert("MYM", CommissionInfo { per_side: dec!(0.50) + dec!(0.20), currency: Currency::USD });
+        map.insert("FSXE", CommissionInfo { per_side: dec!(0.23) + dec!(0.10), currency: Currency::EUR });
+        map.insert("ES", CommissionInfo { per_side: dec!(1.90) + dec!(0.60), currency: Currency::USD });
+        map.insert("MJNK", CommissionInfo { per_side: dec!(39.90) + dec!(1.00), currency: Currency::JPY });
+        map.insert("MNQ", CommissionInfo { per_side: dec!(0.50) + dec!(0.20), currency: Currency::USD });
+        map.insert("NQ", CommissionInfo { per_side: dec!(1.90) + dec!(0.60), currency: Currency::USD });
+        map.insert("EMD", CommissionInfo { per_side: dec!(1.85) + dec!(0.55), currency: Currency::USD });
+        map.insert("NKD", CommissionInfo { per_side: dec!(2.88) + dec!(0.50), currency: Currency::USD });
+        map.insert("SP", CommissionInfo { per_side: dec!(2.88) + dec!(0.60), currency: Currency::USD });
+        map.insert("ZND", CommissionInfo { per_side: dec!(2.88) + dec!(0.60), currency: Currency::USD });
+        map.insert("FXXP", CommissionInfo { per_side: dec!(0.90) + dec!(0.10), currency: Currency::EUR });
+        map.insert("FDAX", CommissionInfo { per_side: dec!(1.77) + dec!(0.20), currency: Currency::EUR });
+        map.insert("FESB", CommissionInfo { per_side: dec!(0.80) + dec!(0.10), currency: Currency::EUR });
+        map.insert("FESX", CommissionInfo { per_side: dec!(0.90) + dec!(0.10), currency: Currency::EUR });
+        map.insert("FDXM", CommissionInfo { per_side: dec!(0.76) + dec!(0.15), currency: Currency::EUR });
+        map.insert("RTY", CommissionInfo { per_side: dec!(1.90) + dec!(0.60), currency: Currency::USD });
+        map.insert("VX", CommissionInfo { per_side: dec!(2.27) + dec!(0.75), currency: Currency::USD });
+        map.insert("FVS", CommissionInfo { per_side: dec!(0.72) + dec!(0.10), currency: Currency::EUR });
+        map.insert("VXM", CommissionInfo { per_side: dec!(0.35) + dec!(0.20), currency: Currency::USD });
 
-        // Currency Futures
-        map.insert("6Z", CommissionInfo { per_side: dec!(2.13), currency: Currency::USD });
-        map.insert("RMB", CommissionInfo { per_side: dec!(2.13), currency: Currency::USD });
-        map.insert("6M", CommissionInfo { per_side: dec!(2.13), currency: Currency::USD });
-        map.insert("TRE", CommissionInfo { per_side: dec!(2.13), currency: Currency::USD });
-        map.insert("6L", CommissionInfo { per_side: dec!(2.13), currency: Currency::USD });
-        map.insert("6N", CommissionInfo { per_side: dec!(2.13), currency: Currency::USD });
-        map.insert("PLN", CommissionInfo { per_side: dec!(2.13), currency: Currency::USD });
-        map.insert("SEK", CommissionInfo { per_side: dec!(2.13), currency: Currency::USD });
-        map.insert("TRY", CommissionInfo { per_side: dec!(2.13), currency: Currency::USD });
-        map.insert("6A", CommissionInfo { per_side: dec!(2.12), currency: Currency::USD });
-        map.insert("6B", CommissionInfo { per_side: dec!(2.13), currency: Currency::USD });
-        map.insert("6C", CommissionInfo { per_side: dec!(2.13), currency: Currency::USD });
-        map.insert("6E", CommissionInfo { per_side: dec!(2.13), currency: Currency::USD });
-        map.insert("6J", CommissionInfo { per_side: dec!(2.13), currency: Currency::USD });
-        map.insert("6S", CommissionInfo { per_side: dec!(2.13), currency: Currency::USD });
-        map.insert("E7", CommissionInfo { per_side: dec!(1.38), currency: Currency::USD });
-        map.insert("J7", CommissionInfo { per_side: dec!(1.38), currency: Currency::USD });
-        map.insert("M6A", CommissionInfo { per_side: dec!(0.39), currency: Currency::USD });
-        map.insert("M6B", CommissionInfo { per_side: dec!(0.39), currency: Currency::USD });
-        map.insert("MCD", CommissionInfo { per_side: dec!(0.39), currency: Currency::USD });
-        map.insert("M6E", CommissionInfo { per_side: dec!(0.39), currency: Currency::USD });
-        map.insert("MJY", CommissionInfo { per_side: dec!(0.39), currency: Currency::USD });
-        map.insert("MSF", CommissionInfo { per_side: dec!(0.39), currency: Currency::USD });
-        map.insert("DX", CommissionInfo { per_side: dec!(1.88), currency: Currency::USD });
+        // Currency Futures (Exchange Fee: 0.30 USD)
+        map.insert("6Z", CommissionInfo { per_side: dec!(2.13) + dec!(0.30), currency: Currency::USD });
+        map.insert("RMB", CommissionInfo { per_side: dec!(2.13) + dec!(0.30), currency: Currency::USD });
+        map.insert("6M", CommissionInfo { per_side: dec!(2.13) + dec!(0.30), currency: Currency::USD });
+        map.insert("TRE", CommissionInfo { per_side: dec!(2.13) + dec!(0.30), currency: Currency::USD });
+        map.insert("6L", CommissionInfo { per_side: dec!(2.13) + dec!(0.30), currency: Currency::USD });
+        map.insert("6N", CommissionInfo { per_side: dec!(2.13) + dec!(0.30), currency: Currency::USD });
+        map.insert("PLN", CommissionInfo { per_side: dec!(2.13) + dec!(0.30), currency: Currency::USD });
+        map.insert("SEK", CommissionInfo { per_side: dec!(2.13) + dec!(0.30), currency: Currency::USD });
+        map.insert("TRY", CommissionInfo { per_side: dec!(2.13) + dec!(0.30), currency: Currency::USD });
+        map.insert("6A", CommissionInfo { per_side: dec!(2.12) + dec!(0.30), currency: Currency::USD });
+        map.insert("6B", CommissionInfo { per_side: dec!(2.13) + dec!(0.30), currency: Currency::USD });
+        map.insert("6C", CommissionInfo { per_side: dec!(2.13) + dec!(0.30), currency: Currency::USD });
+        map.insert("6E", CommissionInfo { per_side: dec!(2.13) + dec!(0.30), currency: Currency::USD });
+        map.insert("6J", CommissionInfo { per_side: dec!(2.13) + dec!(0.30), currency: Currency::USD });
+        map.insert("6S", CommissionInfo { per_side: dec!(2.13) + dec!(0.30), currency: Currency::USD });
+        map.insert("E7", CommissionInfo { per_side: dec!(1.38) + dec!(0.20), currency: Currency::USD });
+        map.insert("J7", CommissionInfo { per_side: dec!(1.38) + dec!(0.20), currency: Currency::USD });
+        map.insert("M6A", CommissionInfo { per_side: dec!(0.39) + dec!(0.15), currency: Currency::USD });
+        map.insert("M6B", CommissionInfo { per_side: dec!(0.39) + dec!(0.15), currency: Currency::USD });
 
-        // Energy Futures
-        map.insert("CL", CommissionInfo { per_side: dec!(2.13), currency: Currency::USD });
-        map.insert("MCL", CommissionInfo { per_side: dec!(0.65), currency: Currency::USD });
-        map.insert("MNG", CommissionInfo { per_side: dec!(0.75), currency: Currency::USD });
-        map.insert("HO", CommissionInfo { per_side: dec!(2.13), currency: Currency::USD });
-        map.insert("NG", CommissionInfo { per_side: dec!(2.13), currency: Currency::USD });
-        map.insert("QG", CommissionInfo { per_side: dec!(1.03), currency: Currency::USD });
-        map.insert("QH", CommissionInfo { per_side: dec!(1.73), currency: Currency::USD });
-        map.insert("QM", CommissionInfo { per_side: dec!(1.73), currency: Currency::USD });
-        map.insert("QU", CommissionInfo { per_side: dec!(1.73), currency: Currency::USD });
-        map.insert("RB", CommissionInfo { per_side: dec!(2.13), currency: Currency::USD });
+        // Energy Futures (Exchange Fee: 0.80 USD)
+        map.insert("CL", CommissionInfo { per_side: dec!(2.13) + dec!(0.80), currency: Currency::USD });
+        map.insert("MCL", CommissionInfo { per_side: dec!(0.65) + dec!(0.30), currency: Currency::USD });
+        map.insert("MNG", CommissionInfo { per_side: dec!(0.75) + dec!(0.30), currency: Currency::USD });
+
+        // Metals Futures (Exchange Fee: 0.40 USD)
+        map.insert("GC", CommissionInfo { per_side: dec!(2.12) + dec!(0.40), currency: Currency::USD });
+        map.insert("MGC", CommissionInfo { per_side: dec!(0.65) + dec!(0.20), currency: Currency::USD });
 
         // Metals Futures
-        map.insert("GC", CommissionInfo { per_side: dec!(2.12), currency: Currency::USD });
-        map.insert("HG", CommissionInfo { per_side: dec!(2.12), currency: Currency::USD });
-        map.insert("MHG", CommissionInfo { per_side: dec!(0.75), currency: Currency::USD });
-        map.insert("MGC", CommissionInfo { per_side: dec!(0.65), currency: Currency::USD });
-        map.insert("QC", CommissionInfo { per_side: dec!(1.54), currency: Currency::USD });
-        map.insert("QI", CommissionInfo { per_side: dec!(1.54), currency: Currency::USD });
-        map.insert("QO", CommissionInfo { per_side: dec!(1.54), currency: Currency::USD });
-        map.insert("SI", CommissionInfo { per_side: dec!(2.12), currency: Currency::USD });
-        map.insert("SIL", CommissionInfo { per_side: dec!(1.15), currency: Currency::USD });
-        map.insert("PA", CommissionInfo { per_side: dec!(2.07), currency: Currency::USD });
-        map.insert("PL", CommissionInfo { per_side: dec!(2.12), currency: Currency::USD });
+        map.insert("QC", CommissionInfo { per_side: dec!(1.54) + dec!(0.40), currency: Currency::USD });
+        map.insert("QI", CommissionInfo { per_side: dec!(1.54) + dec!(0.40), currency: Currency::USD });
+        map.insert("QO", CommissionInfo { per_side: dec!(1.54) + dec!(0.40), currency: Currency::USD });
+        map.insert("SI", CommissionInfo { per_side: dec!(2.12) + dec!(0.50), currency: Currency::USD });
+        map.insert("SIL", CommissionInfo { per_side: dec!(1.15) + dec!(0.35), currency: Currency::USD });
+        map.insert("PA", CommissionInfo { per_side: dec!(2.07) + dec!(0.50), currency: Currency::USD });
+        map.insert("PL", CommissionInfo { per_side: dec!(2.12) + dec!(0.50), currency: Currency::USD });
 
         // Financial Futures
-        map.insert("SR", CommissionInfo { per_side: dec!(1.13), currency: Currency::USD });
-        map.insert("10YY", CommissionInfo { per_side: dec!(0.45), currency: Currency::USD });
-        map.insert("30YY", CommissionInfo { per_side: dec!(0.45), currency: Currency::USD });
-        map.insert("2YY", CommissionInfo { per_side: dec!(0.45), currency: Currency::USD });
-        map.insert("5YY", CommissionInfo { per_side: dec!(0.45), currency: Currency::USD });
-        map.insert("UB", CommissionInfo { per_side: dec!(1.47), currency: Currency::USD });
-        map.insert("MWN", CommissionInfo { per_side: dec!(0.45), currency: Currency::USD });
-        map.insert("JGB", CommissionInfo { per_side: dec!(499.90), currency: Currency::JPY });
-        map.insert("MTN", CommissionInfo { per_side: dec!(0.45), currency: Currency::USD });
-        map.insert("Z3N", CommissionInfo { per_side: dec!(1.17), currency: Currency::USD });
-        map.insert("ZB", CommissionInfo { per_side: dec!(1.39), currency: Currency::USD });
-        map.insert("ZF", CommissionInfo { per_side: dec!(1.17), currency: Currency::USD });
-        map.insert("ZN", CommissionInfo { per_side: dec!(1.32), currency: Currency::USD });
-        map.insert("TN", CommissionInfo { per_side: dec!(1.32), currency: Currency::USD });
-        map.insert("ZQ", CommissionInfo { per_side: dec!(1.49), currency: Currency::USD });
-        map.insert("ZT", CommissionInfo { per_side: dec!(1.17), currency: Currency::USD });
-        map.insert("GE", CommissionInfo { per_side: dec!(1.72), currency: Currency::USD });
-        map.insert("GLB", CommissionInfo { per_side: dec!(1.72), currency: Currency::USD });
-        map.insert("FGBL", CommissionInfo { per_side: dec!(0.77), currency: Currency::EUR });
-        map.insert("FGBM", CommissionInfo { per_side: dec!(0.77), currency: Currency::EUR });
-        map.insert("FGBS", CommissionInfo { per_side: dec!(0.77), currency: Currency::EUR });
-        map.insert("FBTP", CommissionInfo { per_side: dec!(0.74), currency: Currency::EUR });
-        map.insert("FOAT", CommissionInfo { per_side: dec!(0.77), currency: Currency::EUR });
-        map.insert("FGBX", CommissionInfo { per_side: dec!(0.77), currency: Currency::EUR });
-        map.insert("FBTS", CommissionInfo { per_side: dec!(0.77), currency: Currency::EUR });
+        map.insert("SR", CommissionInfo { per_side: dec!(1.13) + dec!(0.25), currency: Currency::USD });
+        map.insert("10YY", CommissionInfo { per_side: dec!(0.45) + dec!(0.10), currency: Currency::USD });
+        map.insert("30YY", CommissionInfo { per_side: dec!(0.45) + dec!(0.10), currency: Currency::USD });
+        map.insert("2YY", CommissionInfo { per_side: dec!(0.45) + dec!(0.10), currency: Currency::USD });
+        map.insert("5YY", CommissionInfo { per_side: dec!(0.45) + dec!(0.10), currency: Currency::USD });
+        map.insert("UB", CommissionInfo { per_side: dec!(1.47) + dec!(0.30), currency: Currency::USD });
+        map.insert("MWN", CommissionInfo { per_side: dec!(0.45) + dec!(0.10), currency: Currency::USD });
+        map.insert("JGB", CommissionInfo { per_side: dec!(499.90) + dec!(10.00), currency: Currency::JPY });
+        map.insert("MTN", CommissionInfo { per_side: dec!(0.45) + dec!(0.10), currency: Currency::USD });
+        map.insert("Z3N", CommissionInfo { per_side: dec!(1.17) + dec!(0.25), currency: Currency::USD });
+        map.insert("ZB", CommissionInfo { per_side: dec!(1.39) + dec!(0.30), currency: Currency::USD });
+        map.insert("ZF", CommissionInfo { per_side: dec!(1.17) + dec!(0.25), currency: Currency::USD });
+        map.insert("ZN", CommissionInfo { per_side: dec!(1.32) + dec!(0.30), currency: Currency::USD });
+        map.insert("TN", CommissionInfo { per_side: dec!(1.32) + dec!(0.30), currency: Currency::USD });
+        map.insert("ZQ", CommissionInfo { per_side: dec!(1.49) + dec!(0.35), currency: Currency::USD });
+        map.insert("ZT", CommissionInfo { per_side: dec!(1.17) + dec!(0.25), currency: Currency::USD });
+        map.insert("GE", CommissionInfo { per_side: dec!(1.72) + dec!(0.35), currency: Currency::USD });
+        map.insert("GLB", CommissionInfo { per_side: dec!(1.72) + dec!(0.35), currency: Currency::USD });
+        map.insert("FGBL", CommissionInfo { per_side: dec!(0.77) + dec!(0.15), currency: Currency::EUR });
+        map.insert("FGBM", CommissionInfo { per_side: dec!(0.77) + dec!(0.15), currency: Currency::EUR });
+        map.insert("FGBS", CommissionInfo { per_side: dec!(0.77) + dec!(0.15), currency: Currency::EUR });
+        map.insert("FBTP", CommissionInfo { per_side: dec!(0.74) + dec!(0.15), currency: Currency::EUR });
+        map.insert("FOAT", CommissionInfo { per_side: dec!(0.77) + dec!(0.15), currency: Currency::EUR });
+        map.insert("FGBX", CommissionInfo { per_side: dec!(0.77) + dec!(0.15), currency: Currency::EUR });
+        map.insert("FBTS", CommissionInfo { per_side: dec!(0.77) + dec!(0.15), currency: Currency::EUR });
 
-        // Grains Futures
-        map.insert("XC", CommissionInfo { per_side: dec!(1.55), currency: Currency::USD });
-        map.insert("XK", CommissionInfo { per_side: dec!(1.56), currency: Currency::USD });
-        map.insert("XW", CommissionInfo { per_side: dec!(1.56), currency: Currency::USD });
-        map.insert("ZC", CommissionInfo { per_side: dec!(2.62), currency: Currency::USD });
-        map.insert("ZE", CommissionInfo { per_side: dec!(2.62), currency: Currency::USD });
-        map.insert("ZL", CommissionInfo { per_side: dec!(2.62), currency: Currency::USD });
-        map.insert("ZM", CommissionInfo { per_side: dec!(2.62), currency: Currency::USD });
-        map.insert("ZO", CommissionInfo { per_side: dec!(2.62), currency: Currency::USD });
-        map.insert("ZR", CommissionInfo { per_side: dec!(2.62), currency: Currency::USD });
-        map.insert("ZS", CommissionInfo { per_side: dec!(2.62), currency: Currency::USD });
-        map.insert("ZW", CommissionInfo { per_side: dec!(2.62), currency: Currency::USD });
+        // Grains Futures (Exchange Fee: 0.50 USD)
+        map.insert("XC", CommissionInfo { per_side: dec!(1.55) + dec!(0.50), currency: Currency::USD });
+        map.insert("XK", CommissionInfo { per_side: dec!(1.56) + dec!(0.50), currency: Currency::USD });
+        map.insert("XW", CommissionInfo { per_side: dec!(1.56) + dec!(0.50), currency: Currency::USD });
+        map.insert("ZC", CommissionInfo { per_side: dec!(2.62) + dec!(0.50), currency: Currency::USD });
+        map.insert("ZE", CommissionInfo { per_side: dec!(2.62) + dec!(0.50), currency: Currency::USD });
+        map.insert("ZL", CommissionInfo { per_side: dec!(2.62) + dec!(0.50), currency: Currency::USD });
+        map.insert("ZM", CommissionInfo { per_side: dec!(2.62) + dec!(0.50), currency: Currency::USD });
+        map.insert("ZO", CommissionInfo { per_side: dec!(2.62) + dec!(0.50), currency: Currency::USD });
+        map.insert("ZR", CommissionInfo { per_side: dec!(2.62) + dec!(0.50), currency: Currency::USD });
+        map.insert("ZS", CommissionInfo { per_side: dec!(2.62) + dec!(0.50), currency: Currency::USD });
+        map.insert("ZW", CommissionInfo { per_side: dec!(2.62) + dec!(0.50), currency: Currency::USD });
 
-        // Softs Futures
-        map.insert("DA", CommissionInfo { per_side: dec!(2.42), currency: Currency::USD });
-        map.insert("LBS", CommissionInfo { per_side: dec!(2.42), currency: Currency::USD });
-        map.insert("CC", CommissionInfo { per_side: dec!(2.63), currency: Currency::USD });
-        map.insert("CT", CommissionInfo { per_side: dec!(2.63), currency: Currency::USD });
-        map.insert("KC", CommissionInfo { per_side: dec!(2.62), currency: Currency::USD });
-        map.insert("OJ", CommissionInfo { per_side: dec!(2.63), currency: Currency::USD });
-        map.insert("SB", CommissionInfo { per_side: dec!(2.63), currency: Currency::USD });
+        // Softs Futures (Exchange Fee: 0.60 USD)
+        map.insert("DA", CommissionInfo { per_side: dec!(2.42) + dec!(0.60), currency: Currency::USD });
+        map.insert("LBS", CommissionInfo { per_side: dec!(2.42) + dec!(0.60), currency: Currency::USD });
+        map.insert("CC", CommissionInfo { per_side: dec!(2.63) + dec!(0.60), currency: Currency::USD });
+        map.insert("CT", CommissionInfo { per_side: dec!(2.63) + dec!(0.60), currency: Currency::USD });
+        map.insert("KC", CommissionInfo { per_side: dec!(2.62) + dec!(0.60), currency: Currency::USD });
+        map.insert("OJ", CommissionInfo { per_side: dec!(2.63) + dec!(0.60), currency: Currency::USD });
+        map.insert("SB", CommissionInfo { per_side: dec!(2.63) + dec!(0.60), currency: Currency::USD });
 
-        // Meats Futures
-        map.insert("GF", CommissionInfo { per_side: dec!(2.62), currency: Currency::USD });
-        map.insert("HE", CommissionInfo { per_side: dec!(2.62), currency: Currency::USD });
-        map.insert("LE", CommissionInfo { per_side: dec!(2.62), currency: Currency::USD });
+        // Meats Futures (Exchange Fee: 0.55 USD)
+        map.insert("GF", CommissionInfo { per_side: dec!(2.62) + dec!(0.55), currency: Currency::USD });
+        map.insert("HE", CommissionInfo { per_side: dec!(2.62) + dec!(0.55), currency: Currency::USD });
+        map.insert("LE", CommissionInfo { per_side: dec!(2.62) + dec!(0.55), currency: Currency::USD })
 
         map
     };
