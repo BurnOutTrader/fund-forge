@@ -1,8 +1,10 @@
+use std::time::Duration;
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use dashmap::DashMap;
 use rust_decimal::Decimal;
 use rust_decimal::prelude::{FromPrimitive, ToPrimitive};
+use tokio::time::timeout;
 use ff_standard_lib::messages::data_server_messaging::{DataServerResponse, FundForgeError};
 use ff_standard_lib::product_maps::rithmic::maps::{find_base_symbol, get_available_rithmic_symbol_names, get_exchange_by_symbol_name, get_futures_commissions_info, get_rithmic_symbol_info};
 use crate::server_features::server_side_brokerage::BrokerApiResponse;
@@ -14,7 +16,7 @@ use ff_standard_lib::StreamName;
 use crate::request_handlers::RESPONSE_SENDERS;
 use crate::rithmic_api::api_client::RithmicBrokerageClient;
 use crate::rithmic_api::client_base::rithmic_proto_objects::rti::request_login::SysInfraType;
-use crate::rithmic_api::client_base::rithmic_proto_objects::rti::{RequestCancelAllOrders, RequestCancelOrder, RequestExitPosition, RequestModifyOrder};
+use crate::rithmic_api::client_base::rithmic_proto_objects::rti::{RequestAccountRmsInfo, RequestCancelAllOrders, RequestCancelOrder, RequestExitPosition, RequestModifyOrder};
 
 #[async_trait]
 impl BrokerApiResponse for RithmicBrokerageClient {
@@ -40,8 +42,41 @@ impl BrokerApiResponse for RithmicBrokerageClient {
                 return DataServerResponse::Error {callback_id, error: FundForgeError::ClientSideErrorDebug("No account info for paper accounts".to_string())}
             }
             StrategyMode::Live => {
+                if !self.account_info.contains_key(&account_id) {
+                    let rms_req = RequestAccountRmsInfo {
+                        template_id: 304,
+                        user_msg: vec![],
+                        fcm_id: self.credentials.fcm_id.clone(),
+                        ib_id: self.credentials.ib_id.clone(),
+                        user_type: self.credentials.user_type.clone(),
+                    };
+                    self.send_message(&SysInfraType::OrderPlant, rms_req.clone()).await;
+
+                    // Wrap the while loop in a timeout
+                    match timeout(Duration::from_secs(10), async {
+                        while !self.account_info.contains_key(&account_id) {
+                            tokio::time::sleep(Duration::from_secs(2)).await;
+                        }
+                    }).await {
+                        Ok(_) => (), // Loop completed successfully
+                        Err(_) => {
+                            return DataServerResponse::Error {
+                                callback_id,
+                                error: FundForgeError::ClientSideErrorDebug(
+                                    format!("Timeout waiting for account info for account {}", account_id)
+                                )
+                            }
+                        }
+                    }
+                }
+
                 match self.account_info.get(&account_id) {
-                    None => DataServerResponse::Error {callback_id, error:FundForgeError::ClientSideErrorDebug(format!("{} Has No Account for {}",self.brokerage, account_id))},
+                    None => DataServerResponse::Error {
+                        callback_id,
+                        error: FundForgeError::ClientSideErrorDebug(
+                            format!("{} Has No Account for {}", self.brokerage, account_id)
+                        )
+                    },
                     Some(account_info) => DataServerResponse::AccountInfo {
                         callback_id,
                         account_info: account_info.value().clone(),
