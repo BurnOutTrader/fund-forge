@@ -341,7 +341,7 @@ impl HybridStorage {
         Ok(())
     }
 
-    pub async fn get_files_in_range(
+    pub async fn get_files_in_range (
         &self,
         symbol: &Symbol,
         resolution: &Resolution,
@@ -446,7 +446,6 @@ mod tests {
     use tempfile::TempDir;
     use ff_standard_lib::standardized_types::base_data::candle::generate_5_day_candle_data;
     use super::*;
-
 
     fn setup_test_storage() -> (HybridStorage, TempDir) {
         let temp_dir = TempDir::new().unwrap();
