@@ -468,7 +468,7 @@ lazy_static! {
         // Meats Futures (Exchange Fee: 0.55 USD)
         map.insert("GF", CommissionInfo { per_side: dec!(2.62) + dec!(0.55), currency: Currency::USD });
         map.insert("HE", CommissionInfo { per_side: dec!(2.62) + dec!(0.55), currency: Currency::USD });
-        map.insert("LE", CommissionInfo { per_side: dec!(2.62) + dec!(0.55), currency: Currency::USD })
+        map.insert("LE", CommissionInfo { per_side: dec!(2.62) + dec!(0.55), currency: Currency::USD });
 
         map
     };
