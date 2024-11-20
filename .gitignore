@@ -12,6 +12,8 @@ trades exports
 /ff_data_server/data/credentials/rithmic_credentials/inactive/*
 /ff_data_server/data/credentials/oanda_credentials/active/*
 /ff_data_server/data/credentials/oanda_credentials/inactive/*
+/ff_data_server/data/credentials/databento_credentials/active/*
+/ff_data_server/data/credentials/databento_credentials/inactive/*
 
 ff_data_server/data/historical/Test/*
 ff_data_server/data/historical/Bitget/*
