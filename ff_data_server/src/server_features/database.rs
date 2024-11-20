@@ -682,11 +682,11 @@ impl HybridStorage {
             grouped_data.entry(key).or_insert_with(Vec::new).push(d);
         }
 
-        println!("Grouped data into {} files", grouped_data.len());
+        //println!("Grouped data into {} files", grouped_data.len());
 
         for ((symbol, resolution, data_type, date), group) in grouped_data {
             let file_path = self.get_file_path(&symbol, &resolution, &data_type, &date, true);
-            println!("Saving {} data points to file: {:?}", group.len(), file_path);
+            //println!("Saving {} data points to file: {:?}", group.len(), file_path);
             self.save_data_to_file(&file_path, &group, is_bulk_download).await?;
         }
 
