@@ -358,7 +358,31 @@ impl BrokerApiResponse for RithmicBrokerageClient {
     async fn flatten_all_for(&self, account: Account) {
         const PLANT: SysInfraType = SysInfraType::OrderPlant;
         self.cancel_orders_on_account(account.clone()).await;
-        if let Some(tag_map) = self.last_tag.get(&account.account_id) {
+        if let Some(tag_map) = self.short_quantity.get(&account.account_id) {
+            for tag in tag_map.value() {
+                let exchange = match get_exchange_by_symbol_name(tag.key()) {
+                    None => {
+                        eprintln!("Rithmic `flatten_all_for()` error, No exchange found for symbol: {}", tag.key());
+                        continue
+                    },
+                    Some(exchange) => exchange
+                };
+                let req = RequestExitPosition {
+                    template_id: 3504,
+                    user_msg: vec!["Flatten All".to_string()],
+                    window_name: None,
+                    fcm_id: self.fcm_id.clone(),
+                    ib_id: self.ib_id.clone(),
+                    account_id: Some(account.account_id.clone()),
+                    symbol: Some(tag.key().to_string()),
+                    exchange: Some(exchange.to_string()),
+                    trading_algorithm: None,
+                    manual_or_auto: Some(2),
+                };
+                self.send_message(&PLANT, req).await;
+            }
+        }
+        if let Some(tag_map) = self.long_quantity.get(&account.account_id) {
             for tag in tag_map.value() {
                 let exchange = match get_exchange_by_symbol_name(tag.key()) {
                     None => {
