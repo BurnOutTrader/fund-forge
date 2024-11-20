@@ -9,7 +9,6 @@ use crate::standardized_types::subscriptions::{DataSubscription, Symbol};
 use crate::standardized_types::time_slices::TimeSlice;
 use chrono::{DateTime, Duration, Utc};
 use std::collections::{BTreeMap, HashMap};
-use std::collections::btree_map::Entry;
 use std::io::Read;
 use ahash::AHashMap;
 use flate2::bufread::GzDecoder;
