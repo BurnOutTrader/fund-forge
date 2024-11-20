@@ -1,5 +1,4 @@
 use std::{fs, io};
-use std::fs::File;
 use std::io::Read;
 use chrono::{DateTime, Utc};
 use flate2::read::GzDecoder;
