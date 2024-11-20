@@ -29,33 +29,6 @@ lazy_static!(
     //todo, we should have a disconnect broadcaster so that we broadcast on disconnect of a streamer, this needs to be done for base data response, where we await updates for before live streams
 );
 
-pub async fn base_data_response(
-    subscriptions: Vec<DataSubscription>,
-    from_time: String,
-    to_time: String,
-    callback_id: u64,
-) -> DataServerResponse {
-    let from_time: DateTime<Utc> = from_time.parse().unwrap();
-    let to_time: DateTime<Utc> = to_time.parse().unwrap();
-
-    if to_time.date_naive() >= Utc::now().date_naive() {
-        let mut tasks = vec![];
-        for subscription in &subscriptions {
-            tasks.push(DATA_STORAGE.get().unwrap().pre_subscribe_updates(subscription.symbol.clone(), subscription.resolution, subscription.base_data_type))
-        }
-        join_all(tasks).await;
-    }
-
-    let data = match DATA_STORAGE.get().expect("data folder not initialized").get_bulk_data(&subscriptions, from_time, to_time).await {
-        Err(e) => return  DataServerResponse::Error { callback_id, error: FundForgeError::ServerErrorDebug(e.to_string())},
-        Ok(data) => data
-    };
-
-    //eprintln!("Data: {:?}", data.len());
-
-    DataServerResponse::HistoricalBaseData {callback_id, payload: data}
-}
-
 pub async fn compressed_file_response (
     subscriptions: Vec<DataSubscription>,
     from_time: String,
@@ -159,18 +132,6 @@ pub async fn manage_async_requests(
                         || symbol_info_response(brokerage, mode, stream_name, symbol_name, callback_id),
                         sender.clone()
                     ).await,
-
-                    DataServerRequest::HistoricalBaseDataRange {
-                        callback_id,
-                        subscriptions,
-                        from_time,
-                        to_time
-                    } => {
-                        handle_callback_no_timeouts(
-                            || base_data_response(subscriptions, from_time, to_time, callback_id),
-                            sender.clone()
-                        ).await
-                    },
 
                     DataServerRequest::GetCompressedHistoricalData { callback_id, subscriptions, from_time, to_time } => {
                         handle_callback_no_timeouts(
