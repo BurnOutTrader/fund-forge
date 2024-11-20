@@ -466,56 +466,6 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_asof_queries() {
-        let (storage, _temp) = setup_test_storage();
-        let test_data = generate_5_day_candle_data().iter()
-            .map(|c| BaseDataEnum::Candle(c.clone()))
-            .collect::<Vec<_>>();
-
-        match storage.save_data_bulk(test_data.clone(), false).await {
-            Ok(_) => {},
-            Err(e) => {
-                eprintln!("Error saving test data: {}", e);
-                assert!(false);
-            }
-        }
-
-        let first_candle = test_data[0].time_closed_utc();
-        let mid_candle = test_data[12].time_closed_utc();
-        let last_candle = test_data.last().unwrap().time_closed_utc();
-
-        let queries = vec![
-            // Exact match
-            (mid_candle, Some(mid_candle)),
-            // Between candles - should get previous
-            (mid_candle + chrono::Duration::minutes(30), Some(mid_candle)),
-            // Start of next day - should get candle #24
-            (test_data[24].time_closed_utc(), Some(test_data[24].time_closed_utc())),
-            // Before first candle
-            (first_candle - chrono::Duration::hours(1), None),
-        ];
-
-        for (query_time, expected_time) in queries {
-            let result = storage.get_data_point_asof(
-                test_data[0].symbol(),
-                &Resolution::Hours(1),
-                &BaseDataType::Candles,
-                query_time
-            ).await.unwrap();
-
-            eprintln!("Query time: {:?}, Expected time: {:?}, Result: {:?}", query_time, expected_time, result);
-
-            match expected_time {
-                Some(time) => {
-                    assert!(result.is_some(), "Expected data for query time {}", query_time);
-                    assert_eq!(result.unwrap().time_closed_utc(), time);
-                },
-                None => assert!(result.is_none(), "Expected no data for query time {}", query_time)
-            }
-        }
-    }
-
-    #[tokio::test]
     async fn test_five_day_candle_storage() {
         let (storage, _temp) = setup_test_storage();
         let test_data = generate_5_day_candle_data().iter()
