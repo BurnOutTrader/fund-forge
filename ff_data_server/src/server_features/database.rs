@@ -328,6 +328,22 @@ impl HybridStorage {
         }
     }
 
+    // Helper function to decompress and deserialize data from a mmap
+    async fn decompress_and_deserialize(&self, mmap: &[u8]) -> io::Result<Vec<BaseDataEnum>> {
+        // Create a decoder for the compressed data
+        let mut decoder = GzDecoder::new(mmap);
+        let mut decompressed = Vec::new();
+
+        // Decompress the data
+        decoder.read_to_end(&mut decompressed).map_err(|e| {
+            io::Error::new(io::ErrorKind::InvalidData, format!("Decompression error: {}", e))
+        })?;
+
+        // Deserialize the decompressed data
+        BaseDataEnum::from_array_bytes(&decompressed)
+            .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, format!("Deserialization error: {}", e)))
+    }
+
     async fn update_symbol(
         download_tasks: Arc<DashMap<(SymbolName, BaseDataType, Resolution), JoinHandle<()>>>,
         download_semaphore: Arc<Semaphore>,
@@ -661,17 +677,116 @@ impl HybridStorage {
                 d.symbol().clone(),
                 d.resolution(),
                 d.base_data_type(),
-                d.time_closed_utc().date_naive().and_hms_opt(0, 0, 0).unwrap().and_local_timezone(Utc).unwrap()  //todo[Remove Unwrap]
+                d.time_closed_utc().date_naive().and_hms_opt(0, 0, 0).unwrap().and_local_timezone(Utc).unwrap()
             );
             grouped_data.entry(key).or_insert_with(Vec::new).push(d);
         }
 
+        println!("Grouped data into {} files", grouped_data.len());
+
         for ((symbol, resolution, data_type, date), group) in grouped_data {
             let file_path = self.get_file_path(&symbol, &resolution, &data_type, &date, true);
+            println!("Saving {} data points to file: {:?}", group.len(), file_path);
             self.save_data_to_file(&file_path, &group, is_bulk_download).await?;
         }
 
         Ok(())
+    }
+
+    pub async fn get_earliest_data_time(
+        &self,
+        symbol: &Symbol,
+        resolution: &Resolution,
+        data_type: &BaseDataType,
+    ) -> Result<Option<DateTime<Utc>>, Box<dyn std::error::Error>> {
+        let base_path = self.get_base_path(symbol, resolution, data_type, false);
+        println!("Looking for earliest data in: {:?}", base_path);
+
+        if !base_path.exists() {
+            return Ok(None);
+        }
+
+        let mut years: Vec<_> = fs::read_dir(&base_path)?
+            .filter_map(|e| e.ok())
+            .filter(|e| e.path().is_dir())
+            .filter_map(|e| {
+                e.file_name()
+                    .to_str()
+                    .and_then(|s| s.parse::<i32>().ok())
+                    .map(|year| (year, e.path()))
+            })
+            .collect();
+        years.sort_unstable_by(|a, b| a.0.cmp(&b.0));
+
+        for (year, year_path) in years {
+            println!("Processing year: {}", year);
+            let mut months: Vec<_> = fs::read_dir(year_path)?
+                .filter_map(|e| e.ok())
+                .filter(|e| e.path().is_dir())
+                .filter_map(|e| {
+                    e.file_name()
+                        .to_str()
+                        .and_then(|s| s.parse::<u32>().ok())
+                        .map(|month| (month, e.path()))
+                })
+                .collect();
+            months.sort_unstable_by(|a, b| a.0.cmp(&b.0));
+
+            for (month, month_path) in months {
+                println!("Processing month: {}", month);
+                let mut days: Vec<_> = fs::read_dir(month_path)?
+                    .filter_map(|e| e.ok())
+                    .filter(|e| e.path().extension().map_or(false, |ext| ext == "bin"))
+                    .collect();
+                days.sort_by_key(|e| e.path());
+
+                for day in days {
+                    let file_path = day.path();
+                    println!("\nProcessing file: {:?}", file_path);
+
+                    match self.get_or_create_mmap(&file_path).await {
+                        Ok(mmap) => {
+                            println!("Got mmap of size: {}", mmap.len());
+
+                            // Decompress the mmap content
+                            let mut decoder = GzDecoder::new(&mmap[..]);
+                            let mut decompressed = Vec::new();
+                            match decoder.read_to_end(&mut decompressed) {
+                                Ok(_) => {
+                                    println!("Decompressed {} bytes", decompressed.len());
+                                    match BaseDataEnum::from_array_bytes(&decompressed) {
+                                        Ok(day_data) => {
+                                            println!("Successfully deserialized {} data points", day_data.len());
+                                            if let Some(time) = day_data.into_iter()
+                                                .map(|d| d.time_closed_utc())
+                                                .min() {
+                                                println!("Found earliest time: {}", time);
+                                                return Ok(Some(time));
+                                            }
+                                        }
+                                        Err(e) => {
+                                            println!("Failed to deserialize decompressed data: {}", e);
+                                            continue;
+                                        }
+                                    }
+                                }
+                                Err(e) => {
+                                    println!("Failed to decompress data: {}", e);
+                                    continue;
+                                }
+                            }
+                        }
+                        Err(e) => {
+                            println!("Failed to create/get mmap: {}", e);
+                            continue;
+                        }
+                    }
+                }
+            }
+        }
+
+        println!("No valid data found");
+        Ok(None)
     }
 
     async fn get_or_create_mmap(&self, file_path: &Path) -> io::Result<Arc<Mmap>> {
@@ -715,8 +830,6 @@ impl HybridStorage {
         }
 
         let mut file = File::open(file_path)?;
-
-        // Read compressed data
         let mut compressed_data = Vec::new();
         file.read_to_end(&mut compressed_data)?;
 
@@ -731,15 +844,15 @@ impl HybridStorage {
             let mut temp_file = File::create(&temp_path)?;
             temp_file.write_all(&decompressed)?;
             temp_file.sync_all()?;
-        } // temp_file is dropped here
+        }
 
         // Now open the temp file for mmap
         let temp_file = File::open(&temp_path)?;
         let mmap = Arc::new(unsafe { Mmap::map(&temp_file)? });
         self.mmap_cache.insert(path_str.clone(), Arc::clone(&mmap));
-        self.cache_last_accessed.insert(path_str.clone(), Utc::now());
+        self.cache_last_accessed.insert(path_str, Utc::now());
 
-        // Keep the temp_file handle alive until after the mmap is created
+        // Clean up temp file
         drop(temp_file);
         std::fs::remove_file(&temp_path)?;
 
@@ -825,6 +938,7 @@ impl HybridStorage {
         Ok(())
     }
 
+    // Updated get_data_range function
     pub async fn get_data_range(
         &self,
         symbol: &Symbol,
@@ -835,6 +949,9 @@ impl HybridStorage {
     ) -> Result<Vec<BaseDataEnum>, FundForgeError> {
         let mut all_data = Vec::new();
         let base_path = self.get_base_path(symbol, resolution, data_type, false);
+        if !base_path.exists() {
+            return Ok(Vec::new());
+        }
 
         let start_year = start.year();
         let end_year = end.year();
@@ -850,40 +967,86 @@ impl HybridStorage {
                 let month_path = year_path.join(format!("{:02}", month));
                 if !month_path.exists() { continue; }
 
-                // Only iterate through relevant days in this month
                 let current_date = if year == start_year && month == start.month() {
                     start.date_naive()
                 } else {
                     NaiveDate::from_ymd_opt(year, month, 1).unwrap()
                 };
+
                 let month_end = if year == end_year && month == end.month() {
                     end.date_naive()
                 } else {
-                    // Last day of month
                     NaiveDate::from_ymd_opt(year, month + 1, 1)
                         .unwrap_or_else(|| NaiveDate::from_ymd_opt(year + 1, 1, 1).unwrap())
-                        .pred_opt().unwrap()
+                        .pred_opt()
+                        .unwrap()
                 };
 
                 let mut current_date = current_date;
                 while current_date <= month_end {
-                    let file_path = month_path.join(format!("{:04}{:02}{:02}.bin", year, month, current_date.day()));
-                    if let Ok(mmap) = self.get_or_create_mmap(&file_path).await {
-                        let day_data = BaseDataEnum::from_array_bytes(&mmap[..].to_vec()).unwrap();
-                        all_data.extend(day_data.into_iter().filter(|d| d.time_closed_utc() >= start && d.time_closed_utc() <= end));
+                    let file_path = month_path.join(format!("{:04}{:02}{:02}.bin",
+                                                            year,
+                                                            month,
+                                                            current_date.day()
+                    ));
+
+                    if file_path.exists() {
+                        let mut file = match File::open(&file_path) {
+                            Ok(file) => file,
+                            Err(_) => {
+                                current_date = current_date.succ_opt().unwrap_or(month_end);
+                                continue;
+                            }
+                        };
+
+                        let mut compressed_data = Vec::new();
+                        if let Ok(_) = file.read_to_end(&mut compressed_data) {
+                            let mut decoder = GzDecoder::new(&compressed_data[..]);
+                            let mut decompressed = Vec::new();
+
+                            if let Ok(_) = decoder.read_to_end(&mut decompressed) {
+                                match BaseDataEnum::from_array_bytes(&decompressed) {
+                                    Ok(mut day_data) => {
+                                        // Filter data within the time range
+                                        day_data.retain(|d| {
+                                            let time = d.time_closed_utc();
+                                            time >= start && time <= end
+                                        });
+                                        all_data.extend(day_data);
+                                    }
+                                    Err(e) => {
+                                        eprintln!("Error deserializing data from {}: {}", file_path.display(), e);
+                                    }
+                                }
+                            }
+                        }
                     }
+
                     current_date = match current_date.succ_opt() {
                         Some(date) => date,
-                        None => {
-                            eprintln!("Failed to get_requests next day");
-                            break
-                        },
-                    }
+                        None => break,
+                    };
                 }
             }
         }
 
+        // Sort the data by timestamp before returning
+        all_data.sort_by_key(|d| d.time_closed_utc());
         Ok(all_data)
+    }
+
+    // Helper function to consistently handle file operations
+    async fn read_and_deserialize_file(file_path: &Path) -> Result<Vec<BaseDataEnum>, std::io::Error> {
+        let mut file = File::open(file_path)?;
+        let mut compressed_data = Vec::new();
+        file.read_to_end(&mut compressed_data)?;
+
+        let mut decoder = GzDecoder::new(&compressed_data[..]);
+        let mut decompressed = Vec::new();
+        decoder.read_to_end(&mut decompressed)?;
+
+        BaseDataEnum::from_array_bytes(&decompressed)
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))
     }
 
     pub async fn get_files_in_range(
@@ -985,7 +1148,7 @@ impl HybridStorage {
         Ok(files_data)
     }
 
-    /// This function will only check back 10,000 days, it will therefore not work beyond 27.5 years into the past,
+    // Updated get_latest_data_point function
     pub async fn get_latest_data_point(
         &self,
         symbol: &Symbol,
@@ -993,46 +1156,67 @@ impl HybridStorage {
         data_type: &BaseDataType,
     ) -> Result<Option<BaseDataEnum>, Box<dyn std::error::Error>> {
         let base_path = self.get_base_path(symbol, resolution, data_type, false);
+        if !base_path.exists() {
+            return Ok(None);
+        }
+
+        let mut latest_point: Option<BaseDataEnum> = None;
 
         // Get years in descending order
         let mut years: Vec<_> = fs::read_dir(&base_path)?
             .filter_map(|e| e.ok())
             .filter(|e| e.path().is_dir())
+            .filter_map(|e| {
+                e.file_name()
+                    .to_str()
+                    .and_then(|s| s.parse::<i32>().ok())
+                    .map(|year| (year, e.path()))
+            })
             .collect();
-        years.sort_by_key(|e| e.path().file_name().and_then(|s| s.to_str()).and_then(|s| s.parse::<u32>().ok()));
-        years.reverse(); // Descending order
+        years.sort_unstable_by(|a, b| b.0.cmp(&a.0));  // Sort descending
 
-        for year_dir in years {
-            // Get months in descending order
-            let mut months: Vec<_> = fs::read_dir(year_dir.path())?
+        'outer: for (_year, year_path) in years {
+            let mut months: Vec<_> = fs::read_dir(year_path)?
                 .filter_map(|e| e.ok())
                 .filter(|e| e.path().is_dir())
+                .filter_map(|e| {
+                    e.file_name()
+                        .to_str()
+                        .and_then(|s| s.parse::<u32>().ok())
+                        .map(|month| (month, e.path()))
+                })
                 .collect();
-            months.sort_by_key(|e| e.path().file_name().and_then(|s| s.to_str()).and_then(|s| s.parse::<u32>().ok()));
-            months.reverse(); // Descending order
+            months.sort_unstable_by(|a, b| b.0.cmp(&a.0));  // Sort descending
 
-            for month_dir in months {
-                // Get days in descending order
-                let mut days: Vec<_> = fs::read_dir(month_dir.path())?
+            for (_month, month_path) in months {
+                let mut days: Vec<_> = fs::read_dir(month_path)?
                     .filter_map(|e| e.ok())
-                    .filter(|e| e.path().extension().and_then(|s| s.to_str()) == Some("bin"))
+                    .filter(|e| e.path().extension().map_or(false, |ext| ext == "bin"))
                     .collect();
-                days.sort_by_key(|e| e.path().file_name().and_then(|s| s.to_str()).and_then(|s| s.parse::<u32>().ok()));
-                days.reverse(); // Descending order
+                days.sort_by_key(|e| std::cmp::Reverse(e.path()));
 
-                // Check first (latest) file in this month
-                if let Some(latest_file) = days.first() {
-                    if let Ok(mmap) = self.get_or_create_mmap(&latest_file.path()).await {
-                        if let Ok(day_data) = BaseDataEnum::from_array_bytes(&mmap.to_vec()) {
-                            if let Some(latest) = day_data.into_iter().max_by_key(|d| d.time_closed_utc()) {
-                                return Ok(Some(latest));
+                for day in days {
+                    let file_path = day.path();
+                    if let Ok(mmap) = self.get_or_create_mmap(&file_path).await {
+                        match self.decompress_and_deserialize(&mmap[..]).await {
+                            Ok(day_data) => {
+                                if let Some(latest) = day_data.into_iter()
+                                    .max_by_key(|d| d.time_closed_utc()) {
+                                    latest_point = Some(latest);
+                                    break 'outer;
+                                }
+                            }
+                            Err(e) => {
+                                eprintln!("Error processing file {}: {}", file_path.display(), e);
+                                continue;
                             }
                         }
                     }
                 }
             }
         }
-        Ok(None)
+
+        Ok(latest_point)
     }
 
     pub async fn get_latest_data_time(
@@ -1042,45 +1226,65 @@ impl HybridStorage {
         data_type: &BaseDataType,
     ) -> Result<Option<DateTime<Utc>>, Box<dyn std::error::Error>> {
         let base_path = self.get_base_path(symbol, resolution, data_type, false);
+        if !base_path.exists() {
+            return Ok(None);
+        }
+
+        let mut latest_time: Option<DateTime<Utc>> = None;
 
         // Get years in descending order
         let mut years: Vec<_> = fs::read_dir(&base_path)?
             .filter_map(|e| e.ok())
             .filter(|e| e.path().is_dir())
+            .filter_map(|e| {
+                e.file_name()
+                    .to_str()
+                    .and_then(|s| s.parse::<i32>().ok())
+                    .map(|year| (year, e.path()))
+            })
             .collect();
-        years.sort_by_key(|e| e.path().file_name().and_then(|s| s.to_str()).and_then(|s| s.parse::<u32>().ok()));
-        years.reverse(); // Descending order
+        years.sort_unstable_by(|a, b| b.0.cmp(&a.0));  // Sort descending
 
-        if let Some(year_dir) = years.first() {
+        for (_year, year_path) in years {
             // Get months in descending order
-            let mut months: Vec<_> = fs::read_dir(year_dir.path())?
+            let mut months: Vec<_> = fs::read_dir(year_path)?
                 .filter_map(|e| e.ok())
                 .filter(|e| e.path().is_dir())
+                .filter_map(|e| {
+                    e.file_name()
+                        .to_str()
+                        .and_then(|s| s.parse::<u32>().ok())
+                        .map(|month| (month, e.path()))
+                })
                 .collect();
-            months.sort_by_key(|e| e.path().file_name().and_then(|s| s.to_str()).and_then(|s| s.parse::<u32>().ok()));
-            months.reverse(); // Descending order
+            months.sort_unstable_by(|a, b| b.0.cmp(&a.0));  // Sort descending
 
-            if let Some(month_dir) = months.first() {
+            for (_month, month_path) in months {
                 // Get days in descending order
-                let mut days: Vec<_> = fs::read_dir(month_dir.path())?
+                let mut days: Vec<_> = fs::read_dir(month_path)?
                     .filter_map(|e| e.ok())
-                    .filter(|e| e.path().extension().and_then(|s| s.to_str()) == Some("bin"))
+                    .filter(|e| e.path().extension().map_or(false, |ext| ext == "bin"))
                     .collect();
-                days.sort_by_key(|e| e.path().file_name().and_then(|s| s.to_str()).and_then(|s| s.parse::<u32>().ok()));
-                days.reverse(); // Descending order
+                days.sort_by_key(|e| std::cmp::Reverse(e.path()));
 
-                if let Some(latest_file) = days.first() {
-                    if let Ok(mmap) = self.get_or_create_mmap(&latest_file.path()).await {
-                        if let Ok(day_data) = BaseDataEnum::from_array_bytes(&mmap.to_vec()) {
-                            return Ok(day_data.into_iter().map(|d| d.time_closed_utc()).max());
+                for day in days {
+                    if let Ok(mmap) = self.get_or_create_mmap(&day.path()).await {
+                        if let Ok(day_data) = BaseDataEnum::from_array_bytes(&mmap[..].to_vec()) {
+                            if let Some(time) = day_data.into_iter()
+                                .map(|d| d.time_closed_utc())
+                                .max() {
+                                latest_time = Some(time);
+                                return Ok(latest_time);  // Return as soon as we find valid data
+                            }
                         }
                     }
                 }
             }
         }
-        Ok(None)
-    }
 
+        Ok(latest_time)
+    }
+/*
     pub async fn get_earliest_data_time(
         &self,
         symbol: &Symbol,
@@ -1088,42 +1292,64 @@ impl HybridStorage {
         data_type: &BaseDataType,
     ) -> Result<Option<DateTime<Utc>>, Box<dyn std::error::Error>> {
         let base_path = self.get_base_path(symbol, resolution, data_type, false);
+        if !base_path.exists() {
+            return Ok(None);
+        }
+
+        let mut earliest_time: Option<DateTime<Utc>> = None;
 
         // Get years in ascending order
         let mut years: Vec<_> = fs::read_dir(&base_path)?
             .filter_map(|e| e.ok())
             .filter(|e| e.path().is_dir())
+            .filter_map(|e| {
+                e.file_name()
+                    .to_str()
+                    .and_then(|s| s.parse::<i32>().ok())
+                    .map(|year| (year, e.path()))
+            })
             .collect();
-        years.sort_by_key(|e| e.path().file_name().and_then(|s| s.to_str()).and_then(|s| s.parse::<u32>().ok()));
+        years.sort_unstable_by(|a, b| a.0.cmp(&b.0));  // Sort ascending
 
-        if let Some(year_dir) = years.first() {
+        for (_year, year_path) in years {
             // Get months in ascending order
-            let mut months: Vec<_> = fs::read_dir(year_dir.path())?
+            let mut months: Vec<_> = fs::read_dir(year_path)?
                 .filter_map(|e| e.ok())
                 .filter(|e| e.path().is_dir())
+                .filter_map(|e| {
+                    e.file_name()
+                        .to_str()
+                        .and_then(|s| s.parse::<u32>().ok())
+                        .map(|month| (month, e.path()))
+                })
                 .collect();
-            months.sort_by_key(|e| e.path().file_name().and_then(|s| s.to_str()).and_then(|s| s.parse::<u32>().ok()));
+            months.sort_unstable_by(|a, b| a.0.cmp(&b.0));  // Sort ascending
 
-            if let Some(month_dir) = months.first() {
+            for (_month, month_path) in months {
                 // Get days in ascending order
-                let mut days: Vec<_> = fs::read_dir(month_dir.path())?
+                let mut days: Vec<_> = fs::read_dir(month_path)?
                     .filter_map(|e| e.ok())
-                    .filter(|e| e.path().extension().and_then(|s| s.to_str()) == Some("bin"))
+                    .filter(|e| e.path().extension().map_or(false, |ext| ext == "bin"))
                     .collect();
-                days.sort_by_key(|e| e.path().file_name().and_then(|s| s.to_str()).and_then(|s| s.parse::<u32>().ok()));
+                days.sort_by_key(|e| e.path());
 
-                if let Some(earliest_file) = days.first() {
-                    if let Ok(mmap) = self.get_or_create_mmap(&earliest_file.path()).await {
-                        if let Ok(day_data) = BaseDataEnum::from_array_bytes(&mmap.to_vec()) {
-                            return Ok(day_data.into_iter().map(|d| d.time_closed_utc()).min());
+                for day in days {
+                    if let Ok(mmap) = self.get_or_create_mmap(&day.path()).await {
+                        if let Ok(day_data) = BaseDataEnum::from_array_bytes(&mmap[..].to_vec()) {
+                            if let Some(time) = day_data.into_iter()
+                                .map(|d| d.time_closed_utc())
+                                .min() {
+                                earliest_time = Some(time);
+                                return Ok(earliest_time);  // Return as soon as we find valid data
+                            }
                         }
                     }
                 }
             }
         }
 
-        Ok(None)
-    }
+        Ok(earliest_time)
+    }*/
 
     pub async fn get_bulk_data(
         &self,
@@ -1166,6 +1392,7 @@ impl HybridStorage {
         Ok(combined_data)
     }
 
+    // Updated get_data_point_asof function
     pub async fn get_data_point_asof(
         &self,
         symbol: &Symbol,
@@ -1179,7 +1406,7 @@ impl HybridStorage {
         // If the file exists for the target date, check it first
         if file_path.exists() {
             if let Ok(mmap) = self.get_or_create_mmap(&file_path).await {
-                if let Ok(day_data) = BaseDataEnum::from_array_bytes(&mmap[..].to_vec()) {
+                if let Ok(day_data) = self.decompress_and_deserialize(&mmap[..]).await {
                     // Find the closest point before or at target_time
                     let result = day_data.into_iter()
                         .filter(|d| d.time_closed_utc() <= target_time)
@@ -1193,8 +1420,15 @@ impl HybridStorage {
         }
 
         let mut current_date = target_time.date_naive();
+        let mut attempts = 0;
+        const MAX_ATTEMPTS: i32 = 30; // Limit how far back we'll look
 
         while let Some(prev_date) = current_date.pred_opt() {
+            attempts += 1;
+            if attempts > MAX_ATTEMPTS {
+                break;
+            }
+
             current_date = prev_date;
             let file_path = self.get_file_path(
                 symbol,
@@ -1220,13 +1454,19 @@ impl HybridStorage {
             }
 
             if let Ok(mmap) = self.get_or_create_mmap(&file_path).await {
-                if let Ok(day_data) = BaseDataEnum::from_array_bytes(&mmap[..].to_vec()) {
-                    let result = day_data.into_iter()
-                        .filter(|d| d.time_closed_utc() <= target_time)
-                        .max_by_key(|d| d.time_closed_utc());
+                match self.decompress_and_deserialize(&mmap[..]).await {
+                    Ok(day_data) => {
+                        let result = day_data.into_iter()
+                            .filter(|d| d.time_closed_utc() <= target_time)
+                            .max_by_key(|d| d.time_closed_utc());
 
-                    if let Some(point) = result {
-                        return Ok(Some(point));
+                        if let Some(point) = result {
+                            return Ok(Some(point));
+                        }
+                    }
+                    Err(e) => {
+                        eprintln!("Error processing file {}: {}", file_path.display(), e);
+                        continue;
                     }
                 }
             }
@@ -1570,7 +1810,10 @@ mod tests {
     #[tokio::test]
     async fn test_earliest_data_across_days() {
         let (storage, _temp) = setup_test_storage();
+        println!("Test directory: {:?}", _temp.path());
+
         let base_time = Utc.with_ymd_and_hms(2024, 1, 1, 0, 0, 0).unwrap();
+        println!("Base time: {}", base_time);
 
         // Create data points across different days
         let test_data: Vec<BaseDataEnum> = (0..48) // 2 days worth of hourly data
@@ -1578,7 +1821,7 @@ mod tests {
                 let time = base_time + chrono::Duration::hours(i);
                 BaseDataEnum::Quote(Quote {
                     symbol: Symbol::new(
-                        "EUR/USD".to_string(),
+                        "EUR/USD".to_string(), // Keep the original format
                         DataVendor::Test,
                         MarketType::Forex
                     ),
@@ -1591,20 +1834,73 @@ mod tests {
             })
             .collect();
 
-        storage.save_data_bulk(test_data.clone(), false).await.unwrap();
+        println!("Created {} test data points", test_data.len());
+        println!("First data point time: {}", test_data[0].time_closed_utc());
+        println!("Last data point time: {}", test_data[47].time_closed_utc());
 
-        let earliest = storage.get_earliest_data_time(
+        // Save data
+        match storage.save_data_bulk(test_data.clone(), false).await {
+            Ok(_) => println!("Successfully saved bulk data"),
+            Err(e) => println!("Error saving bulk data: {:?}", e),
+        }
+
+        // Check the base path
+        let symbol = test_data[0].symbol();
+        let base_path = storage.get_base_path(
+            symbol,
+            &Resolution::Instant,
+            &BaseDataType::Quotes,
+            false
+        );
+        println!("Looking for data in base path: {:?}", base_path);
+        println!("Base path exists: {}", base_path.exists());
+
+        if base_path.exists() {
+            // List contents of directory
+            println!("Directory contents:");
+            for entry in std::fs::read_dir(&base_path).unwrap() {
+                println!("  {:?}", entry.unwrap().path());
+            }
+        }
+
+        // Try to get earliest time with error logging
+        let earliest = match storage.get_earliest_data_time(
             test_data[0].symbol(),
             &Resolution::Instant,
             &BaseDataType::Quotes
-        ).await.unwrap();
+        ).await {
+            Ok(Some(time)) => {
+                println!("Found earliest time: {}", time);
+                Some(time)
+            },
+            Ok(None) => {
+                println!("No earliest time found");
+                None
+            },
+            Err(e) => {
+                println!("Error getting earliest time: {:?}", e);
+                None
+            }
+        };
 
-        assert!(earliest.is_some());
+        assert!(earliest.is_some(), "Expected earliest data point to exist");
         assert_eq!(
             earliest.unwrap(),
             base_time,
             "Earliest time should match the first data point across multiple days"
         );
+    }
+
+    // Helper function to verify data was saved correctly
+    async fn verify_data_saved(storage: &HybridStorage, symbol: &Symbol, time: DateTime<Utc>) -> bool {
+        let file_path = storage.get_file_path(
+            symbol,
+            &Resolution::Instant,
+            &BaseDataType::Quotes,
+            &time,
+            false
+        );
+        file_path.exists()
     }
 
     #[tokio::test]
