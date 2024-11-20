@@ -19,6 +19,7 @@ See below for all the free historical data you will ever need.
 - 16-11-24: Indicators are no longer an enum, we now pass a `Box<dyn Indicators>` where Indicators is the trait common to all indicators. indicator::new() should return `Box<Self>`. [see](ff_standard_lib/src/strategies/STRATEGIES_README.md/#creating-indicators) The runtime cost of using dyn dispatch here is negligible, and it allows us to build custom indicators without modifying the engine.
 - 16-11-24: I added a lot of Ai generated indicators that are not tested.
 - 17-11-24: Added consolidators for daily and weekly resolutions (Have not been tested and will need some work to finish off), these need a TradingHours object to be passed in when subscribing to data. [see](ff_standard_lib/src/strategies/STRATEGIES_README.md/#trading-hours), also [see](ff_standard_lib/src/strategies/STRATEGIES_README.md/#subscriptions)
+- 20-11-24: Fixed some data base Serialization issues created when adding compression, add unit tests for data base.
 
 ### Current State and Future Development
 The platform is currently in a semi-working state, think of it as a proof of concept, there is a lot of untested functionality, both in backtesting and live trading.
