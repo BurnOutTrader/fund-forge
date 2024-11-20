@@ -55,12 +55,6 @@ pub enum StreamRequest {
 pub enum DataServerRequest {
     Register(StrategyMode),
 
-    HistoricalBaseDataRange {
-        callback_id: u64,
-        subscriptions: Vec<DataSubscription>,
-        from_time: String,
-        to_time: String,
-    },
     /// Requests a list of instruments all instruments available with the `DataVendor` from the server, an instrument object is the vendors specific data type.
     /// # Fields
     /// * `DataVendor`
@@ -175,7 +169,6 @@ impl DataServerRequest {
             DataServerRequest::SymbolNames { callback_id, .. } => {*callback_id = id}
             DataServerRequest::RegisterStreamer{..} => {}
             DataServerRequest::CommissionInfo { callback_id, .. } => {*callback_id = id}
-            DataServerRequest::HistoricalBaseDataRange { callback_id, .. } => {*callback_id = id}
             DataServerRequest::WarmUpResolutions { callback_id, .. } => {*callback_id = id}
             DataServerRequest::ExchangeRate { callback_id, .. } => {*callback_id = id}
             DataServerRequest::GetCompressedHistoricalData { callback_id, .. } => {*callback_id = id}
@@ -196,11 +189,6 @@ pub enum SubscriptionResponse {
 /// Represents a request type for the network message. This enum is used to specify the type of request and the returning response
 pub enum
 DataServerResponse {
-    HistoricalBaseData {
-        callback_id: u64,
-        payload: BTreeMap<i64, TimeSlice>
-    },
-
     CompressedHistoricalData {
         callback_id: u64,
         payload: Vec<Vec<u8>>
@@ -337,7 +325,6 @@ impl Bytes<DataServerResponse> for DataServerResponse {
 impl DataServerResponse {
     pub fn get_callback_id(&self) -> Option<u64> {
         match self {
-            DataServerResponse::HistoricalBaseData { callback_id,.. } => Some(callback_id.clone()),
             DataServerResponse::Symbols  { callback_id,.. } => Some(callback_id.clone()),
             DataServerResponse::Resolutions  { callback_id,.. } => Some(callback_id.clone()),
             DataServerResponse::Error  { callback_id,.. } => Some(callback_id.clone()),
