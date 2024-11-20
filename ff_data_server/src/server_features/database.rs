@@ -700,12 +700,13 @@ impl HybridStorage {
         data_type: &BaseDataType,
     ) -> Result<Option<DateTime<Utc>>, Box<dyn std::error::Error>> {
         let base_path = self.get_base_path(symbol, resolution, data_type, false);
-        println!("Looking for earliest data in: {:?}", base_path);
-
         if !base_path.exists() {
             return Ok(None);
         }
 
+        let mut earliest_time: Option<DateTime<Utc>> = None;
+
+        // Get years in ascending order
         let mut years: Vec<_> = fs::read_dir(&base_path)?
             .filter_map(|e| e.ok())
             .filter(|e| e.path().is_dir())
@@ -716,10 +717,10 @@ impl HybridStorage {
                     .map(|year| (year, e.path()))
             })
             .collect();
-        years.sort_unstable_by(|a, b| a.0.cmp(&b.0));
+        years.sort_unstable_by(|a, b| a.0.cmp(&b.0));  // Sort ascending
 
-        for (year, year_path) in years {
-            println!("Processing year: {}", year);
+        for (_year, year_path) in years {
+            // Get months in ascending order
             let mut months: Vec<_> = fs::read_dir(year_path)?
                 .filter_map(|e| e.ok())
                 .filter(|e| e.path().is_dir())
@@ -730,10 +731,10 @@ impl HybridStorage {
                         .map(|month| (month, e.path()))
                 })
                 .collect();
-            months.sort_unstable_by(|a, b| a.0.cmp(&b.0));
+            months.sort_unstable_by(|a, b| a.0.cmp(&b.0));  // Sort ascending
 
-            for (month, month_path) in months {
-                println!("Processing month: {}", month);
+            for (_month, month_path) in months {
+                // Get days in ascending order
                 let mut days: Vec<_> = fs::read_dir(month_path)?
                     .filter_map(|e| e.ok())
                     .filter(|e| e.path().extension().map_or(false, |ext| ext == "bin"))
@@ -742,42 +743,49 @@ impl HybridStorage {
 
                 for day in days {
                     let file_path = day.path();
-                    println!("\nProcessing file: {:?}", file_path);
+                    let mut file = match File::open(&file_path) {
+                        Ok(file) => file,
+                        Err(e) => {
+                            eprintln!("Error opening file {}: {}", file_path.display(), e);
+                            continue;
+                        }
+                    };
 
-                    match self.get_or_create_mmap(&file_path).await {
-                        Ok(mmap) => {
-                            println!("Got mmap of size: {}", mmap.len());
+                    let mut compressed_data = Vec::new();
+                    if let Err(e) = file.read_to_end(&mut compressed_data) {
+                        eprintln!("Error reading file {}: {}", file_path.display(), e);
+                        continue;
+                    }
 
-                            // Decompress the mmap content
-                            let mut decoder = GzDecoder::new(&mmap[..]);
-                            let mut decompressed = Vec::new();
-                            match decoder.read_to_end(&mut decompressed) {
-                                Ok(_) => {
-                                    println!("Decompressed {} bytes", decompressed.len());
-                                    match BaseDataEnum::from_array_bytes(&decompressed) {
-                                        Ok(day_data) => {
-                                            println!("Successfully deserialized {} data points", day_data.len());
-                                            if let Some(time) = day_data.into_iter()
-                                                .map(|d| d.time_closed_utc())
-                                                .min() {
-                                                println!("Found earliest time: {}", time);
-                                                return Ok(Some(time));
+                    // Decompress
+                    let mut decoder = GzDecoder::new(&compressed_data[..]);
+                    let mut decompressed = Vec::new();
+                    match decoder.read_to_end(&mut decompressed) {
+                        Ok(_) => {
+                            match BaseDataEnum::from_array_bytes(&decompressed) {
+                                Ok(day_data) => {
+                                    if let Some(time) = day_data.into_iter()
+                                        .map(|d| d.time_closed_utc())
+                                        .min() {
+                                        match earliest_time {
+                                            None => earliest_time = Some(time),
+                                            Some(current_earliest) if time < current_earliest => {
+                                                earliest_time = Some(time)
                                             }
+                                            _ => {}
                                         }
-                                        Err(e) => {
-                                            println!("Failed to deserialize decompressed data: {}", e);
-                                            continue;
-                                        }
+                                        // Found valid data, no need to check more files
+                                        return Ok(earliest_time);
                                     }
                                 }
                                 Err(e) => {
-                                    println!("Failed to decompress data: {}", e);
+                                    eprintln!("Error deserializing data from {}: {}", file_path.display(), e);
                                     continue;
                                 }
                             }
                         }
                         Err(e) => {
-                            println!("Failed to create/get mmap: {}", e);
+                            eprintln!("Error decompressing data from {}: {}", file_path.display(), e);
                             continue;
                         }
                     }
@@ -785,8 +793,7 @@ impl HybridStorage {
             }
         }
 
-        println!("No valid data found");
-        Ok(None)
+        Ok(earliest_time)
     }
 
     async fn get_or_create_mmap(&self, file_path: &Path) -> io::Result<Arc<Mmap>> {
@@ -1268,14 +1275,50 @@ impl HybridStorage {
                 days.sort_by_key(|e| std::cmp::Reverse(e.path()));
 
                 for day in days {
-                    if let Ok(mmap) = self.get_or_create_mmap(&day.path()).await {
-                        if let Ok(day_data) = BaseDataEnum::from_array_bytes(&mmap[..].to_vec()) {
-                            if let Some(time) = day_data.into_iter()
-                                .map(|d| d.time_closed_utc())
-                                .max() {
-                                latest_time = Some(time);
-                                return Ok(latest_time);  // Return as soon as we find valid data
+                    let file_path = day.path();
+                    // Read file directly instead of using mmap
+                    let mut file = match File::open(&file_path) {
+                        Ok(file) => file,
+                        Err(e) => {
+                            eprintln!("Error opening file {}: {}", file_path.display(), e);
+                            continue;
+                        }
+                    };
+
+                    let mut compressed_data = Vec::new();
+                    if let Err(e) = file.read_to_end(&mut compressed_data) {
+                        eprintln!("Error reading file {}: {}", file_path.display(), e);
+                        continue;
+                    }
+
+                    // Decompress
+                    let mut decoder = GzDecoder::new(&compressed_data[..]);
+                    let mut decompressed = Vec::new();
+                    match decoder.read_to_end(&mut decompressed) {
+                        Ok(_) => {
+                            match BaseDataEnum::from_array_bytes(&decompressed) {
+                                Ok(day_data) => {
+                                    if let Some(time) = day_data.into_iter()
+                                        .map(|d| d.time_closed_utc())
+                                        .max() {
+                                        match latest_time {
+                                            None => latest_time = Some(time),
+                                            Some(current_latest) if time > current_latest => {
+                                                latest_time = Some(time)
+                                            }
+                                            _ => {}
+                                        }
+                                    }
+                                }
+                                Err(e) => {
+                                    eprintln!("Error deserializing data from {}: {}", file_path.display(), e);
+                                    continue;
+                                }
                             }
+                        }
+                        Err(e) => {
+                            eprintln!("Error decompressing data from {}: {}", file_path.display(), e);
+                            continue;
                         }
                     }
                 }
@@ -1284,72 +1327,6 @@ impl HybridStorage {
 
         Ok(latest_time)
     }
-/*
-    pub async fn get_earliest_data_time(
-        &self,
-        symbol: &Symbol,
-        resolution: &Resolution,
-        data_type: &BaseDataType,
-    ) -> Result<Option<DateTime<Utc>>, Box<dyn std::error::Error>> {
-        let base_path = self.get_base_path(symbol, resolution, data_type, false);
-        if !base_path.exists() {
-            return Ok(None);
-        }
-
-        let mut earliest_time: Option<DateTime<Utc>> = None;
-
-        // Get years in ascending order
-        let mut years: Vec<_> = fs::read_dir(&base_path)?
-            .filter_map(|e| e.ok())
-            .filter(|e| e.path().is_dir())
-            .filter_map(|e| {
-                e.file_name()
-                    .to_str()
-                    .and_then(|s| s.parse::<i32>().ok())
-                    .map(|year| (year, e.path()))
-            })
-            .collect();
-        years.sort_unstable_by(|a, b| a.0.cmp(&b.0));  // Sort ascending
-
-        for (_year, year_path) in years {
-            // Get months in ascending order
-            let mut months: Vec<_> = fs::read_dir(year_path)?
-                .filter_map(|e| e.ok())
-                .filter(|e| e.path().is_dir())
-                .filter_map(|e| {
-                    e.file_name()
-                        .to_str()
-                        .and_then(|s| s.parse::<u32>().ok())
-                        .map(|month| (month, e.path()))
-                })
-                .collect();
-            months.sort_unstable_by(|a, b| a.0.cmp(&b.0));  // Sort ascending
-
-            for (_month, month_path) in months {
-                // Get days in ascending order
-                let mut days: Vec<_> = fs::read_dir(month_path)?
-                    .filter_map(|e| e.ok())
-                    .filter(|e| e.path().extension().map_or(false, |ext| ext == "bin"))
-                    .collect();
-                days.sort_by_key(|e| e.path());
-
-                for day in days {
-                    if let Ok(mmap) = self.get_or_create_mmap(&day.path()).await {
-                        if let Ok(day_data) = BaseDataEnum::from_array_bytes(&mmap[..].to_vec()) {
-                            if let Some(time) = day_data.into_iter()
-                                .map(|d| d.time_closed_utc())
-                                .min() {
-                                earliest_time = Some(time);
-                                return Ok(earliest_time);  // Return as soon as we find valid data
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        Ok(earliest_time)
-    }*/
 
     pub async fn get_bulk_data(
         &self,
@@ -2027,5 +2004,274 @@ mod tests {
 
         assert!(result.is_some());
         assert_eq!(result.unwrap(), test_data[0]);
+    }
+
+    fn create_test_quote(time: DateTime<Utc>, ask: Decimal, bid: Decimal) -> BaseDataEnum {
+        BaseDataEnum::Quote(Quote {
+            symbol: Symbol::new(
+                "EUR-USD".to_string(),
+                DataVendor::Test,
+                MarketType::Forex
+            ),
+            ask,
+            bid,
+            ask_volume: dec!(100000.0),
+            bid_volume: dec!(150000.0),
+            time: time.to_string(),
+        })
+    }
+
+    #[tokio::test]
+    async fn test_earliest_time_basic() {
+        let (storage, _temp) = setup_test_storage();
+
+        // Create test data with known timestamps
+        let base_time = Utc.with_ymd_and_hms(2024, 1, 1, 0, 0, 0).unwrap();
+        let test_data = vec![
+            create_test_quote(base_time + chrono::Duration::hours(2), dec!(1.2345), dec!(1.2343)),
+            create_test_quote(base_time + chrono::Duration::hours(1), dec!(1.2346), dec!(1.2344)),
+            create_test_quote(base_time, dec!(1.2347), dec!(1.2345)),
+        ];
+
+        // Save data
+        storage.save_data_bulk(test_data.clone(), false).await.unwrap();
+
+        // Get earliest time
+        let earliest = storage.get_earliest_data_time(
+            &test_data[0].symbol(),
+            &Resolution::Instant,
+            &BaseDataType::Quotes
+        ).await.unwrap();
+
+        assert_eq!(earliest, Some(base_time), "Earliest time should be base_time");
+    }
+
+    #[tokio::test]
+    async fn test_latest_time_basic() {
+        let (storage, _temp) = setup_test_storage();
+
+        let base_time = Utc.with_ymd_and_hms(2024, 1, 1, 0, 0, 0).unwrap();
+        let latest_time = base_time + chrono::Duration::hours(2);
+
+        let test_data = vec![
+            create_test_quote(base_time, dec!(1.2345), dec!(1.2343)),
+            create_test_quote(base_time + chrono::Duration::hours(1), dec!(1.2346), dec!(1.2344)),
+            create_test_quote(latest_time, dec!(1.2347), dec!(1.2345)),
+        ];
+
+        storage.save_data_bulk(test_data.clone(), false).await.unwrap();
+
+        let result = storage.get_latest_data_time(
+            &test_data[0].symbol(),
+            &Resolution::Instant,
+            &BaseDataType::Quotes
+        ).await.unwrap();
+
+        assert_eq!(result, Some(latest_time), "Latest time should be latest_time");
+    }
+
+    #[tokio::test]
+    async fn test_earliest_time_across_days() {
+        let (storage, _temp) = setup_test_storage();
+
+        let day1 = Utc.with_ymd_and_hms(2024, 1, 1, 12, 0, 0).unwrap();
+        let day2 = Utc.with_ymd_and_hms(2024, 1, 2, 12, 0, 0).unwrap();
+        let day3 = Utc.with_ymd_and_hms(2024, 1, 3, 12, 0, 0).unwrap();
+
+        let test_data = vec![
+            create_test_quote(day2, dec!(1.2345), dec!(1.2343)),
+            create_test_quote(day3, dec!(1.2346), dec!(1.2344)),
+            create_test_quote(day1, dec!(1.2347), dec!(1.2345)), // Earliest
+        ];
+
+        storage.save_data_bulk(test_data.clone(), false).await.unwrap();
+
+        let earliest = storage.get_earliest_data_time(
+            &test_data[0].symbol(),
+            &Resolution::Instant,
+            &BaseDataType::Quotes
+        ).await.unwrap();
+
+        assert_eq!(earliest, Some(day1), "Earliest time should be day1");
+    }
+
+    #[tokio::test]
+    async fn test_latest_time_across_days() {
+        let (storage, _temp) = setup_test_storage();
+
+        let day1 = Utc.with_ymd_and_hms(2024, 1, 1, 12, 0, 0).unwrap();
+        let day2 = Utc.with_ymd_and_hms(2024, 1, 2, 12, 0, 0).unwrap();
+        let day3 = Utc.with_ymd_and_hms(2024, 1, 3, 12, 0, 0).unwrap();
+
+        let test_data = vec![
+            create_test_quote(day1, dec!(1.2345), dec!(1.2343)),
+            create_test_quote(day2, dec!(1.2346), dec!(1.2344)),
+            create_test_quote(day3, dec!(1.2347), dec!(1.2345)), // Latest
+        ];
+
+        storage.save_data_bulk(test_data.clone(), false).await.unwrap();
+
+        let latest = storage.get_latest_data_time(
+            &test_data[0].symbol(),
+            &Resolution::Instant,
+            &BaseDataType::Quotes
+        ).await.unwrap();
+
+        assert_eq!(latest, Some(day3), "Latest time should be day3");
+    }
+
+    #[tokio::test]
+    async fn test_earliest_time_across_months() {
+        let (storage, _temp) = setup_test_storage();
+
+        let month1 = Utc.with_ymd_and_hms(2024, 1, 15, 12, 0, 0).unwrap();
+        let month2 = Utc.with_ymd_and_hms(2024, 2, 15, 12, 0, 0).unwrap();
+        let month3 = Utc.with_ymd_and_hms(2024, 3, 15, 12, 0, 0).unwrap();
+
+        let test_data = vec![
+            create_test_quote(month2, dec!(1.2345), dec!(1.2343)),
+            create_test_quote(month3, dec!(1.2346), dec!(1.2344)),
+            create_test_quote(month1, dec!(1.2347), dec!(1.2345)), // Earliest
+        ];
+
+        storage.save_data_bulk(test_data.clone(), false).await.unwrap();
+
+        let earliest = storage.get_earliest_data_time(
+            &test_data[0].symbol(),
+            &Resolution::Instant,
+            &BaseDataType::Quotes
+        ).await.unwrap();
+
+        assert_eq!(earliest, Some(month1), "Earliest time should be month1");
+    }
+
+    #[tokio::test]
+    async fn test_latest_time_across_months() {
+        let (storage, _temp) = setup_test_storage();
+
+        let month1 = Utc.with_ymd_and_hms(2024, 1, 15, 12, 0, 0).unwrap();
+        let month2 = Utc.with_ymd_and_hms(2024, 2, 15, 12, 0, 0).unwrap();
+        let month3 = Utc.with_ymd_and_hms(2024, 3, 15, 12, 0, 0).unwrap();
+
+        let test_data = vec![
+            create_test_quote(month1, dec!(1.2345), dec!(1.2343)),
+            create_test_quote(month2, dec!(1.2346), dec!(1.2344)),
+            create_test_quote(month3, dec!(1.2347), dec!(1.2345)), // Latest
+        ];
+
+        storage.save_data_bulk(test_data.clone(), false).await.unwrap();
+
+        let latest = storage.get_latest_data_time(
+            &test_data[0].symbol(),
+            &Resolution::Instant,
+            &BaseDataType::Quotes
+        ).await.unwrap();
+
+        assert_eq!(latest, Some(month3), "Latest time should be month3");
+    }
+
+    #[tokio::test]
+    async fn test_earliest_time_empty_storage() {
+        let (storage, _temp) = setup_test_storage();
+
+        let result = storage.get_earliest_data_time(
+            &Symbol::new("EUR-USD".to_string(), DataVendor::Test, MarketType::Forex),
+            &Resolution::Instant,
+            &BaseDataType::Quotes
+        ).await.unwrap();
+
+        assert_eq!(result, None, "Earliest time should be None for empty storage");
+    }
+
+    #[tokio::test]
+    async fn test_latest_time_empty_storage() {
+        let (storage, _temp) = setup_test_storage();
+
+        let result = storage.get_latest_data_time(
+            &Symbol::new("EUR-USD".to_string(), DataVendor::Test, MarketType::Forex),
+            &Resolution::Instant,
+            &BaseDataType::Quotes
+        ).await.unwrap();
+
+        assert_eq!(result, None, "Latest time should be None for empty storage");
+    }
+
+    #[tokio::test]
+    async fn test_earliest_time_with_gaps() {
+        let (storage, _temp) = setup_test_storage();
+
+        // Create data with time gaps
+        let early_time = Utc.with_ymd_and_hms(2024, 1, 1, 0, 0, 0).unwrap();
+        let mid_time = Utc.with_ymd_and_hms(2024, 1, 15, 0, 0, 0).unwrap();
+        let late_time = Utc.with_ymd_and_hms(2024, 1, 30, 0, 0, 0).unwrap();
+
+        let test_data = vec![
+            create_test_quote(mid_time, dec!(1.2345), dec!(1.2343)),
+            create_test_quote(late_time, dec!(1.2346), dec!(1.2344)),
+            create_test_quote(early_time, dec!(1.2347), dec!(1.2345)), // Earliest
+        ];
+
+        storage.save_data_bulk(test_data.clone(), false).await.unwrap();
+
+        let earliest = storage.get_earliest_data_time(
+            &test_data[0].symbol(),
+            &Resolution::Instant,
+            &BaseDataType::Quotes
+        ).await.unwrap();
+
+        assert_eq!(earliest, Some(early_time), "Should find earliest time even with gaps");
+    }
+
+    #[tokio::test]
+    async fn test_latest_time_with_gaps() {
+        let (storage, _temp) = setup_test_storage();
+
+        // Create data with time gaps
+        let early_time = Utc.with_ymd_and_hms(2024, 1, 1, 0, 0, 0).unwrap();
+        let mid_time = Utc.with_ymd_and_hms(2024, 1, 15, 0, 0, 0).unwrap();
+        let late_time = Utc.with_ymd_and_hms(2024, 1, 30, 0, 0, 0).unwrap();
+
+        let test_data = vec![
+            create_test_quote(early_time, dec!(1.2345), dec!(1.2343)),
+            create_test_quote(mid_time, dec!(1.2346), dec!(1.2344)),
+            create_test_quote(late_time, dec!(1.2347), dec!(1.2345)), // Latest
+        ];
+
+        storage.save_data_bulk(test_data.clone(), false).await.unwrap();
+
+        let latest = storage.get_latest_data_time(
+            &test_data[0].symbol(),
+            &Resolution::Instant,
+            &BaseDataType::Quotes
+        ).await.unwrap();
+
+        assert_eq!(latest, Some(late_time), "Should find latest time even with gaps");
+    }
+
+    #[tokio::test]
+    async fn test_earliest_and_latest_time_single_point() {
+        let (storage, _temp) = setup_test_storage();
+
+        let time = Utc.with_ymd_and_hms(2024, 1, 1, 12, 0, 0).unwrap();
+        let test_data = vec![
+            create_test_quote(time, dec!(1.2345), dec!(1.2343)),
+        ];
+
+        storage.save_data_bulk(test_data.clone(), false).await.unwrap();
+
+        let earliest = storage.get_earliest_data_time(
+            &test_data[0].symbol(),
+            &Resolution::Instant,
+            &BaseDataType::Quotes
+        ).await.unwrap();
+
+        let latest = storage.get_latest_data_time(
+            &test_data[0].symbol(),
+            &Resolution::Instant,
+            &BaseDataType::Quotes
+        ).await.unwrap();
+
+        assert_eq!(earliest, Some(time), "Earliest time should match single point");
+        assert_eq!(latest, Some(time), "Latest time should match single point");
     }
 }
