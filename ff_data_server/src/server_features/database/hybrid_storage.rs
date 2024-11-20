@@ -15,7 +15,6 @@ use flate2::write::GzEncoder;
 use indicatif::{MultiProgress};
 use lazy_static::lazy_static;
 use memmap2::{Mmap};
-use rust_decimal::Decimal;
 use tokio::sync::{OnceCell, Semaphore};
 use tokio::task;
 use tokio::task::JoinHandle;
@@ -237,7 +236,9 @@ impl HybridStorage {
         file.read_to_end(&mut compressed_data)?;
 
         // Decompress
-        let mut decoder = GzDecoder::new(&compressed_data[..]);
+        let cursor = std::io::Cursor::new(&compressed_data);
+        let buf_reader = std::io::BufReader::new(cursor);
+        let mut decoder = GzDecoder::new(buf_reader);
         let mut decompressed = Vec::new();
         decoder.read_to_end(&mut decompressed)?;
 
