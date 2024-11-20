@@ -31,6 +31,7 @@ pub async fn get_exchange_rate(from_currency: Currency, to_currency: Currency, d
         data_vendor,
         side
     };
+    //eprintln!("Getting exchange rate for {}-{} at {}", from_currency.to_string(), to_currency.to_string(), date_time);
     let (sender, receiver) = oneshot::channel();
     let msg = StrategyRequest::CallBack(ConnectionType::Vendor(data_vendor), request, sender);
     send_request(msg).await;

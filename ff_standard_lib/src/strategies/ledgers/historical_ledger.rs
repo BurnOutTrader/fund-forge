@@ -280,7 +280,7 @@ impl Ledger {
             } else {
                 dec!(1.0)
             };
-
+            //eprintln!("symbol_code: {}, exchange_rate: {}, {}, {}", symbol_code, exchange_rate, self.currency, info.pnl_currency);
             //todo, we only need to do this for certain brokerages, I will need a better pattern..
             self.charge_commission(&symbol_name, remaining_quantity, exchange_rate).await;
             if symbol_name != symbol_code && !self.symbol_code_map.contains_key(&symbol_name) {

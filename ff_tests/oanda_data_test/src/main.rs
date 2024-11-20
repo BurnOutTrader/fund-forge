@@ -1,7 +1,6 @@
 use std::cmp::PartialEq;
 use std::collections::HashMap;
-use chrono::{Duration, NaiveDate, NaiveTime};
-use chrono_tz::America::Chicago;
+use chrono::{Duration, NaiveDate};
 use chrono_tz::Australia;
 use colored::Colorize;
 use rust_decimal::Decimal;
@@ -18,7 +17,6 @@ use ff_standard_lib::standardized_types::accounts::{Account, Currency};
 use ff_standard_lib::standardized_types::base_data::base_data_type::BaseDataType;
 use ff_standard_lib::standardized_types::broker_enum::Brokerage;
 use ff_standard_lib::standardized_types::datavendor_enum::DataVendor;
-use ff_standard_lib::standardized_types::market_hours::{DaySession, TradingHours};
 use ff_standard_lib::standardized_types::orders::OrderUpdateEvent;
 use ff_standard_lib::standardized_types::position::PositionUpdateEvent;
 use ff_standard_lib::standardized_types::resolution::Resolution;
@@ -31,7 +29,7 @@ async fn main() {
     let strategy = FundForgeStrategy::initialize(
         StrategyMode::Backtest, // Backtest, Live, LivePaper
         dec!(100000),
-        Currency::USD,
+        Currency::AUD,
         NaiveDate::from_ymd_opt(2005, 02, 01).unwrap().and_hms_opt(0, 0, 0).unwrap(), // Starting date of the backtest is a NaiveDateTime not NaiveDate
         NaiveDate::from_ymd_opt(2024, 11, 11).unwrap().and_hms_opt(0, 0, 0).unwrap(), // Ending date of the backtest is a NaiveDateTime not NaiveDate
         Australia::Sydney,                      // the strategy time zone
@@ -42,7 +40,7 @@ async fn main() {
              DataSubscription::new(
                 SymbolName::from("EUR-USD"),
                 DataVendor::Oanda,
-                Resolution::Day,
+                Resolution::Hours(4),
                 BaseDataType::QuoteBars,
                 MarketType::Forex
             ), Some(CME_HOURS)),

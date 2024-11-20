@@ -118,7 +118,6 @@ impl HybridStorage {
         Ok(None)
     }
 
-
     // Updated get_data_point_asof function
     pub async fn get_data_point_asof(
         &self,
@@ -136,6 +135,7 @@ impl HybridStorage {
                 // Create a properly aligned copy of the memory-mapped data
                 let aligned_data = mmap.as_ref().to_vec();
                 if let Ok(day_data) = BaseDataEnum::from_array_bytes(&aligned_data) {
+                    //eprintln!("Found data for {} in {}", target_time, file_path.display());
                     // Find the latest data point that satisfies the condition
                     if let Some(latest_data) = day_data
                         .into_iter()
@@ -186,6 +186,7 @@ impl HybridStorage {
                 // Create a properly aligned copy of the memory-mapped data
                 let aligned_data = mmap.as_ref().to_vec();
                 if let Ok(day_data) = BaseDataEnum::from_array_bytes(&aligned_data) {
+                    //eprintln!("Found data for {}", current_date);
                     // Find the latest data point that satisfies the condition
                     if let Some(latest_data) = day_data
                         .into_iter()
