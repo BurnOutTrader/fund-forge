@@ -54,7 +54,7 @@ impl HybridStorage {
                         }
                     },
                     Ok(None) => continue,
-                    Err(e) => return Err(e),
+                    Err(e) => return Err(FundForgeError::ServerErrorDebug(format!("Error getting exchange rate: {}", e))),
                 }
             }
         } else {
@@ -90,7 +90,7 @@ impl HybridStorage {
                             }
                         },
                         Ok(None) => continue,
-                        Err(e) => return Err(e),
+                        Err(e) => return Err(FundForgeError::ServerErrorDebug(format!("Error getting exchange rate: {}", e))),
                     }
                 }
             }

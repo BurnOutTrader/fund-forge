@@ -36,100 +36,41 @@ impl HybridStorage {
         data_type: &BaseDataType,
     ) -> Result<Option<DateTime<Utc>>, Box<dyn std::error::Error>> {
         let base_path = self.get_base_path(symbol, resolution, data_type, false);
-        if !base_path.exists() {
-            return Ok(None);
-        }
-
-        let mut earliest_time: Option<DateTime<Utc>> = None;
 
         // Get years in ascending order
         let mut years: Vec<_> = fs::read_dir(&base_path)?
             .filter_map(|e| e.ok())
             .filter(|e| e.path().is_dir())
-            .filter_map(|e| {
-                e.file_name()
-                    .to_str()
-                    .and_then(|s| s.parse::<i32>().ok())
-                    .map(|year| (year, e.path()))
-            })
             .collect();
-        years.sort_unstable_by(|a, b| a.0.cmp(&b.0));  // Sort ascending
+        years.sort_by_key(|e| e.path().file_name().and_then(|s| s.to_str()).and_then(|s| s.parse::<u32>().ok()));
 
-        for (_year, year_path) in years {
+        if let Some(year_dir) = years.first() {
             // Get months in ascending order
-            let mut months: Vec<_> = fs::read_dir(year_path)?
+            let mut months: Vec<_> = fs::read_dir(year_dir.path())?
                 .filter_map(|e| e.ok())
                 .filter(|e| e.path().is_dir())
-                .filter_map(|e| {
-                    e.file_name()
-                        .to_str()
-                        .and_then(|s| s.parse::<u32>().ok())
-                        .map(|month| (month, e.path()))
-                })
                 .collect();
-            months.sort_unstable_by(|a, b| a.0.cmp(&b.0));  // Sort ascending
+            months.sort_by_key(|e| e.path().file_name().and_then(|s| s.to_str()).and_then(|s| s.parse::<u32>().ok()));
 
-            for (_month, month_path) in months {
+            if let Some(month_dir) = months.first() {
                 // Get days in ascending order
-                let mut days: Vec<_> = fs::read_dir(month_path)?
+                let mut days: Vec<_> = fs::read_dir(month_dir.path())?
                     .filter_map(|e| e.ok())
-                    .filter(|e| e.path().extension().map_or(false, |ext| ext == "bin"))
+                    .filter(|e| e.path().extension().and_then(|s| s.to_str()) == Some("bin"))
                     .collect();
-                days.sort_by_key(|e| e.path());
+                days.sort_by_key(|e| e.path().file_name().and_then(|s| s.to_str()).and_then(|s| s.parse::<u32>().ok()));
 
-                for day in days {
-                    let file_path = day.path();
-                    let mut file = match File::open(&file_path) {
-                        Ok(file) => file,
-                        Err(e) => {
-                            eprintln!("Error opening file {}: {}", file_path.display(), e);
-                            continue;
-                        }
-                    };
-
-                    let mut compressed_data = Vec::new();
-                    if let Err(e) = file.read_to_end(&mut compressed_data) {
-                        eprintln!("Error reading file {}: {}", file_path.display(), e);
-                        continue;
-                    }
-
-                    // Decompress
-                    let mut decoder = GzDecoder::new(&compressed_data[..]);
-                    let mut decompressed = Vec::new();
-                    match decoder.read_to_end(&mut decompressed) {
-                        Ok(_) => {
-                            match BaseDataEnum::from_array_bytes(&decompressed) {
-                                Ok(day_data) => {
-                                    if let Some(time) = day_data.into_iter()
-                                        .map(|d| d.time_closed_utc())
-                                        .min() {
-                                        match earliest_time {
-                                            None => earliest_time = Some(time),
-                                            Some(current_earliest) if time < current_earliest => {
-                                                earliest_time = Some(time)
-                                            }
-                                            _ => {}
-                                        }
-                                        // Found valid data, no need to check more files
-                                        return Ok(earliest_time);
-                                    }
-                                }
-                                Err(e) => {
-                                    eprintln!("Error deserializing data from {}: {}", file_path.display(), e);
-                                    continue;
-                                }
-                            }
-                        }
-                        Err(e) => {
-                            eprintln!("Error decompressing data from {}: {}", file_path.display(), e);
-                            continue;
+                if let Some(earliest_file) = days.first() {
+                    if let Ok(mmap) = self.get_or_create_mmap(&earliest_file.path()).await {
+                        if let Ok(day_data) = BaseDataEnum::from_array_bytes(&mmap.to_vec()) {
+                            return Ok(day_data.into_iter().map(|d| d.time_closed_utc()).min());
                         }
                     }
                 }
             }
         }
 
-        Ok(earliest_time)
+        Ok(None)
     }
 
     pub async fn get_latest_data_time(
@@ -139,99 +80,43 @@ impl HybridStorage {
         data_type: &BaseDataType,
     ) -> Result<Option<DateTime<Utc>>, Box<dyn std::error::Error>> {
         let base_path = self.get_base_path(symbol, resolution, data_type, false);
-        if !base_path.exists() {
-            return Ok(None);
-        }
-
-        let mut latest_time: Option<DateTime<Utc>> = None;
 
         // Get years in descending order
         let mut years: Vec<_> = fs::read_dir(&base_path)?
             .filter_map(|e| e.ok())
             .filter(|e| e.path().is_dir())
-            .filter_map(|e| {
-                e.file_name()
-                    .to_str()
-                    .and_then(|s| s.parse::<i32>().ok())
-                    .map(|year| (year, e.path()))
-            })
             .collect();
-        years.sort_unstable_by(|a, b| b.0.cmp(&a.0));  // Sort descending
+        years.sort_by_key(|e| e.path().file_name().and_then(|s| s.to_str()).and_then(|s| s.parse::<u32>().ok()));
+        years.reverse(); // Descending order
 
-        for (_year, year_path) in years {
+        if let Some(year_dir) = years.first() {
             // Get months in descending order
-            let mut months: Vec<_> = fs::read_dir(year_path)?
+            let mut months: Vec<_> = fs::read_dir(year_dir.path())?
                 .filter_map(|e| e.ok())
                 .filter(|e| e.path().is_dir())
-                .filter_map(|e| {
-                    e.file_name()
-                        .to_str()
-                        .and_then(|s| s.parse::<u32>().ok())
-                        .map(|month| (month, e.path()))
-                })
                 .collect();
-            months.sort_unstable_by(|a, b| b.0.cmp(&a.0));  // Sort descending
+            months.sort_by_key(|e| e.path().file_name().and_then(|s| s.to_str()).and_then(|s| s.parse::<u32>().ok()));
+            months.reverse(); // Descending order
 
-            for (_month, month_path) in months {
+            if let Some(month_dir) = months.first() {
                 // Get days in descending order
-                let mut days: Vec<_> = fs::read_dir(month_path)?
+                let mut days: Vec<_> = fs::read_dir(month_dir.path())?
                     .filter_map(|e| e.ok())
-                    .filter(|e| e.path().extension().map_or(false, |ext| ext == "bin"))
+                    .filter(|e| e.path().extension().and_then(|s| s.to_str()) == Some("bin"))
                     .collect();
-                days.sort_by_key(|e| std::cmp::Reverse(e.path()));
+                days.sort_by_key(|e| e.path().file_name().and_then(|s| s.to_str()).and_then(|s| s.parse::<u32>().ok()));
+                days.reverse(); // Descending order
 
-                for day in days {
-                    let file_path = day.path();
-                    // Read file directly instead of using mmap
-                    let mut file = match File::open(&file_path) {
-                        Ok(file) => file,
-                        Err(e) => {
-                            eprintln!("Error opening file {}: {}", file_path.display(), e);
-                            continue;
-                        }
-                    };
-
-                    let mut compressed_data = Vec::new();
-                    if let Err(e) = file.read_to_end(&mut compressed_data) {
-                        eprintln!("Error reading file {}: {}", file_path.display(), e);
-                        continue;
-                    }
-
-                    // Decompress
-                    let mut decoder = GzDecoder::new(&compressed_data[..]);
-                    let mut decompressed = Vec::new();
-                    match decoder.read_to_end(&mut decompressed) {
-                        Ok(_) => {
-                            match BaseDataEnum::from_array_bytes(&decompressed) {
-                                Ok(day_data) => {
-                                    if let Some(time) = day_data.into_iter()
-                                        .map(|d| d.time_closed_utc())
-                                        .max() {
-                                        match latest_time {
-                                            None => latest_time = Some(time),
-                                            Some(current_latest) if time > current_latest => {
-                                                latest_time = Some(time)
-                                            }
-                                            _ => {}
-                                        }
-                                    }
-                                }
-                                Err(e) => {
-                                    eprintln!("Error deserializing data from {}: {}", file_path.display(), e);
-                                    continue;
-                                }
-                            }
-                        }
-                        Err(e) => {
-                            eprintln!("Error decompressing data from {}: {}", file_path.display(), e);
-                            continue;
+                if let Some(latest_file) = days.first() {
+                    if let Ok(mmap) = self.get_or_create_mmap(&latest_file.path()).await {
+                        if let Ok(day_data) = BaseDataEnum::from_array_bytes(&mmap.to_vec()) {
+                            return Ok(day_data.into_iter().map(|d| d.time_closed_utc()).max());
                         }
                     }
                 }
             }
         }
-
-        Ok(latest_time)
+        Ok(None)
     }
 
 

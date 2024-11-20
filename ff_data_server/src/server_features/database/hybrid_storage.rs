@@ -216,40 +216,40 @@ impl HybridStorage {
         }
 
         // Get oldest file outside of any locks
-        {
-            let oldest_path = if self.mmap_cache.len() >= 200 {
-                self.cache_last_accessed
-                    .iter()
-                    .min_by_key(|entry| entry.value().clone())
-                    .map(|entry| entry.key().clone())
-            } else {
-                None
-            };
+        let oldest_path = if self.mmap_cache.len() >= 200 {
+            self.cache_last_accessed
+                .iter()
+                .min_by_key(|entry| entry.value().clone())
+                .map(|entry| entry.key().clone())
+        } else {
+            None
+        };
 
-            // Remove oldest file if needed
-            if let Some(oldest_path) = oldest_path {
-                // Get (don't remove) the semaphore first
-                if let Some(semaphore) = self.file_locks.get(&oldest_path) {
-                    let permit = semaphore.value().acquire().await.map_err(|e| {
-                        io::Error::new(
-                            io::ErrorKind::Other,
-                            format!("Error acquiring lock for cache cleanup: {}", e)
-                        )
-                    })?;
+        // Remove oldest file if needed
+        if let Some(oldest_path) = oldest_path {
+            // Get (don't remove) the semaphore first
+            if let Some(semaphore) = self.file_locks.get(&oldest_path) {
+                let permit = semaphore.value().acquire().await.map_err(|e| {
+                    io::Error::new(
+                        io::ErrorKind::Other,
+                        format!("Error acquiring lock for cache cleanup: {}", e)
+                    )
+                })?;
 
-                    // Now safely remove from caches
-                    if let Some((_, mmap)) = self.mmap_cache.remove(&file_path.to_string_lossy().to_string()) {
-                        drop(mmap); // Explicitly drop the mmap
-                    }
-                    self.cache_last_accessed.remove(&oldest_path);
-                    drop(permit);
+                // Now safely remove from caches
+                if let Some((_, mmap)) = self.mmap_cache.remove(&file_path.to_string_lossy().to_string()) {
+                    drop(mmap); // Explicitly drop the mmap
                 }
-                // Finally remove the semaphore
-                self.file_locks.remove(&oldest_path);
+                self.cache_last_accessed.remove(&oldest_path);
+                drop(permit);
             }
+            // Finally remove the semaphore
+            self.file_locks.remove(&oldest_path);
         }
 
         let mut file = File::open(file_path)?;
+
+        // Read compressed data
         let mut compressed_data = Vec::new();
         file.read_to_end(&mut compressed_data)?;
 
@@ -264,15 +264,15 @@ impl HybridStorage {
             let mut temp_file = File::create(&temp_path)?;
             temp_file.write_all(&decompressed)?;
             temp_file.sync_all()?;
-        }
+        } // temp_file is dropped here
 
         // Now open the temp file for mmap
         let temp_file = File::open(&temp_path)?;
         let mmap = Arc::new(unsafe { Mmap::map(&temp_file)? });
         self.mmap_cache.insert(path_str.clone(), Arc::clone(&mmap));
-        self.cache_last_accessed.insert(path_str, Utc::now());
+        self.cache_last_accessed.insert(path_str.clone(), Utc::now());
 
-        // Clean up temp file
+        // Keep the temp_file handle alive until after the mmap is created
         drop(temp_file);
         std::fs::remove_file(&temp_path)?;
 
