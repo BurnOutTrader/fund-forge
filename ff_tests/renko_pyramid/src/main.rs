@@ -40,7 +40,7 @@ async fn main() {
     );
 
     let strategy = FundForgeStrategy::initialize(
-        StrategyMode::Live,
+        StrategyMode::Backtest,
         dec!(100000),
         Currency::USD,
         NaiveDate::from_ymd_opt(2019, 11, 7).unwrap().and_hms_opt(0, 0, 0).unwrap(),
@@ -59,6 +59,8 @@ async fn main() {
         false,
         vec![account.clone()],
     ).await;
+
+    eprintln!("Strategy Initialized");
 
     on_data_received(Arc::new(strategy), strategy_event_receiver, subscription, symbol_name, account).await;
 }
