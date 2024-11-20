@@ -135,7 +135,7 @@ impl Ledger {
     }
 
     pub fn balance(&self) -> Decimal {
-        self.cash_value.clone()
+        self.cash_used + self.cash_available
     }
 
     pub fn update(&mut self, cash_value: Decimal, cash_available: Decimal, cash_used: Decimal) {
