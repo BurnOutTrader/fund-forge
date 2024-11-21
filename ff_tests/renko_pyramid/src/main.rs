@@ -236,7 +236,7 @@ pub async fn on_data_received(
                 let msg = format!("{}",event);
                 println!("{}", msg.as_str().bright_magenta());
                 strategy.export_trades(&String::from("./trades exports"));
-                strategy.print_ledgers().await;
+                strategy.print_ledgers();
                 //we should handle shutdown gracefully by first ending the strategy loop.
                 break 'strategy_loop
             },
@@ -252,10 +252,10 @@ pub async fn on_data_received(
                     PositionUpdateEvent::PositionOpened { .. } => {}
                     PositionUpdateEvent::Increased { .. } => {}
                     PositionUpdateEvent::PositionReduced { .. } => {
-                        strategy.print_ledger(event.account()).await;
+                        strategy.print_ledger(event.account());
                     },
                     PositionUpdateEvent::PositionClosed { ref side, ref booked_pnl,.. } => {
-                        strategy.print_ledger(event.account()).await;
+                        strategy.print_ledger(event.account());
                         exit_order_id = None;
                         entry_order_id = None;
                         let result = if *booked_pnl > dec!(0) {

@@ -95,15 +95,27 @@ impl LedgerService {
         }
     }
 
-    pub async fn print_ledgers(&self) {
+    pub fn print_ledgers(&self) {
         for ledger in self.ledgers.iter() {
-            ledger.value().print().await;
+            ledger.value().print();
         }
     }
 
     pub fn export_trades(&self, account: &Account, directory: &str) {
         if let Some(ledger) = self.ledgers.get(account) {
             ledger.export_positions_to_csv(directory);
+        }
+    }
+
+    pub fn export_trades_to_csv(&self, account: &Account, directory: &str) {
+        if let Some(ledger) = self.ledgers.get(account) {
+            ledger.export_positions_to_csv(directory);
+        }
+    }
+
+    pub fn print_trade_statistics(&self, account: &Account) {
+        if let Some(ledger) = self.ledgers.get(account) {
+            ledger.print_trade_statistics();
         }
     }
 
@@ -115,9 +127,9 @@ impl LedgerService {
         }
     }
 
-    pub async fn print_ledger(&self, account: &Account) {
+    pub fn print_ledger(&self, account: &Account) {
        if let Some(ledger) = self.ledgers.get(account) {
-           let string = ledger.value().print().await; //todo need to return the string here
+           let string = ledger.value().print(); //todo need to return the string here
            println!("{}", string);
        }
     }

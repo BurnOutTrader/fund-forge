@@ -1,15 +1,18 @@
 use dashmap::DashMap;
 use tokio::sync::{oneshot};
 use rust_decimal::Decimal;
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, Duration, Utc};
 use std::fs::create_dir_all;
 use std::path::Path;
+use std::str::FromStr;
 use csv::Writer;
 use std::sync::Arc;
 use rust_decimal::prelude::FromPrimitive;
 use rust_decimal_macros::dec;
+use serde_derive::Serialize;
 use tokio::sync::mpsc::{Receiver, Sender};
 use uuid::Uuid;
+use crate::helpers::converters::format_duration;
 use crate::product_maps::oanda::maps::OANDA_SYMBOL_INFO;
 use crate::product_maps::rithmic::maps::{find_base_symbol, get_futures_symbol_info};
 use crate::standardized_types::accounts::{Account, AccountInfo, Currency};
@@ -454,7 +457,7 @@ impl Ledger {
         true
     }
 
-    pub async fn print(&self) -> String {
+    pub fn print(&self) -> String {
         let mut total_trades: usize = 0;
         let mut losses: usize = 0;
         let mut wins: usize = 0;
@@ -728,4 +731,203 @@ impl Ledger {
             }
         }
     }
+
+    // Function to export individual trades to CSV
+    pub fn export_trades_to_csv(&self, folder: &str) {
+        // Create the folder if it does not exist
+        if let Err(e) = create_dir_all(folder) {
+            eprintln!("Failed to create directory {}: {}", folder, e);
+            return;
+        }
+
+        // Get current date in desired format
+        let date = Utc::now().format("%Y%m%d_%H%M").to_string();
+
+        // Use brokerage and account ID to format the filename
+        let brokerage = self.account.brokerage.to_string();
+        let file_name = format!("{}/{:?}_TradeResults_{}_{}_{}.csv", folder, self.mode, brokerage, self.account.account_id, date);
+
+        // Create a writer for the CSV file
+        let file_path = Path::new(&file_name);
+        match Writer::from_path(file_path) {
+            Ok(mut wtr) => {
+                // Iterate over all closed positions and their trades
+                for entry in self.positions_closed.iter() {
+                    for position in entry.value() {
+                        for trade in &position.completed_trades {
+                            let pnl = match position.side {
+                                PositionSide::Long => (trade.exit_price - trade.entry_price) * trade.entry_quantity,
+                                PositionSide::Short => (trade.entry_price - trade.exit_price) * trade.entry_quantity,
+                            };
+
+                            let export = TradeExport {
+                                symbol_code: position.symbol_code.clone(),
+                                position_id: position.position_id.clone(),
+                                side: position.side.to_string(),
+                                entry_price: trade.entry_price,
+                                entry_quantity: trade.entry_quantity,
+                                exit_price: trade.exit_price,
+                                exit_quantity: trade.exit_quantity,
+                                entry_time: trade.entry_time.clone(),
+                                exit_time: trade.exit_time.clone(),
+                                pnl: pnl.round_dp(2),
+                                tag: position.tag.clone(),
+                            };
+
+                            if let Err(e) = wtr.serialize(export) {
+                                eprintln!("Failed to write trade data to {}: {}", file_path.display(), e);
+                            }
+                        }
+                    }
+                }
+
+                if let Err(e) = wtr.flush() {
+                    eprintln!("Failed to flush CSV writer for {}: {}", file_path.display(), e);
+                } else {
+                    println!("Successfully exported all trades to {}", file_path.display());
+                }
+            }
+            Err(e) => {
+                eprintln!("Failed to create CSV writer for {}: {}", file_path.display(), e);
+            }
+        }
+    }
+
+    pub fn print_trade_statistics(&self) -> String {
+        let mut total_trades: usize = 0;
+        let mut wins: usize = 0;
+        let mut losses: usize = 0;
+        let mut break_even: usize = 0;
+        let mut total_pnl = dec!(0.0);
+        let mut win_pnl = dec!(0.0);
+        let mut loss_pnl = dec!(0.0);
+        let mut longest_hold = Duration::zero();
+        let mut shortest_hold = Duration::max_value();
+        let mut total_hold_time = Duration::zero();
+        let mut largest_win = dec!(0.0);
+        let mut largest_loss = dec!(0.0);
+
+        // Collect statistics for each individual trade
+        for entry in self.positions_closed.iter() {
+            for position in entry.value() {
+                for trade in &position.completed_trades {
+                    total_trades += 1;
+
+                    let pnl = match position.side {
+                        PositionSide::Long => (trade.exit_price - trade.entry_price) * trade.entry_quantity,
+                        PositionSide::Short => (trade.entry_price - trade.exit_price) * trade.entry_quantity,
+                    };
+
+                    total_pnl += pnl;
+
+                    if pnl > dec!(0.0) {
+                        wins += 1;
+                        win_pnl += pnl;
+                        largest_win = largest_win.max(pnl);
+                    } else if pnl < dec!(0.0) {
+                        losses += 1;
+                        loss_pnl += pnl;
+                        largest_loss = largest_loss.min(pnl);
+                    } else {
+                        break_even += 1;
+                    }
+
+                    // Calculate hold time
+                    let entry_time = DateTime::<Utc>::from_str(&trade.entry_time).unwrap();
+                    let exit_time = DateTime::<Utc>::from_str(&trade.exit_time).unwrap();
+                    let hold_duration = exit_time - entry_time;
+
+                    longest_hold = longest_hold.max(hold_duration);
+                    shortest_hold = shortest_hold.min(hold_duration);
+                    total_hold_time = total_hold_time + hold_duration;
+                }
+            }
+        }
+
+        // Calculate derived statistics
+        let win_rate = if total_trades > 0 {
+            (wins as f64 / total_trades as f64 * 100.0).round()
+        } else {
+            0.0
+        };
+
+        let avg_win = if wins > 0 {
+            win_pnl / Decimal::from(wins)
+        } else {
+            dec!(0.0)
+        };
+
+        let avg_loss = if losses > 0 {
+            loss_pnl / Decimal::from(losses)
+        } else {
+            dec!(0.0)
+        };
+
+        let profit_factor = if loss_pnl.abs() > dec!(0.0) {
+            win_pnl / loss_pnl.abs()
+        } else if win_pnl > dec!(0.0) {
+            dec!(1000.0)
+        } else {
+            dec!(0.0)
+        };
+
+        let avg_hold_time = if total_trades > 0 {
+            total_hold_time / total_trades as i32
+        } else {
+            Duration::zero()
+        };
+
+        format!(
+            "\nDetailed Trade Statistics:\n\
+            Total Trades: {}\n\
+            Win Rate: {}%\n\
+            Wins: {}\n\
+            Losses: {}\n\
+            Break Even: {}\n\
+            Total PnL: {}\n\
+            Win PnL: {}\n\
+            Loss PnL: {}\n\
+            Average Win: {}\n\
+            Average Loss: {}\n\
+            Largest Win: {}\n\
+            Largest Loss: {}\n\
+            Profit Factor: {}\n\
+            Average Hold Time: {}\n\
+            Shortest Hold: {}\n\
+            Longest Hold: {}\n\
+            Commission Paid: {}\n",
+            total_trades,
+            win_rate,
+            wins,
+            losses,
+            break_even,
+            total_pnl.round_dp(2),
+            win_pnl.round_dp(2),
+            loss_pnl.round_dp(2),
+            avg_win.round_dp(2),
+            avg_loss.round_dp(2),
+            largest_win.round_dp(2),
+            largest_loss.round_dp(2),
+            profit_factor.round_dp(2),
+            format_duration(avg_hold_time),
+            format_duration(shortest_hold),
+            format_duration(longest_hold),
+            self.commissions_paid.round_dp(2)
+        )
+    }
+}
+
+#[derive(Debug, Serialize)]
+struct TradeExport {
+    symbol_code: String,
+    position_id: String,
+    side: String,
+    entry_price: Decimal,
+    entry_quantity: Decimal,
+    exit_price: Decimal,
+    exit_quantity: Decimal,
+    entry_time: String,
+    exit_time: String,
+    pnl: Decimal,
+    tag: String,
 }

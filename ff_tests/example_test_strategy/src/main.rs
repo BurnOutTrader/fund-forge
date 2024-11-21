@@ -329,8 +329,8 @@ pub async fn on_data_received(
                 match event {
                     PositionUpdateEvent::PositionOpened { .. } => {}
                     PositionUpdateEvent::Increased { .. } => {}
-                    PositionUpdateEvent::PositionReduced { .. } => strategy.print_ledger(&event.account()).await,
-                    PositionUpdateEvent::PositionClosed { .. } => strategy.print_ledger(event.account()).await,
+                    PositionUpdateEvent::PositionReduced { .. } => strategy.print_ledger(&event.account()),
+                    PositionUpdateEvent::PositionClosed { .. } => strategy.print_ledger(event.account()),
                 }
             }
             StrategyEvent::TimedEvent(name) => {
@@ -339,7 +339,7 @@ pub async fn on_data_received(
         }
     }
     strategy.export_trades(&String::from("./trades exports"));
-    strategy.print_ledgers().await;
+    strategy.print_ledgers();
     event_receiver.close();
     println!("Strategy: Event Loop Ended");
 }

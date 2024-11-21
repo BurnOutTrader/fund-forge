@@ -153,7 +153,7 @@ pub async fn on_data_received(
                 let msg = format!("{}",event);
                 println!("{}", msg.as_str().bright_magenta());
                 strategy.export_trades(&String::from("./trades exports"));
-                strategy.print_ledgers().await;
+                strategy.print_ledgers();
                 //we should handle shutdown gracefully by first ending the strategy loop.
                 break 'strategy_loop
             },
@@ -169,10 +169,10 @@ pub async fn on_data_received(
                     PositionUpdateEvent::PositionOpened { .. } => {}
                     PositionUpdateEvent::Increased { .. } => {}
                     PositionUpdateEvent::PositionReduced { .. } => {
-                        strategy.print_ledger(event.account()).await
+                        strategy.print_ledger(event.account())
                     },
                     PositionUpdateEvent::PositionClosed { .. } => {
-                        strategy.print_ledger(event.account()).await
+                        strategy.print_ledger(event.account())
                     },
                 }
                 let quantity = strategy.position_size(&account_1, &"EUR-USD".to_string());
@@ -184,7 +184,7 @@ pub async fn on_data_received(
                 let msg = format!("Strategy: Order Event: {}, Time: {}", event, event.time_local(strategy.time_zone()));
                 match event {
                     OrderUpdateEvent::OrderRejected { .. } | OrderUpdateEvent::OrderUpdateRejected { .. } => {
-                        strategy.print_ledger(event.account()).await;
+                        strategy.print_ledger(event.account());
                         println!("{}", msg.as_str().on_bright_magenta().on_bright_red())
                     },
                     _ =>  println!("{}", msg.as_str().bright_yellow())

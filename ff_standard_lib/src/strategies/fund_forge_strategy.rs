@@ -1013,13 +1013,13 @@ impl FundForgeStrategy {
     }
 
     /// Prints a ledgers statistics
-    pub async fn print_ledger(&self, account: &Account) {
-        self.ledger_service.print_ledger(account).await;
+    pub fn print_ledger(&self, account: &Account) {
+        self.ledger_service.print_ledger(account);
     }
 
     /// Prints all ledgers statistics
-    pub async fn print_ledgers(&self) {
-        self.ledger_service.print_ledgers().await;
+    pub fn print_ledgers(&self) {
+        self.ledger_service.print_ledgers();
     }
 
     /// Exports trades to a csv file in the directory
