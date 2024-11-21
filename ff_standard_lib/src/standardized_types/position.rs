@@ -225,6 +225,20 @@ pub enum PositionCalculationMode {
 #[derive(Clone, Serialize_rkyv, Deserialize_rkyv, Archive, Debug, PartialEq, Serialize, Deserialize, PartialOrd,)]
 #[archive(compare(PartialEq), check_bytes)]
 #[archive_attr(derive(Debug))]
+pub struct EntryPrice {
+    pub volume: Volume,
+    pub price: Price,
+}
+
+impl EntryPrice {
+    pub fn new(volume: Volume, price: Price) -> Self {
+        Self { volume, price }
+    }
+}
+
+#[derive(Clone, Serialize_rkyv, Deserialize_rkyv, Archive, Debug, PartialEq, Serialize, Deserialize, PartialOrd,)]
+#[archive(compare(PartialEq), check_bytes)]
+#[archive_attr(derive(Debug))]
 pub struct Position {
     pub symbol_name: SymbolName,
     pub symbol_code: String,
@@ -246,8 +260,7 @@ pub struct Position {
     pub symbol_info: SymbolInfo,
     pub tag: String,
     pub position_calculation_mode: PositionCalculationMode,
-    pub open_entry_prices: VecDeque<Decimal>,
-    pub final_exit_prices: Vec<Decimal>,
+    pub open_entry_prices: VecDeque<EntryPrice>,
 }
 
 impl Position {
@@ -286,8 +299,7 @@ impl Position {
             exchange_rate_multiplier,
             tag,
             position_calculation_mode,
-            open_entry_prices: VecDeque::from(vec![average_price]),
-            final_exit_prices: Vec::new(),
+            open_entry_prices: VecDeque::from(vec![EntryPrice::new(quantity, average_price)]),
         }
     }
 
@@ -360,26 +372,62 @@ impl Position {
         }
 
         self.exchange_rate_multiplier = exchange_rate;
+        let mut remaining_exit_quantity = quantity;
+        let mut total_booked_pnl = dec!(0.0);
 
-        let entry_price = match self.position_calculation_mode {
-            PositionCalculationMode::FIFO => self.open_entry_prices.pop_front().unwrap(),
-            PositionCalculationMode::LIFO => self.open_entry_prices.pop_back().unwrap(),
-        };
-        // Calculate booked PnL
-        let booked_pnl = calculate_theoretical_pnl(
-            self.account.brokerage,
-            self.side,
-            entry_price,
-            market_price,
-            quantity,
-            &self.symbol_info,
-            self.exchange_rate_multiplier,
-            account_currency
-        );
+        // Create a temporary queue/stack for processing to avoid borrow checker issues
+        let mut temp_entries = VecDeque::new();
+
+        // Keep processing entry prices until we've covered the full exit quantity
+        while remaining_exit_quantity > dec!(0.0) {
+            let entry = match self.position_calculation_mode {
+                PositionCalculationMode::FIFO => self.open_entry_prices.pop_front(),
+                PositionCalculationMode::LIFO => self.open_entry_prices.pop_back(),
+            }.expect("No entry prices available but position still open");
+
+            // Calculate how much we can exit from this entry price level
+            let exit_quantity = remaining_exit_quantity.min(entry.volume);
+
+            // Calculate PnL for this portion
+            let portion_booked_pnl = calculate_theoretical_pnl(
+                self.account.brokerage,
+                self.side,
+                entry.price,
+                market_price,
+                exit_quantity,
+                &self.symbol_info,
+                self.exchange_rate_multiplier,
+                account_currency
+            );
+
+            // If we didn't use all of this entry, we need to put back the remainder
+            let remaining_entry_volume = entry.volume - exit_quantity;
+            if remaining_entry_volume > dec!(0.0) {
+                let remaining_entry = EntryPrice::new(remaining_entry_volume, entry.price);
+                match self.position_calculation_mode {
+                    // For FIFO, we want to maintain order from front to back
+                    PositionCalculationMode::FIFO => temp_entries.push_back(remaining_entry),
+                    // For LIFO, we want to maintain order from back to front
+                    PositionCalculationMode::LIFO => temp_entries.push_front(remaining_entry),
+                }
+            }
+
+            total_booked_pnl += portion_booked_pnl;
+            remaining_exit_quantity -= exit_quantity;
+        }
+
+        // Put any remaining entries back in the correct order
+        // No need to reverse the order when restoring since we maintained it during temp storage
+        while let Some(entry) = temp_entries.pop_front() {
+            match self.position_calculation_mode {
+                PositionCalculationMode::FIFO => self.open_entry_prices.push_front(entry),
+                PositionCalculationMode::LIFO => self.open_entry_prices.push_back(entry),
+            }
+        }
 
         // Update position
-        self.booked_pnl += booked_pnl;
-        self.open_pnl -= booked_pnl;
+        self.booked_pnl += total_booked_pnl;
+        self.open_pnl -= total_booked_pnl;
 
         self.average_exit_price = match self.average_exit_price {
             Some(existing_exit_price) => {
@@ -394,8 +442,6 @@ impl Position {
             }
             None => Some(market_price)
         };
-
-        self.final_exit_prices.push(market_price);
 
         self.quantity_open -= quantity;
         self.quantity_closed += quantity;
@@ -438,7 +484,6 @@ impl Position {
         }
     }
 
-    /// Adds to the paper position
     pub(crate) async fn add_to_position(&mut self, mode: StrategyMode, is_simulating_pnl: bool, account_currency: Currency, market_price: Price, quantity: Volume, time: DateTime<Utc>, tag: String) -> PositionUpdateEvent {
         // Correct the average price calculation with proper parentheses
         if mode != StrategyMode::Live || is_simulating_pnl {
@@ -449,7 +494,8 @@ impl Position {
             }
         }
 
-        self.open_entry_prices.push_back(market_price);
+        // Create and add new entry price
+        self.open_entry_prices.push_back(EntryPrice::new(quantity, market_price));
 
         // Update the total quantity
         self.quantity_open += quantity;
