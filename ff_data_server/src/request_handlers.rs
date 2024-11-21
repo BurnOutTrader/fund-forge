@@ -8,6 +8,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use dashmap::DashMap;
 use futures_util::future::join_all;
+use indicatif::{ProgressBar, ProgressStyle};
 use lazy_static::lazy_static;
 use tokio::io;
 use tokio::io::{AsyncReadExt, AsyncWriteExt, WriteHalf};
@@ -16,7 +17,7 @@ use tokio::sync::mpsc;
 use tokio::sync::mpsc::{Receiver, Sender};
 use tokio::time::timeout;
 use tokio_rustls::server::TlsStream;
-use crate::server_features::database::hybrid_storage::DATA_STORAGE;
+use crate::server_features::database::hybrid_storage::{DATA_STORAGE, MULTIBAR};
 use crate::server_side_brokerage::{account_info_response, accounts_response, commission_info_response, live_market_order, symbol_info_response, symbol_names_response, live_enter_long, live_exit_long, live_exit_short, live_enter_short, other_orders, cancel_order, flatten_all_for, update_order, cancel_orders_on_account, exchange_rate_response};
 use crate::server_side_datavendor::{base_data_types_response, decimal_accuracy_response, markets_response, resolutions_response, symbols_response, tick_size_response};
 use ff_standard_lib::standardized_types::enums::StrategyMode;
@@ -66,12 +67,20 @@ pub async fn manage_async_requests(
     let strategy_mode = strategy_mode;
     let (response_sender, request_receiver) = mpsc::channel(1000);
     RESPONSE_SENDERS.insert(stream_name.clone(), response_sender.clone());
-
     let read_task = tokio::spawn(async move {
         const LENGTH: usize = 8;
         let mut receiver = read_half;
         let mut length_bytes = [0u8; LENGTH];
-
+        let message_bar = MULTIBAR.add(ProgressBar::new_spinner());
+        let prefix = format!("Connected: {}", stream_name);
+        let bright_green_prefix = format!("\x1b[92mConnected: {}\x1b[0m", stream_name);
+        // Set the colored prefix
+        message_bar.set_prefix(bright_green_prefix);
+        message_bar.set_style(
+            ProgressStyle::default_spinner()
+                .template("{spinner:.green} {prefix} {msg}")
+                .expect("Failed to set style"),
+        );
         while let Ok(_) = receiver.read_exact(&mut length_bytes).await {
             let msg_length = u64::from_be_bytes(length_bytes) as usize;
             let mut message_body = vec![0u8; msg_length];
@@ -92,7 +101,8 @@ pub async fn manage_async_requests(
                     continue;
                 }
             };
-            println!("{:?}", request);
+            let msg  = format!("Last Request: {:?}", request);
+            message_bar.set_message(msg);
 
             let stream_name = stream_name.clone();
             let mode = strategy_mode.clone();
@@ -272,7 +282,10 @@ pub async fn manage_async_requests(
         // Deregister when disconnected
         //deregister_streamer(&stream_name).await;
         RESPONSE_SENDERS.remove(&stream_name);
-        println!("Streamer Disconnected: {}", stream_name);
+        let prefix = format!("Disconnected: {}", stream_name);
+        message_bar.set_prefix(prefix);
+        let msg = "Strategy disconnected".to_string();
+        message_bar.finish_with_message(msg);
     });
 
     // Response handler for outgoing messages
