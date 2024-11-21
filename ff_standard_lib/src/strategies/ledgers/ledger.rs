@@ -121,6 +121,17 @@ impl Ledger {
         ledger
     }
 
+    /// Used to save positions to disk in json format
+    /// Useful for machine learning
+    pub fn save_positions_to_file(&self, file: &str) {
+        let mut positions = vec![];
+        for position in self.positions.iter() {
+            positions.push(position.value().clone());
+        }
+        let positions = serde_json::to_string(&positions).unwrap();
+        std::fs::write(file, positions).unwrap();
+    }
+
     pub fn get_exchange_multiplier(&self, to_currency: Currency) -> Decimal {
         if self.currency == to_currency {
             return dec!(1.0);

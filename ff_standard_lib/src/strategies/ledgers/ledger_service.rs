@@ -44,6 +44,20 @@ impl LedgerService {
         }
     }
 
+    pub fn get_positions(&self, account: &Account) -> DashMap<SymbolCode, Vec<Position>> {
+        if let Some(ledger) = self.ledgers.get(account) {
+            ledger.value().positions_closed.clone()
+        } else {
+            Default::default()
+        }
+    }
+
+    pub fn save_positions_to_file(&self, account: &Account, file_path: &str) {
+        if let Some(ledger) = self.ledgers.get(account) {
+            ledger.value().save_positions_to_file(file_path);
+        }
+    }
+
     pub fn balance(&self, account: &Account) -> Decimal {
         self.ledgers.get(account)
             .map(|ledger| ledger.balance())

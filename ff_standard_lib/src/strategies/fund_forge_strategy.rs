@@ -14,6 +14,7 @@ use crate::strategies::handlers::subscription_handler::SubscriptionHandler;
 use crate::standardized_types::subscriptions::{DataSubscription, SymbolCode, SymbolName};
 use crate::strategies::handlers::timed_events_handler::{TimedEvent, TimedEventHandler};
 use std::collections::BTreeMap;
+use std::fs;
 use std::sync::Arc;
 use std::time::Duration;
 use dashmap::DashMap;
@@ -33,6 +34,7 @@ use crate::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use crate::standardized_types::market_hours::TradingHours;
 use crate::standardized_types::new_types::{Price, Volume};
 use crate::standardized_types::orders::{Order, OrderId, OrderRequest, OrderType, OrderUpdateType, TimeInForce};
+use crate::standardized_types::position::Position;
 use crate::strategies::client_features::connection_types::ConnectionType;
 use crate::strategies::client_features::live_subscriptions::live_subscription_handler;
 use crate::strategies::client_features::request_handler::{send_request, StrategyRequest};
@@ -1032,6 +1034,29 @@ impl FundForgeStrategy {
     /// Exports positions (cumulative) to a csv file in the directory
     pub fn export_trades_to_csv(&self, account: &Account, directory: &str) {
         self.ledger_service.export_trades_to_csv(account, directory);
+    }
+
+    /// Save positions to a json file in the directory
+    /// Useful for machine learning etc.
+    pub fn save_positions_to_file(&self, account: &Account, file_path: &str) {
+        self.ledger_service.save_positions_to_file(account, file_path);
+    }
+
+    /// Used to load positions from disk when saved as json format
+    /// Useful for machine learning
+    pub fn load_positions_from_file(file: &str) -> Vec<Position> {
+        // Read the file content
+        let file_content = fs::read_to_string(file).expect("Failed to read the file");
+
+        // Deserialize the JSON into a Vec<Position>
+        let positions: Vec<Position> = serde_json::from_str(&file_content).expect("Failed to parse JSON");
+
+        positions
+    }
+
+    /// Get a clone of closed positions for the account
+    pub fn get_positions(&self, account: &Account) -> DashMap<SymbolCode, Vec<Position>> {
+        self.ledger_service.get_positions(account)
     }
 
     /// Exports trades (individual) to a csv file in the directory
