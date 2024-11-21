@@ -24,6 +24,10 @@ lazy_static! {
     .collect();
 }
 
+pub fn get_futures_symbols() -> Vec<String> {
+    AVAILABLE_SYMBOL_NAMES.clone()
+}
+
 lazy_static! {
     static ref FUTURES_CODE_TO_NAME: AHashMap<&'static str, &'static str> = {
         let mut futures = AHashMap::new();

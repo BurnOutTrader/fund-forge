@@ -548,11 +548,11 @@ pub fn get_exchange_by_symbol_name(code: &str) -> Option<FuturesExchange> {
     }
 }
 
-pub fn get_rithmic_symbol_info(symbol: &str) -> Result<SymbolInfo, String> {
+/*pub fn get_futures_symbol_info(symbol: &str) -> Result<SymbolInfo, String> {
     SYMBOL_INFO_MAP.get(symbol)
         .cloned()
         .ok_or_else(|| format!("{} not found", symbol))
-}
+}*/
 
 pub fn get_rithmic_intraday_margin_in_usd(symbol: &str) -> Option<Decimal> {
     INTRADAY_MARGINS.get(symbol).cloned()

@@ -1,3 +1,4 @@
+use std::collections::VecDeque;
 use std::str::FromStr;
 use std::sync::Arc;
 use chrono::{TimeZone, Utc};
@@ -17,12 +18,12 @@ use ff_standard_lib::standardized_types::accounts::Account;
 use ff_standard_lib::standardized_types::broker_enum::Brokerage;
 use ff_standard_lib::standardized_types::enums::PositionSide;
 use ff_standard_lib::standardized_types::new_types::Volume;
-use ff_standard_lib::standardized_types::position::Position;
+use ff_standard_lib::standardized_types::position::{Position, PositionCalculationMode};
 use ff_standard_lib::standardized_types::subscriptions::{SymbolCode};
 use crate::rithmic_api::api_client::RithmicBrokerageClient;
 use crate::rithmic_api::plant_handlers::create_datetime;
 use crate::rithmic_api::plant_handlers::handler_loop::send_updates;
-use ff_standard_lib::product_maps::rithmic::maps::get_rithmic_symbol_info;
+use ff_standard_lib::product_maps::rithmic::maps::get_futures_symbol_info;
 
 lazy_static! {
     pub static ref POSITIONS: DashMap<SymbolCode, Position> = DashMap::new();
@@ -195,7 +196,7 @@ pub async fn match_pnl_plant_id(
                             None => return
                         };
 
-                        let symbol_info = match get_rithmic_symbol_info(symbol_name) {
+                        let symbol_info = match get_futures_symbol_info(symbol_name) {
                             Err(e) => return,
                             Ok(info) => info
                         };
@@ -249,6 +250,9 @@ pub async fn match_pnl_plant_id(
                                     position_id: client.generate_id(side),
                                     symbol_info,
                                     tag,
+                                    position_calculation_mode: PositionCalculationMode::FIFO,
+                                    open_entry_prices: VecDeque::from(vec![average_price]),
+                                    final_exit_prices: Vec::new(),
                                 };
                                 POSITIONS.insert(symbol_code.clone(), position.clone());
                             }

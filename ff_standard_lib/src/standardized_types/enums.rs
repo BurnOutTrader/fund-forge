@@ -35,6 +35,14 @@ impl FuturesExchange {
     }
 }
 
+#[derive(Serialize, Deserialize, Clone, Serialize_rkyv, Deserialize_rkyv, Archive, PartialOrd, Eq, Ord, PartialEq, Copy, Debug, Display, Hash)]
+#[archive(compare(PartialEq), check_bytes)]
+#[archive_attr(derive(Debug))]
+pub enum Exchange {
+    NASDAQ,
+    // Add other exchanges if necessary
+}
+
 /// Used for internal ff calulcations
 #[derive(Serialize, Deserialize, Clone, Serialize_rkyv, Deserialize_rkyv, Archive, PartialOrd, Eq, Ord, PartialEq, Copy, Debug, Display, Hash)]
 #[archive(compare(PartialEq), check_bytes)]
@@ -43,7 +51,7 @@ pub enum MarketType {
     Forex,
     CFD,
     Futures(FuturesExchange),
-    Equities,
+    Equities(Exchange),
     Crypto,
     ETF,
     Fundamentals,
@@ -55,7 +63,7 @@ impl MarketType {
             MarketType::Forex => value.round_dp(decimal_accuracy),
             MarketType::CFD => value.round_dp(decimal_accuracy),
             MarketType::Futures(_) => round_to_tick_size(value, tick_size),
-            MarketType::Equities => value.round_dp(decimal_accuracy),
+            MarketType::Equities(_) => value.round_dp(decimal_accuracy),
             MarketType::Crypto => value.round_dp(decimal_accuracy),
             MarketType::ETF => value.round_dp(decimal_accuracy),
             MarketType::Fundamentals => value.round_dp(decimal_accuracy),

@@ -308,6 +308,7 @@ impl Ledger {
                 exchange_rate,
                 tag.clone(),
                 time,
+                self.position_calculation_mode.clone()
             );
 
             // Insert the new position into the positions map

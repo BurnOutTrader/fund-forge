@@ -6,8 +6,9 @@ use dashmap::DashMap;
 use rust_decimal::Decimal;
 use rust_decimal_macros::dec;
 use tokio::sync::{oneshot};
-use crate::standardized_types::position::Position;
+use crate::standardized_types::position::{Position, PositionCalculationMode};
 use crate::standardized_types::accounts::{Account, Currency};
+use crate::standardized_types::broker_enum::Brokerage;
 use crate::standardized_types::new_types::{Price, Volume};
 use crate::standardized_types::orders::{OrderId, OrderUpdateEvent};
 use crate::standardized_types::time_slices::TimeSlice;
@@ -121,6 +122,10 @@ impl LedgerService {
     }
 
     pub async fn init_ledger(&self, account: &Account, strategy_mode: StrategyMode, synchronize_accounts: bool, starting_cash: Decimal, currency: Currency) {
+        let position_calculation_mode = match account.brokerage {
+            Brokerage::Rithmic(_) => PositionCalculationMode::LIFO,
+            _ => PositionCalculationMode::LIFO,
+        };
         if !self.ledgers.contains_key(account) {
             match strategy_mode {
                 StrategyMode::Live => {
@@ -135,7 +140,8 @@ impl LedgerService {
                         account_info,
                         strategy_mode,
                         synchronize_accounts,
-                        self.strategy_sender.clone()
+                        self.strategy_sender.clone(),
+                        position_calculation_mode
                     ));
                     let static_ledger: &'static Ledger = Box::leak(ledger);
 
@@ -172,6 +178,8 @@ impl LedgerService {
                         is_simulating_pnl: true,
                         strategy_sender: self.strategy_sender.clone(),
                         rates: Arc::new(DashMap::new()),
+                        position_calculation_mode,
+
                     });
                     let static_ledger: &'static Ledger = Box::leak(ledger);
 

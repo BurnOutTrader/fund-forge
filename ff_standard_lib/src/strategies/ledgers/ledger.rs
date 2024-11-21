@@ -11,14 +11,14 @@ use rust_decimal_macros::dec;
 use tokio::sync::mpsc::{Receiver, Sender};
 use uuid::Uuid;
 use crate::product_maps::oanda::maps::OANDA_SYMBOL_INFO;
-use crate::product_maps::rithmic::maps::{find_base_symbol, get_rithmic_symbol_info};
+use crate::product_maps::rithmic::maps::{find_base_symbol, get_futures_symbol_info};
 use crate::standardized_types::accounts::{Account, AccountInfo, Currency};
 use crate::standardized_types::base_data::traits::BaseData;
 use crate::standardized_types::broker_enum::Brokerage;
 use crate::standardized_types::enums::{OrderSide, PositionSide, StrategyMode};
 use crate::standardized_types::new_types::{Price, Volume};
 use crate::standardized_types::orders::{OrderId, OrderUpdateEvent};
-use crate::standardized_types::position::{Position, PositionId, PositionUpdateEvent};
+use crate::standardized_types::position::{Position, PositionCalculationMode, PositionId, PositionUpdateEvent};
 use crate::standardized_types::subscriptions::{SymbolCode, SymbolName};
 use crate::standardized_types::symbol_info::SymbolInfo;
 use crate::standardized_types::time_slices::TimeSlice;
@@ -62,6 +62,7 @@ pub struct Ledger {
     pub is_simulating_pnl: bool,
     pub(crate) strategy_sender: Sender<StrategyEvent>,
     pub rates: Arc<DashMap<Currency, Decimal>>,
+    pub position_calculation_mode: PositionCalculationMode
     //todo, add daily max loss, max order size etc to ledger
 }
 
@@ -70,7 +71,8 @@ impl Ledger {
         account_info: AccountInfo,
         mode: StrategyMode,
         synchronise_accounts: bool,
-        strategy_sender: Sender<StrategyEvent>
+        strategy_sender: Sender<StrategyEvent>,
+        position_calculation_mode: PositionCalculationMode
     ) -> Self {
         let is_simulating_pnl = match synchronise_accounts {
             true => false,
@@ -111,6 +113,7 @@ impl Ledger {
             is_simulating_pnl,
             strategy_sender,
             rates: Arc::new(Default::default()),
+            position_calculation_mode
         };
         ledger
     }
@@ -185,6 +188,9 @@ impl Ledger {
 
     async fn synchronize_live_position(&self, mut position: Position, time: DateTime<Utc>) {
         if let Some((_, mut existing_position)) = self.positions.remove(&position.symbol_code) {
+            if existing_position.side == position.side && existing_position.quantity_open == existing_position.quantity_open {
+                return;
+            }
             // Check if the position side has changed
             if existing_position.side != position.side {
                 // Close the existing position
@@ -387,7 +393,7 @@ impl Ledger {
                 match brokerage {
                     Brokerage::Rithmic(_) => {
                         if let Some(symbol) = find_base_symbol(symbol_name) {
-                            return match get_rithmic_symbol_info(&symbol) {
+                            return match get_futures_symbol_info(&symbol) {
                                 Ok(info) => info,
                                 Err(_) => panic!("Ledgers: Error getting symbol info: {}, {}", brokerage, symbol_name),
                             };
@@ -690,6 +696,7 @@ impl Ledger {
                 exchange_rate,
                 tag.clone(),
                 time,
+                self.position_calculation_mode.clone()
             );
 
             // Insert the new position into the positions map

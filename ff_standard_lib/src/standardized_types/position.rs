@@ -1,3 +1,4 @@
+use std::collections::VecDeque;
 use std::fmt;
 use std::str::FromStr;
 use chrono::{DateTime, TimeZone, Utc};
@@ -216,6 +217,14 @@ impl fmt::Display for PositionUpdateEvent {
 #[derive(Clone, Serialize_rkyv, Deserialize_rkyv, Archive, Debug, PartialEq, Serialize, Deserialize, PartialOrd,)]
 #[archive(compare(PartialEq), check_bytes)]
 #[archive_attr(derive(Debug))]
+pub enum PositionCalculationMode {
+    FIFO,
+    LIFO,
+}
+
+#[derive(Clone, Serialize_rkyv, Deserialize_rkyv, Archive, Debug, PartialEq, Serialize, Deserialize, PartialOrd,)]
+#[archive(compare(PartialEq), check_bytes)]
+#[archive_attr(derive(Debug))]
 pub struct Position {
     pub symbol_name: SymbolName,
     pub symbol_code: String,
@@ -236,6 +245,9 @@ pub struct Position {
     pub position_id: PositionId,
     pub symbol_info: SymbolInfo,
     pub tag: String,
+    pub position_calculation_mode: PositionCalculationMode,
+    pub open_entry_prices: VecDeque<Decimal>,
+    pub final_exit_prices: Vec<Decimal>,
 }
 
 impl Position {
@@ -250,7 +262,8 @@ impl Position {
         symbol_info: SymbolInfo,
         exchange_rate_multiplier: Decimal,
         tag: String,
-        time: DateTime<Utc>
+        time: DateTime<Utc>,
+        position_calculation_mode: PositionCalculationMode
     ) -> Self {
         Self {
             symbol_name,
@@ -272,6 +285,9 @@ impl Position {
             symbol_info,
             exchange_rate_multiplier,
             tag,
+            position_calculation_mode,
+            open_entry_prices: VecDeque::from(vec![average_price]),
+            final_exit_prices: Vec::new(),
         }
     }
 
@@ -344,11 +360,16 @@ impl Position {
         }
 
         self.exchange_rate_multiplier = exchange_rate;
+
+        let entry_price = match self.position_calculation_mode {
+            PositionCalculationMode::FIFO => self.open_entry_prices.pop_front().unwrap(),
+            PositionCalculationMode::LIFO => self.open_entry_prices.pop_back().unwrap(),
+        };
         // Calculate booked PnL
         let booked_pnl = calculate_theoretical_pnl(
             self.account.brokerage,
             self.side,
-            self.average_price,
+            entry_price,
             market_price,
             quantity,
             &self.symbol_info,
@@ -373,6 +394,8 @@ impl Position {
             }
             None => Some(market_price)
         };
+
+        self.final_exit_prices.push(market_price);
 
         self.quantity_open -= quantity;
         self.quantity_closed += quantity;
@@ -425,6 +448,8 @@ impl Position {
                 panic!("Average price should not be 0");
             }
         }
+
+        self.open_entry_prices.push_back(market_price);
 
         // Update the total quantity
         self.quantity_open += quantity;

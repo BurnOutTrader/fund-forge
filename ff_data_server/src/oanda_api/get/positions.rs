@@ -8,7 +8,7 @@ use uuid::Uuid;
 use ff_standard_lib::helpers::converters::fund_forge_formatted_symbol_name;
 use ff_standard_lib::product_maps::oanda::maps::OANDA_SYMBOL_INFO;
 use ff_standard_lib::standardized_types::accounts::Account;
-use ff_standard_lib::standardized_types::position::Position;
+use ff_standard_lib::standardized_types::position::{Position, PositionCalculationMode};
 use crate::oanda_api::models::primitives::InstrumentName;
 
 #[derive(Debug)]
@@ -154,7 +154,8 @@ pub fn parse_oanda_position(position: OandaPosition, account: Account) -> Option
         symbol_info.clone(),
         dec!(1),
         "Existing Order".to_string(),
-        Utc::now()
+        Utc::now(),
+        PositionCalculationMode::FIFO
     );
     position.open_pnl = open_pnl;
     Some(position)
