@@ -1,11 +1,10 @@
 use chrono::{Duration, NaiveDate};
 use chrono_tz::Australia;
-use chrono_tz::Tz::UTC;
 use colored::Colorize;
 use rust_decimal::Decimal;
 use ff_standard_lib::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use ff_standard_lib::standardized_types::base_data::traits::BaseData;
-use ff_standard_lib::standardized_types::enums::{FuturesExchange, MarketType, OrderSide, PrimarySubscription, StrategyMode};
+use ff_standard_lib::standardized_types::enums::{MarketType, PrimarySubscription, StrategyMode};
 use ff_standard_lib::strategies::strategy_events::{StrategyEvent};
 use ff_standard_lib::standardized_types::subscriptions::{DataSubscription, SymbolCode, SymbolName};
 use ff_standard_lib::strategies::fund_forge_strategy::FundForgeStrategy;
@@ -13,13 +12,11 @@ use rust_decimal_macros::dec;
 use tokio::sync::mpsc;
 use ff_standard_lib::apis::rithmic::rithmic_systems::RithmicSystem;
 use ff_standard_lib::product_maps::rithmic::maps::{get_exchange_by_symbol_name, get_futures_trading_hours};
-use ff_standard_lib::product_maps::rithmic::rollover::get_front_month;
 use ff_standard_lib::standardized_types::accounts::{Account, AccountId, Currency};
 use ff_standard_lib::standardized_types::base_data::base_data_type::BaseDataType;
-use ff_standard_lib::standardized_types::base_data::tick::Aggressor;
 use ff_standard_lib::standardized_types::broker_enum::Brokerage;
 use ff_standard_lib::standardized_types::datavendor_enum::DataVendor;
-use ff_standard_lib::standardized_types::orders::{OrderUpdateEvent, TimeInForce};
+use ff_standard_lib::standardized_types::orders::{OrderUpdateEvent};
 use ff_standard_lib::standardized_types::position::PositionUpdateEvent;
 use ff_standard_lib::standardized_types::resolution::Resolution;
 
@@ -64,7 +61,7 @@ async fn main() {
         core::time::Duration::from_millis(100),
         false,
         false,
-        false,
+        true,
         vec![account_1.clone()],
     ).await;
 

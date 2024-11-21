@@ -91,7 +91,8 @@ impl Ledger {
             let exchange_rate = if self.currency != existing_position.symbol_info.pnl_currency {
                 let side = match existing_position.side {
                     PositionSide::Long => OrderSide::Buy,
-                    PositionSide::Short => OrderSide::Sell
+                    PositionSide::Short => OrderSide::Sell,
+                    _ => unreachable!("This shouldn't happen")
                 };
                 match get_exchange_rate(self.currency, existing_position.symbol_info.pnl_currency, time, side).await {
                     Ok(rate) => {
@@ -363,6 +364,7 @@ impl Ledger {
             let order_side = match side {
                 PositionSide::Long => OrderSide::Sell,
                 PositionSide::Short => OrderSide::Buy,
+                _ => unreachable!("This shouldn't happen")
             };
 
             let market_price = match price_service_request_market_fill_price(

@@ -34,6 +34,7 @@ pub fn calculate_theoretical_pnl(
                     }
                     ticks
                 },
+                _ => unreachable!("This shouldn't be possible"),
             }
         }
         _ => {
@@ -52,9 +53,9 @@ pub fn calculate_theoretical_pnl(
                     }
                     ticks
                 },
+                _ => unreachable!("This shouldn't be possible"),
+            }
         }
-    }
-
     };
 
     let pnl = raw_ticks * symbol_info.value_per_tick * quantity;

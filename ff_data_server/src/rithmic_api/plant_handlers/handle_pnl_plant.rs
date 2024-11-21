@@ -1,4 +1,3 @@
-use std::collections::VecDeque;
 use std::str::FromStr;
 use std::sync::Arc;
 use chrono::{TimeZone, Utc};
@@ -13,15 +12,12 @@ use prost::{Message as ProstMessage};
 use rust_decimal::{Decimal};
 use rust_decimal::prelude::FromPrimitive;
 use rust_decimal_macros::dec;
-use tokio::task;
 use ff_standard_lib::messages::data_server_messaging::DataServerResponse;
-use ff_standard_lib::product_maps::rithmic::maps::get_futures_symbol_info;
 use ff_standard_lib::standardized_types::accounts::Account;
 #[allow(unused_imports)]
 use ff_standard_lib::standardized_types::broker_enum::Brokerage;
 use ff_standard_lib::standardized_types::enums::PositionSide;
 use ff_standard_lib::standardized_types::new_types::Volume;
-use ff_standard_lib::standardized_types::position::{EntryPrice, Position, PositionCalculationMode};
 use ff_standard_lib::standardized_types::subscriptions::{SymbolCode};
 use crate::rithmic_api::api_client::RithmicBrokerageClient;
 use crate::rithmic_api::plant_handlers::create_datetime;
@@ -29,8 +25,6 @@ use crate::rithmic_api::plant_handlers::handler_loop::send_updates;
 use crate::server_features::database::hybrid_storage::MULTIBAR;
 
 lazy_static! {
-    pub static ref POSITIONS: DashMap<SymbolCode, Position> = DashMap::new();
-    pub static ref POSITION_COUNT: DashMap<SymbolCode, u64> = DashMap::new();
     pub static ref PROGRESS_PNL: DashMap<(Brokerage, Account, SymbolCode), ProgressBar> = DashMap::new();
 }
 
@@ -185,13 +179,12 @@ pub async fn match_pnl_plant_id(
                         );
                         PROGRESS_PNL.insert(key.clone(), message_bar);
                     }
-                    if (buy_qty > 0 || sell_qty > 0) {
+                    if side != PositionSide::Flat {
                         if let Some(message_bar) = PROGRESS_PNL.get(&key) {
-                            let msg = format!("Pnl: {:?}, Buy Quantity: {:?}, Sell Quantity: {:?}", msg.open_position_pnl, msg.buy_qty, msg.sell_qty);
+                            let msg = format!("Pnl: {:?}, Buy Quantity: {:?}, Sell Quantity: {:?}", msg.open_position_pnl.clone(), msg.buy_qty, msg.sell_qty);
                             message_bar.set_message(msg);
                         }
-                    }
-                    if buy_qty == 0 && sell_qty == 0 {
+                    } else if side == PositionSide::Flat {
                         if let Some((key, pb)) = PROGRESS_PNL.remove(&key) {
                             pb.finish_and_clear();
                         }
@@ -199,125 +192,32 @@ pub async fn match_pnl_plant_id(
                 }
                 //println!("PNL Update Message: {:?}", msg);
 
+                if let (Some(pnl), Some(average_price), Some(symbol_name)) = (msg.open_position_pnl, msg.avg_open_fill_price, msg.product_code) {
+                    //todo do this with a simple message, quantity open, and position side, symbol name, symbol code
+                    let open_position_pnl = match f64::from_str(&pnl) {
+                        Ok(open_position_pnl) => open_position_pnl,
+                        Err(_) => return
+                    };
 
-                //todo do this with a simple message, quantity open, and position side, symbol name, symbol code
-
-                if side.is_none() {
-                    if let Some((symbol_code, mut position)) = POSITIONS.remove(symbol_code) {
-                        let tag = match client.last_tag.get(&account_id) {
-                            None => "External Position Modification".to_string(),
-                            Some(tag) => match tag.value().get(&symbol_code) {
-                                None => "External Position Modification".to_string(),
-                                Some(tag) => tag.clone()
-                            }
-                        };
-                        position.quantity_closed += position.quantity_open;
-                        position.quantity_open = dec!(0);
-                        position.open_pnl = dec!(0);
-                        position.is_closed = true;
-                        position.close_time = Some(Utc::now().to_string());
-
-                        //println!("Closing position: {:?}", position);
-                        send_updates(DataServerResponse::LivePositionUpdates {
-                            account: Account::new(client.brokerage, account_id.clone()),
-                            position,
-                            time,
-                        }).await;
-                    }
-                    return
-                } else if let Some(side) = side {
-                    if let (Some(symbol_name), Some(average_price)) = (&msg.product_code, &msg.avg_open_fill_price) {
-                        let average_price = match Decimal::from_f64_retain(*average_price) {
-                            Some(average_price) => average_price,
-                            None => return
-                        };
-
-                        let symbol_info = match get_futures_symbol_info(symbol_name) {
-                            Err(e) => return,
-                            Ok(info) => info
-                        };
-
-                        let mut count_entry = POSITION_COUNT.entry(symbol_code.clone()).or_insert(1);
-                        *count_entry = count_entry.wrapping_add(1); // Allow overflow back to 0
-                        if *count_entry == 0 {
-                            *count_entry = 1; // Prevent the count from being 0, reset to 1
+                    let open_position_quantity = match msg.open_position_quantity {
+                        None => return,
+                        Some(open_position_quantity) => match f64::from_str(&open_position_quantity.to_string()) {
+                            Ok(open_position_quantity) => open_position_quantity,
+                            Err(_) => return
                         }
+                    };
 
-                        let open_position_quantity = match Decimal::from_i32(quantity) {
-                            Some(open_quantity) => open_quantity,
-                            None => return
-                        };
-
-                        let open_pnl = match msg.open_position_pnl {
-                            Some(open_pnl) => Decimal::from_str(&open_pnl).unwrap_or_else(|_| dec!(0)),
-                            None => dec!(0)
-                        };
-
-                        match POSITIONS.get_mut(symbol_code) {
-                            None => {
-                                let tag = match client.last_tag.get(&account_id) {
-                                    None => "External Position Modification".to_string(),
-                                    Some(tag) => match tag.value().get(symbol_code) {
-                                        None => "External Position Modification".to_string(),
-                                        Some(tag) => tag.clone()
-                                    }
-                                };
-                                //println!("Creating Position");
-                                let position = Position {
-                                    symbol_name: symbol_name.clone(),
-                                    symbol_code: symbol_code.clone(),
-                                    account: Account {
-                                        brokerage: client.brokerage,
-                                        account_id: account_id.clone(),
-                                    },
-                                    side,
-                                    open_time: Utc::now().to_string(),
-                                    quantity_open: open_position_quantity,
-                                    quantity_closed: Default::default(),
-                                    close_time: None,
-                                    average_price,
-                                    open_pnl,
-                                    booked_pnl: dec!(0),
-                                    highest_recoded_price: average_price,
-                                    lowest_recoded_price: average_price,
-                                    exchange_rate_multiplier: dec!(1),
-                                    average_exit_price: None,
-                                    is_closed: false,
-                                    position_id: client.generate_id(side),
-                                    symbol_info,
-                                    tag,
-                                    position_calculation_mode: PositionCalculationMode::FIFO,
-                                    open_entry_prices: VecDeque::from(vec![EntryPrice::new(average_price, open_position_quantity)]),
-                                    completed_trades: vec![],
-                                };
-                                POSITIONS.insert(symbol_code.clone(), position.clone());
-                            }
-                            Some(mut position) => {
-                                //println!("Updating Position");
-                                position.quantity_open = open_position_quantity;
-                                position.side = side;;
-                                position.average_price = average_price;
-                                position.open_pnl = open_pnl;
-
-                                const ZERO: Decimal = dec!(0);
-                                position.is_closed = if open_position_quantity == ZERO {
-                                    true
-                                } else {
-                                    false
-                                };
-
-                                let clone_position = position.clone();
-                                task::spawn(async move {
-                                    let position_update = DataServerResponse::LivePositionUpdates {
-                                        account: Account::new(client.brokerage, account_id.clone()),
-                                        position: clone_position,
-                                        time,
-                                    };
-                                    send_updates(position_update).await;
-                                });
-                            }
-                        };
-                    }
+                    let position_update = DataServerResponse::LivePositionUpdates {
+                        symbol_name: symbol_name.clone(),
+                        symbol_code: symbol_code.clone(),
+                        average_price,
+                        account: Account::new(client.brokerage, account_id.clone()),
+                        open_quantity: open_position_quantity,
+                        side,
+                        time,
+                        open_pnl: open_position_pnl,
+                    };
+                    send_updates(position_update).await;
                 }
             }
         },
@@ -423,7 +323,7 @@ fn update_position(
     msg_buy_qty: Option<i32>,
     msg_sell_qty: Option<i32>,
     client: &Arc<RithmicBrokerageClient>
-) -> (Option<PositionSide>, i32) {
+) -> (PositionSide, i32) {
     match (msg_buy_qty, msg_sell_qty) {
         (Some(buy_quantity), None) if buy_quantity > 0 => {
             client.long_quantity
@@ -434,7 +334,7 @@ fn update_position(
                 .entry(account_id.clone())
                 .or_insert_with(DashMap::new)
                 .remove(symbol_code);
-            (Some(PositionSide::Long), buy_quantity)
+            (PositionSide::Long, buy_quantity)
         }
         (None, Some(sell_qty)) if sell_qty > 0 => {
             client.short_quantity
@@ -445,7 +345,7 @@ fn update_position(
                 .entry(account_id.clone())
                 .or_insert_with(DashMap::new)
                 .remove(symbol_code);
-            (Some(PositionSide::Short), sell_qty)
+            (PositionSide::Short, sell_qty)
         }
         (Some(buy_quantity), Some(sell_qty)) => {
             if buy_quantity > 0 && sell_qty <= 0 {
@@ -457,7 +357,7 @@ fn update_position(
                     .entry(account_id.clone())
                     .or_insert_with(DashMap::new)
                     .remove(symbol_code);
-                (Some(PositionSide::Long), buy_quantity)
+                (PositionSide::Long, buy_quantity)
             } else if buy_quantity <= 0 && sell_qty > 0 {
                 client.short_quantity
                     .entry(account_id.clone())
@@ -467,7 +367,7 @@ fn update_position(
                     .entry(account_id.clone())
                     .or_insert_with(DashMap::new)
                     .remove(symbol_code);
-                (Some(PositionSide::Short), sell_qty)
+                (PositionSide::Short, sell_qty)
             } else {
                 // Clear positions if neither buy nor sell is active
                 client.long_quantity
@@ -478,7 +378,7 @@ fn update_position(
                     .entry(account_id.clone())
                     .or_insert_with(DashMap::new)
                     .remove(symbol_code);
-                (None, 0)
+                (PositionSide::Flat, 0)
             }
         }
         _ => {
@@ -491,7 +391,7 @@ fn update_position(
                 .entry(account_id.clone())
                 .or_insert_with(DashMap::new)
                 .remove(symbol_code);
-            (None, 0)
+            (PositionSide::Flat, 0)
         }
     }
 }

@@ -5,6 +5,7 @@ use std::time::Duration;
 use ahash::AHashMap;
 use dashmap::DashMap;
 use chrono::Utc;
+use rust_decimal::prelude::ToPrimitive;
 use ff_standard_lib::standardized_types::accounts::AccountId;
 use ff_standard_lib::standardized_types::orders::{OrderState, OrderUpdateEvent};
 use rust_decimal_macros::dec;
@@ -64,10 +65,31 @@ pub fn handle_account_updates(client: Arc<OandaClient>) {
                                                 parsed_position.symbol_name.clone(),
                                                 parsed_position.clone()
                                             );
+
+                                        let quantity_open = match parsed_position.quantity_open.to_f64() {
+                                            None => continue,
+                                            Some(q) => q
+                                        };
+
+                                        let average_price = match parsed_position.average_price.to_f64() {
+                                            None => continue,
+                                            Some(p) => p
+                                        };
+
+                                        let open_pnl = match parsed_position.open_pnl.to_f64() {
+                                            None => continue,
+                                            Some(p) => p
+                                        };
+
                                         let message = DataServerResponse::LivePositionUpdates {
+                                            symbol_name: parsed_position.symbol_name.clone(),
+                                            symbol_code: parsed_position.symbol_name.clone(),
                                             account: account.clone(),
-                                            position: parsed_position,
+                                            open_quantity: quantity_open,
+                                            average_price,
+                                            side: parsed_position.side,
                                             time: Utc::now().to_string(),
+                                            open_pnl,
                                         };
                                         for stream_name in RESPONSE_SENDERS.iter() {
                                             match stream_name.value().send(message.clone()).await {

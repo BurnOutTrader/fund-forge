@@ -1,6 +1,6 @@
 use std::sync::Arc;
 use chrono::{DateTime, Utc};
-use crate::standardized_types::enums::{OrderSide, StrategyMode};
+use crate::standardized_types::enums::{OrderSide, PositionSide, StrategyMode};
 use crate::standardized_types::subscriptions::{SymbolCode, SymbolName};
 use dashmap::DashMap;
 use rust_decimal::Decimal;
@@ -30,9 +30,9 @@ impl LedgerService {
         }
     }
 
-    pub async fn synchronize_live_position(&self, account: Account, position: Position, time: DateTime<Utc>) {
+    pub async fn synchronize_live_position(&self, symbol_name: SymbolName, symbol_code: SymbolCode, account: Account, open_quantity: f64, average_price: f64, side: PositionSide, open_pnl: f64, time: String) {
         if let Some(sender) = self.ledger_senders.get(&account) {
-            let msg = LedgerMessage::SyncPosition{position, time};
+            let msg = LedgerMessage::SyncPosition{symbol_name, symbol_code, account, open_quantity, average_price, side, open_pnl, time};
             sender.send(msg).await.unwrap();
         }
     }

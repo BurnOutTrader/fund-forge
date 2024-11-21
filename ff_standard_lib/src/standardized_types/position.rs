@@ -413,10 +413,12 @@ impl Position {
             BaseDataEnum::QuoteBar(bar) => match self.side {
                 PositionSide::Long => (bar.ask_close, bar.ask_high, bar.ask_low),
                 PositionSide::Short => (bar.bid_close, bar.bid_high, bar.bid_low),
+                _ => unreachable!("This shouldn't be possible"),
             },
             BaseDataEnum::Quote(quote) => match self.side {
                 PositionSide::Long => (quote.ask, quote.ask, quote.ask),
                 PositionSide::Short => (quote.bid, quote.bid, quote.bid),
+                _ => unreachable!("This shouldn't be possible"),
             },
             BaseDataEnum::Fundamental(_) => panic!("Fundamentals should not be here"),
         };
@@ -669,6 +671,7 @@ impl Position {
             let trade_pnl = match self.side {
                 PositionSide::Long => (trade.exit_price - trade.entry_price) * trade.entry_quantity,
                 PositionSide::Short => (trade.entry_price - trade.exit_price) * trade.entry_quantity,
+                _ => unreachable!("This shouldn't be possible"),
             };
 
             // Update best/worst trades

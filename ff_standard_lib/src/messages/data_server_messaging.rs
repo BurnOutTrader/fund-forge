@@ -1,5 +1,5 @@
-use crate::standardized_types::enums::{MarketType, OrderSide, StrategyMode, PrimarySubscription};
-use crate::standardized_types::subscriptions::{DataSubscription, Symbol, SymbolName};
+use crate::standardized_types::enums::{MarketType, OrderSide, StrategyMode, PrimarySubscription, PositionSide};
+use crate::standardized_types::subscriptions::{DataSubscription, Symbol, SymbolCode, SymbolName};
 use crate::standardized_types::bytes_trait::Bytes;
 use rkyv::{Archive, Deserialize, Serialize};
 use serde::{Deserialize as SerdeDeserialize, Serialize as SerdeSerialize};
@@ -11,7 +11,6 @@ use crate::standardized_types::datavendor_enum::DataVendor;
 use crate::standardized_types::base_data::base_data_type::BaseDataType;
 use crate::standardized_types::new_types::{Price};
 use crate::standardized_types::orders::{OrderRequest, OrderUpdateEvent};
-use crate::standardized_types::position::Position;
 use crate::standardized_types::symbol_info::{CommissionInfo, FrontMonthInfo, SymbolInfo};
 
 /// An Api key String
@@ -302,7 +301,7 @@ DataServerResponse {
     LiveAccountUpdates {account: Account, cash_value: Decimal, cash_available: Decimal, cash_used: Decimal},
 
     /// Booked pnl is only sent for closed positions, it is the amount of booked pnl since the last side change from none to long or short
-    LivePositionUpdates {account: Account, position: Position, time: String},
+    LivePositionUpdates {symbol_name: SymbolName, symbol_code: SymbolCode, account: Account, open_quantity: f64, average_price: f64, side: PositionSide, open_pnl: f64, time: String},
 }
 
 impl Bytes<DataServerResponse> for DataServerResponse {

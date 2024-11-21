@@ -97,6 +97,7 @@ pub enum OrderSide {
 pub enum PositionSide {
     Long,
     Short,
+    Flat
 }
 
 #[derive(Clone, Serialize_rkyv, Deserialize_rkyv, Archive, PartialEq, Debug, Copy)]

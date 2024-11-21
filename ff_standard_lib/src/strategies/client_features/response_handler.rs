@@ -106,12 +106,11 @@ pub async fn response_handler(
                                         ledger_service.live_account_updates(&account, cash_value, cash_available, cash_used).await;
                                     });
                                 }
-                                DataServerResponse::LivePositionUpdates { account, position, time } => {
+                                DataServerResponse::LivePositionUpdates { symbol_name, symbol_code, account, open_quantity, average_price, side, open_pnl, time } => {
                                    if synchronise_accounts {
                                        //println!("Live Position: {:?}", position);
                                         //tokio::task::spawn(async move {
-                                       let time = DateTime::<Utc>::from_str(&time).unwrap();
-                                        ledger_service.synchronize_live_position(account, position, time).await
+                                        ledger_service.synchronize_live_position(symbol_name, symbol_code, account, open_quantity, average_price, side, open_pnl, time).await
                                         //});
                                     }
                                 }

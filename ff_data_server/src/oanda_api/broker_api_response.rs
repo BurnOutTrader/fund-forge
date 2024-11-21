@@ -588,6 +588,7 @@ impl BrokerApiResponse for OandaClient {
                     PositionSide::Short => {
                         ("Flatten Short".to_string(), OrderSide::Buy, OrderType::ExitShort)
                     }
+                    _ => unreachable!()
                 };
                 let exit_order = Order {
                     id: guid.to_string(),
