@@ -18,6 +18,7 @@
 - [Placing Orders](#placing-orders)
 - [Currency Conversion](#currency-conversion)
 - [Debugging Strategies](#debugging-strategies)
+- [Statistics](#statistics)
 - [Trading Hours](#trading-hours)
 
 ## Important Info
@@ -1527,3 +1528,28 @@ Remember:
 - When close time is None, session runs until next close
 - For 24-hour sessions, use open: None, close: None after initial open
 - Week start affects weekly bar consolidation
+
+# Statistics 
+Trade statistics are recorded in 2 way.
+1. Position statistics, using a flat to flat algorithm, where a position might consist of multiple trades, a position is closed only when the account becomes flat the symbol.
+2. Trade statistics, using either first in first out, or last in first out, where a trade is a single entry and exit or partial exit, a trade is created(closed) whenever an opposing order is filled.
+
+```rust
+fn example(strategy: &FundForgeStrategy) {
+   let account = Account::new(Brokerage::Test, "Test_Account_1".to_string());
+    
+   // Export the position statistics for the account
+   strategy.export_positions_to_csv(&String::from("./trades exports"));
+   
+   // We can print the position statistics to console as part of the ledger print out
+   strategy.print_ledger(event.account());
+    
+    // Export the trade statistics for the account
+   strategy.export_trades_to_csv(&account, &String::from("./trades exports"));
+   
+   // We can print the combined individual trade statistics to console
+   strategy.print_trade_statistics(&account);
+   
+}
+```
+```
