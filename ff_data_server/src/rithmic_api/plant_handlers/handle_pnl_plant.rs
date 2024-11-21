@@ -162,8 +162,15 @@ pub async fn match_pnl_plant_id(
                 };
 
                 let time = create_datetime(ssboe as i64, usecs as i64).to_string();
+                let account_id = match msg.account_id {
+                    None => return,
+                    Some(id) => id
+                };
 
-                if let (Some(buy_qty), Some(sell_qty), Some(account_id)) = (msg.buy_qty, msg.sell_qty, msg.account_id.clone()) {
+                //this line of code is critical for exit long and exit short to work
+                let (side, quantity) = update_position(account_id.clone(), &symbol_code, msg.buy_qty, msg.sell_qty, &client);
+
+                if let (Some(buy_qty), Some(sell_qty)) = (msg.buy_qty, msg.sell_qty) {
                     let key = (client.brokerage, Account::new(client.brokerage, account_id.clone()), symbol_code.clone());
                     if !PROGRESS_PNL.contains_key(&key) && (buy_qty > 0 || sell_qty > 0) {
                         let message_bar = MULTIBAR.add(ProgressBar::new_spinner());
@@ -178,13 +185,13 @@ pub async fn match_pnl_plant_id(
                         );
                         PROGRESS_PNL.insert(key.clone(), message_bar);
                     }
-                    if let Some(message_bar) = PROGRESS_PNL.get(&key) {
-                        let msg = format!("Pnl: {:?}, Buy Quantity: {:?}, Sell Quantity: {:?}", msg.open_position_pnl, msg.buy_qty, msg.sell_qty);
-                        message_bar.set_message(msg);
+                    if (buy_qty > 0 || sell_qty > 0) {
+                        if let Some(message_bar) = PROGRESS_PNL.get(&key) {
+                            let msg = format!("Pnl: {:?}, Buy Quantity: {:?}, Sell Quantity: {:?}", msg.open_position_pnl, msg.buy_qty, msg.sell_qty);
+                            message_bar.set_message(msg);
+                        }
                     }
-                } else if let (Some(account_id), Some(net_quantity)) = (msg.account_id.clone(), msg.net_quantity) {
-                    if net_quantity == 0 {
-                        let key = (client.brokerage, Account::new(client.brokerage, account_id.clone()), symbol_code.clone());
+                    if buy_qty == 0 && sell_qty == 0 {
                         if let Some((key, pb)) = PROGRESS_PNL.remove(&key) {
                             pb.finish_and_clear();
                         }
@@ -194,12 +201,7 @@ pub async fn match_pnl_plant_id(
 
 
                 //todo do this with a simple message, quantity open, and position side, symbol name, symbol code
-                let account_id = match msg.account_id {
-                    None => return,
-                    Some(id) => id
-                };
 
-                let (side, quantity) = update_position(account_id.clone(), &symbol_code, msg.buy_qty, msg.sell_qty, &client);
                 if side.is_none() {
                     if let Some((symbol_code, mut position)) = POSITIONS.remove(symbol_code) {
                         let tag = match client.last_tag.get(&account_id) {
