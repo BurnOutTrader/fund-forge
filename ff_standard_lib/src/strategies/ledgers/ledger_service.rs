@@ -115,7 +115,8 @@ impl LedgerService {
 
     pub fn print_trade_statistics(&self, account: &Account) {
         if let Some(ledger) = self.ledgers.get(account) {
-            ledger.print_trade_statistics();
+            let msg = ledger.print_trade_statistics();
+            println!("{}", msg);
         }
     }
 
