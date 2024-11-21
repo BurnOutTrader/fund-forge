@@ -6,7 +6,7 @@ use rust_decimal::Decimal;
 use rust_decimal::prelude::{FromPrimitive, ToPrimitive};
 use tokio::time::timeout;
 use ff_standard_lib::messages::data_server_messaging::{DataServerResponse, FundForgeError};
-use ff_standard_lib::product_maps::rithmic::maps::{find_base_symbol, get_available_rithmic_symbol_names, get_exchange_by_symbol_name, get_futures_commissions_info, get_rithmic_symbol_info};
+use ff_standard_lib::product_maps::rithmic::maps::{find_base_symbol, get_available_rithmic_symbol_names, get_exchange_by_symbol_name, get_futures_commissions_info, get_futures_symbol_info};
 use crate::server_features::server_side_brokerage::BrokerApiResponse;
 use ff_standard_lib::standardized_types::accounts::{Account, AccountId};
 use ff_standard_lib::standardized_types::enums::StrategyMode;
@@ -93,13 +93,13 @@ impl BrokerApiResponse for RithmicBrokerageClient {
         symbol_name: SymbolName,
         callback_id: u64
     ) -> DataServerResponse {
-        match get_rithmic_symbol_info(&symbol_name) {
+        match get_futures_symbol_info(&symbol_name) {
             Ok(symbol_info) => DataServerResponse::SymbolInfo {callback_id, symbol_info},
             Err(e) => {
                 match find_base_symbol(&symbol_name) {
                     None => {}
                     Some(symbol) => {
-                        return match get_rithmic_symbol_info(&symbol) {
+                        return match get_futures_symbol_info(&symbol) {
                             Ok(info) => DataServerResponse::SymbolInfo { callback_id, symbol_info: info },
                             Err(e) => DataServerResponse::Error { callback_id, error: FundForgeError::ServerErrorDebug(format!("{}", e)) }
                         }

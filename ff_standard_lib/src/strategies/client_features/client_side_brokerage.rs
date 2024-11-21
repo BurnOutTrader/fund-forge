@@ -6,7 +6,7 @@ use tokio::sync::oneshot;
 use tokio::time::timeout;
 use crate::messages::data_server_messaging::{DataServerRequest, DataServerResponse, FundForgeError};
 use crate::product_maps::oanda::maps::{get_oanda_symbol_names, OANDA_SYMBOL_INFO, SYMBOL_DIVISORS};
-use crate::product_maps::rithmic::maps::{find_base_symbol, get_available_rithmic_symbol_names, get_rithmic_intraday_margin_in_usd, get_rithmic_symbol_info};
+use crate::product_maps::rithmic::maps::{find_base_symbol, get_available_rithmic_symbol_names, get_rithmic_intraday_margin_in_usd, get_futures_symbol_info};
 use crate::standardized_types::accounts::{AccountId, AccountInfo, Currency};
 use crate::standardized_types::broker_enum::Brokerage;
 use crate::standardized_types::new_types::{Price, Volume};
@@ -69,13 +69,13 @@ impl Brokerage {
     pub async fn symbol_info(&self, symbol_name: SymbolName) -> Result<SymbolInfo, FundForgeError> {
         match self {
             Brokerage::Rithmic(_) => {
-                match get_rithmic_symbol_info(&symbol_name) {
+                match get_futures_symbol_info(&symbol_name) {
                     Ok(symbol_info) => Ok(symbol_info),
                     Err(_) => {
                        match find_base_symbol(&symbol_name) {
                             None => return Err(FundForgeError::ClientSideErrorDebug(format!("Symbol info not found: {}", symbol_name))),
                             Some(symbol) => {
-                                return match get_rithmic_symbol_info(&symbol) {
+                                return match get_futures_symbol_info(&symbol) {
                                     Ok(info) => Ok(info),
                                     Err(e) => Err(FundForgeError::ClientSideErrorDebug(format!("{}", e)))
                                 }

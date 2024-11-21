@@ -3,7 +3,7 @@ use tokio::sync::oneshot;
 use tokio::time::timeout;
 use crate::messages::data_server_messaging::{DataServerRequest, DataServerResponse, FundForgeError};
 use crate::product_maps::oanda::maps::OANDA_SYMBOL_INFO;
-use crate::product_maps::rithmic::maps::get_rithmic_symbol_info;
+use crate::product_maps::rithmic::maps::get_futures_symbol_info;
 use crate::standardized_types::base_data::base_data_type::BaseDataType;
 use crate::standardized_types::datavendor_enum::DataVendor;
 use crate::standardized_types::enums::{MarketType, PrimarySubscription};
@@ -139,7 +139,7 @@ impl DataVendor {
     pub async fn decimal_accuracy(&self, symbol_name: SymbolName) -> Result<u32, FundForgeError> {
         match self {
             DataVendor::Rithmic => {
-                return match get_rithmic_symbol_info(&symbol_name) {
+                return match get_futures_symbol_info(&symbol_name) {
                     Ok(info) => Ok(info.decimal_accuracy),
                     Err(e) => return Err(FundForgeError::ClientSideErrorDebug(format!("Error getting decimal accuracy Symbol not found in rithmic_symbol_info: {}", e)))
                 };
@@ -180,7 +180,7 @@ impl DataVendor {
         match self {
             DataVendor::DataBento => {}
             DataVendor::Rithmic => {
-                return match get_rithmic_symbol_info(&symbol_name) {
+                return match get_futures_symbol_info(&symbol_name) {
                     Ok(info) => Ok(info.tick_size),
                     Err(e) => return Err(FundForgeError::ClientSideErrorDebug(format!("Error getting tick size: {}", e)))
                 };

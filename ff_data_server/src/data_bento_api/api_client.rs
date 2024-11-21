@@ -1,15 +1,12 @@
 use std::sync::Arc;
-use structopt::lazy_static::lazy_static;
 use ff_standard_lib::messages::data_server_messaging::FundForgeError;
 use crate::ServerLaunchOptions;
 use std::fs;
 use dashmap::DashMap;
 use databento::{HistoricalClient, LiveClient};
-use databento::dbn::{PitSymbolMap, SType, Schema};
-use tokio::sync::OnceCell;
+use databento::dbn::{SType, Schema};
+use tokio::sync::{Mutex, OnceCell};
 use toml::Value;
-use ff_standard_lib::standardized_types::subscriptions::SymbolName;
-use crate::oanda_api::api_client::OandaClient;
 
 
 static DATA_BENTO_CLIENT: OnceCell<Arc<DataBentoClient>> = OnceCell::const_new();
@@ -30,8 +27,8 @@ pub fn get_data_bento_client() -> Result<Arc<DataBentoClient>, FundForgeError> {
 }
 
 pub struct DataBentoClient {
-    historical_client: HistoricalClient,
-    live_clients: DashMap<(String, Schema, SType), LiveClient>,
+    pub historical_client: Arc<Mutex<HistoricalClient>>,
+    pub live_clients: DashMap<(String, Schema, SType), LiveClient>,
 }
 
 impl DataBentoClient {
@@ -51,7 +48,7 @@ impl DataBentoClient {
         };
 
         Ok(Self {
-            historical_client,
+            historical_client: Arc::new(Mutex::new(historical_client)),
             live_clients: DashMap::new()
         })
     }
