@@ -1,7 +1,7 @@
 use std::cmp::min;
 use std::collections::BTreeMap;
 use async_trait::async_trait;
-use chrono::{DateTime, Duration, TimeDelta, Utc};
+use chrono::{DateTime, Datelike, Duration, TimeDelta, Utc};
 use indicatif::{ProgressBar, ProgressStyle};
 use crate::rithmic_api::client_base::rithmic_proto_objects::rti::request_login::SysInfraType;
 use crate::rithmic_api::client_base::rithmic_proto_objects::rti::{RequestMarketDataUpdate, RequestTimeBarUpdate};
@@ -352,6 +352,7 @@ impl VendorApiResponse for RithmicBrokerageClient {
 
     async fn update_historical_data(&self, symbol: Symbol, base_data_type: BaseDataType, resolution: Resolution, from: DateTime<Utc>, to: DateTime<Utc>, from_back: bool, progress_bar: ProgressBar, is_bulk_download: bool) -> Result<(), FundForgeError> {
         const SYSTEM: SysInfraType = SysInfraType::HistoryPlant;
+        let earliest_date = DateTime::parse_from_rfc3339("2019-06-03T00:00:00Z").unwrap().with_timezone(&Utc);
         const TIME_NEGATIVE: std::time::Duration = std::time::Duration::from_secs(1);
         let symbol_name = symbol.name.clone();
         let exchange = match get_exchange_by_symbol_name(&symbol_name) {
@@ -394,6 +395,12 @@ impl VendorApiResponse for RithmicBrokerageClient {
 
         let mut empty_windows = 0;
         let mut combined_data = BTreeMap::new();
+
+        let max_bars = match resolution {
+            Resolution::Ticks(_) => 5000,
+            _ => 10000,
+        };
+        let mut last_save_day = from.day();
         'main_loop: loop {
             // Calculate window end based on start time (always 1 hour)
             let window_end = window_start + resolution_multiplier;
@@ -402,14 +409,10 @@ impl VendorApiResponse for RithmicBrokerageClient {
                 false => Utc::now() + Duration::seconds(2),
             };
 
-            if from.timestamp() > to.timestamp() - 3{
-                break 'main_loop;
-            }
-
             progress_bar.set_message(format!("Downloading: ({}: {}) from: {}, to {}", resolution, base_data_type, window_start, window_end.format("%Y-%m-%d %H:%M:%S")));
             let (sender, receiver) = oneshot::channel();
 
-            self.send_replay_request(base_data_type, resolution, symbol_name.clone(), exchange, window_start, window_end, sender).await;
+            self.send_replay_request(max_bars, base_data_type, resolution, symbol_name.clone(), exchange, window_start, window_end, sender).await;
             const TIME_OUT: std::time::Duration = std::time::Duration::from_secs(180);
             let data_map = match timeout(TIME_OUT, receiver).await {
                 Ok(receiver_result) => match receiver_result {
@@ -417,7 +420,7 @@ impl VendorApiResponse for RithmicBrokerageClient {
                         if response.is_empty() {
                             empty_windows += 1;
                             //eprintln!("Empty window: {} - {}", window_start, window_end);
-                            if empty_windows >= 100 {
+                            if empty_windows >= 250 || (empty_windows > 100 && from <= earliest_date) {
                                 progress_bar.set_message(format!("Empty window: {} - {}", window_start, window_end));
                                 break 'main_loop;
                             }
@@ -458,12 +461,13 @@ impl VendorApiResponse for RithmicBrokerageClient {
 
             combined_data.extend(data_map);
 
-            if combined_data.len() >= 500000 {
+            if window_start.day() != last_save_day || is_end {
                 let save_data: Vec<BaseDataEnum> = combined_data.clone().into_values().collect();
                 if let Err(e) = data_storage.save_data_bulk(save_data, is_bulk_download).await {
                     progress_bar.set_message(format!("Failed to save data for: {} - {}, {}", window_start, window_end, e));
                     break 'main_loop;
                 }
+                last_save_day = window_start.day();
                 combined_data.clear();
             }
 

@@ -919,7 +919,7 @@ impl RithmicBrokerageClient {
     }
 
 
-    pub(crate) async fn send_replay_request(&self, base_data_type: BaseDataType, resolution: Resolution, symbol_name: SymbolName, exchange: FuturesExchange, window_start: DateTime<Utc>, window_end: DateTime<Utc>, sender: oneshot::Sender<BTreeMap<DateTime<Utc>,BaseDataEnum>>) {
+    pub(crate) async fn send_replay_request(&self, max_bars: i32, base_data_type: BaseDataType, resolution: Resolution, symbol_name: SymbolName, exchange: FuturesExchange, window_start: DateTime<Utc>, window_end: DateTime<Utc>, sender: oneshot::Sender<BTreeMap<DateTime<Utc>,BaseDataEnum>>) {
         const SYSTEM: SysInfraType = SysInfraType::HistoryPlant;
         // Send the request based on data type
         let callback_id = self.generate_callback_id().await;
@@ -946,7 +946,7 @@ impl RithmicBrokerageClient {
                     bar_type_period: Some(num),
                     start_index: Some(window_start.timestamp() as i32),
                     finish_index: Some(window_end.timestamp() as i32),
-                    user_max_count: Some(10000),
+                    user_max_count: Some(max_bars),
                     direction: Some(Direction::First.into()),
                     time_order: Some(TimeOrder::Forwards.into()),
                     resume_bars: Some(false),
@@ -967,7 +967,7 @@ impl RithmicBrokerageClient {
                     bar_type_specifier: Some("1".to_string()),
                     start_index: Some(window_start.timestamp() as i32),
                     finish_index: Some(window_end.timestamp() as i32),
-                    user_max_count: Some(10000),
+                    user_max_count: Some(max_bars),
                     custom_session_open_ssm: None,
                     custom_session_close_ssm: None,
                     direction: Some(request_tick_bar_replay::Direction::First.into()),
