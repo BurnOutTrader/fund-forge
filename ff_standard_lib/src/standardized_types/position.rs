@@ -545,3 +545,309 @@ impl Position {
         }
     }
 }
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use rust_decimal_macros::dec;
+    use crate::product_maps::rithmic::maps::get_futures_symbol_info;
+    use crate::standardized_types::base_data::quote::Quote;
+    use crate::standardized_types::datavendor_enum::DataVendor;
+    use crate::standardized_types::enums::{FuturesExchange, MarketType};
+    use crate::standardized_types::subscriptions::Symbol;
+
+    fn setup_basic_position() -> Position {
+        let symbol_info = get_futures_symbol_info("NQ").unwrap();
+        Position::new(
+            "NQ".to_string(),
+            "NQ2403".to_string(), // Example futures contract
+            Account::new(Brokerage::Test, "test-account".to_string()),
+            PositionSide::Long,
+            dec!(1.0),
+            dec!(17500.0), // More realistic NQ price
+            "test-pos-1".to_string(),
+            symbol_info,
+            dec!(1.0),
+            "test".to_string(),
+            Utc::now(),
+            PositionCalculationMode::FIFO,
+        )
+    }
+
+    #[tokio::test]
+    async fn test_fifo_position_handling() {
+        let mut position = setup_basic_position();
+
+        // Add multiple entries at different prices
+        position.add_to_position(
+            StrategyMode::Backtest,
+            true,
+            Currency::USD,
+            dec!(17525.0),
+            dec!(0.5),
+            Utc::now(),
+            "test-add-1".to_string()
+        ).await;
+
+        position.add_to_position(
+            StrategyMode::Backtest,
+            true,
+            Currency::USD,
+            dec!(17550.0),
+            dec!(0.5),
+            Utc::now(),
+            "test-add-2".to_string()
+        ).await;
+
+        // Verify entry prices are in correct order
+        assert_eq!(position.open_entry_prices.len(), 3);
+        assert_eq!(position.open_entry_prices[0].price, dec!(17500.0));
+        assert_eq!(position.open_entry_prices[1].price, dec!(17525.0));
+        assert_eq!(position.open_entry_prices[2].price, dec!(17550.0));
+
+        // Reduce position (should take from first entry - FIFO)
+        let event = position.reduce_position_size(
+            dec!(17575.0),
+            dec!(1.0),
+            Currency::USD,
+            dec!(1.0),
+            Utc::now(),
+            "test-reduce-1".to_string()
+        ).await;
+
+        // Verify FIFO behavior
+        assert_eq!(position.open_entry_prices.len(), 2);
+        assert_eq!(position.open_entry_prices[0].price, dec!(17525.0));
+        assert_eq!(position.open_entry_prices[1].price, dec!(17550.0));
+
+        match event {
+            PositionUpdateEvent::PositionReduced { booked_pnl, .. } => {
+                assert!(booked_pnl > dec!(0.0)); // Should be profitable
+            },
+            _ => panic!("Expected PositionReduced event"),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_lifo_position_handling() {
+        let symbol_info = get_futures_symbol_info("NQ").unwrap();
+        let mut position = Position::new(
+            "NQ".to_string(),
+            "NQ2403".to_string(),
+            Account::new(Brokerage::Test, "test-account".to_string()),
+            PositionSide::Long,
+            dec!(1.0),
+            dec!(17500.0),
+            "test-pos-1".to_string(),
+            symbol_info,
+            dec!(1.0),
+            "test".to_string(),
+            Utc::now(),
+            PositionCalculationMode::LIFO,
+        );
+
+        // Add multiple entries
+        position.add_to_position(
+            StrategyMode::Backtest,
+            true,
+            Currency::USD,
+            dec!(17525.0),
+            dec!(1.0),
+            Utc::now(),
+            "test-add-1".to_string()
+        ).await;
+
+        position.add_to_position(
+            StrategyMode::Backtest,
+            true,
+            Currency::USD,
+            dec!(17550.0),
+            dec!(1.0),
+            Utc::now(),
+            "test-add-2".to_string()
+        ).await;
+
+        // Reduce position (should take from last entry - LIFO)
+        let event = position.reduce_position_size(
+            dec!(17575.0),
+            dec!(1.0),
+            Currency::USD,
+            dec!(1.0),
+            Utc::now(),
+            "test-reduce-1".to_string()
+        ).await;
+
+        // Verify LIFO behavior
+        assert_eq!(position.open_entry_prices.len(), 2);
+        assert_eq!(position.open_entry_prices[0].price, dec!(17500.0));
+        assert_eq!(position.open_entry_prices[1].price, dec!(17525.0));
+
+        match event {
+            PositionUpdateEvent::PositionReduced { booked_pnl, .. } => {
+                assert!(booked_pnl > dec!(0.0));
+            },
+            _ => panic!("Expected PositionReduced event"),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_partial_position_reduction() {
+        let mut position = setup_basic_position();
+
+        // Add position
+        position.add_to_position(
+            StrategyMode::Backtest,
+            true,
+            Currency::USD,
+            dec!(17525.0),
+            dec!(2.0),
+            Utc::now(),
+            "test-add-1".to_string()
+        ).await;
+
+        // Reduce position partially
+        position.reduce_position_size(
+            dec!(17550.0),
+            dec!(1.5),
+            Currency::USD,
+            dec!(1.0),
+            Utc::now(),
+            "test-reduce-1".to_string()
+        ).await;
+
+        // Verify remaining position
+        assert_eq!(position.quantity_open, dec!(1.5));
+        assert_eq!(position.quantity_closed, dec!(1.5));
+        assert!(!position.is_closed);
+
+        // Verify entry prices were properly adjusted
+        let total_entry_volume: Decimal = position.open_entry_prices.iter()
+            .map(|entry| entry.volume)
+            .sum();
+        assert_eq!(total_entry_volume, position.quantity_open);
+    }
+
+    #[tokio::test]
+    async fn test_complete_position_closure() {
+        let mut position = setup_basic_position();
+
+        // Close entire position
+        let event = position.reduce_position_size(
+            dec!(17525.0),
+            dec!(1.0),
+            Currency::USD,
+            dec!(1.0),
+            Utc::now(),
+            "test-close".to_string()
+        ).await;
+
+        // Verify position state
+        assert!(position.is_closed);
+        assert_eq!(position.quantity_open, dec!(0.0));
+        assert_eq!(position.open_pnl, dec!(0.0));
+        assert!(position.close_time.is_some());
+        assert!(position.open_entry_prices.is_empty());
+
+        match event {
+            PositionUpdateEvent::PositionClosed { .. } => {},
+            _ => panic!("Expected PositionClosed event"),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_average_price_calculation() {
+        let mut position = setup_basic_position();
+
+        // Initial average price should be the entry price
+        assert_eq!(position.average_price, dec!(17500.0));
+
+        // Add position at different price
+        position.add_to_position(
+            StrategyMode::Backtest,
+            true,
+            Currency::USD,
+            dec!(17600.0),
+            dec!(1.0),
+            Utc::now(),
+            "test-add-1".to_string()
+        ).await;
+
+        // Verify weighted average price
+        assert_eq!(position.average_price, dec!(17550.0));
+
+        // Reduce position
+        position.reduce_position_size(
+            dec!(17650.0),
+            dec!(1.0),
+            Currency::USD,
+            dec!(1.0),
+            Utc::now(),
+            "test-reduce-1".to_string()
+        ).await;
+
+        // Verify average price is recalculated correctly
+        assert_eq!(position.average_price, dec!(17600.0));
+    }
+
+    #[tokio::test]
+    async fn test_pnl_calculation() {
+        let mut position = setup_basic_position();
+
+        // Add to position
+        position.add_to_position(
+            StrategyMode::Backtest,
+            true,
+            Currency::USD,
+            dec!(17525.0),
+            dec!(1.0),
+            Utc::now(),
+            "test-add-1".to_string()
+        ).await;
+
+        // Update market price and check open PnL
+        let mock_data = BaseDataEnum::Quote(Quote {
+            symbol: Symbol::new("NQ".to_string(), DataVendor::Rithmic, MarketType::Futures(FuturesExchange::CME)),
+            bid: dec!(17550.0),
+            ask_volume: dec!(100),
+            ask: dec!(17550.0),
+            time: Utc::now().to_string(),
+            bid_volume: dec!(100),
+        });
+
+        let open_pnl = position.update_base_data(&mock_data, Currency::USD);
+        assert!(open_pnl > dec!(0.0));
+
+        // Close half position and verify booked PnL
+        let event = position.reduce_position_size(
+            dec!(17550.0),
+            dec!(1.0),
+            Currency::USD,
+            dec!(1.0),
+            Utc::now(),
+            "test-reduce-1".to_string()
+        ).await;
+
+        match event {
+            PositionUpdateEvent::PositionReduced { booked_pnl, open_pnl, .. } => {
+                assert!(booked_pnl > dec!(0.0));
+                assert!(open_pnl > dec!(0.0));
+            },
+            _ => panic!("Expected PositionReduced event"),
+        }
+    }
+
+    #[tokio::test]
+    #[should_panic(expected = "Something wrong with logic, ledger should know this not to be possible")]
+    async fn test_invalid_reduction() {
+        let mut position = setup_basic_position();
+
+        // Try to reduce more than available
+        position.reduce_position_size(
+            dec!(17525.0),
+            dec!(2.0), // More than position size
+            Currency::USD,
+            dec!(1.0),
+            Utc::now(),
+            "test-invalid-reduce".to_string()
+        ).await;
+    }
+}
