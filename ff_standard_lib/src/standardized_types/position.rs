@@ -247,6 +247,7 @@ pub struct Trade {
     pub exit_quantity: Volume,
     pub entry_time: String,
     pub exit_time: String,
+    pub profit: Price,
 }
 
 #[derive(Debug)]
@@ -441,16 +442,6 @@ impl Position {
             // Calculate how much we can exit from this entry price level
             let exit_quantity = remaining_exit_quantity.min(entry.volume);
 
-            // Record the trade
-            self.completed_trades.push(Trade {
-                entry_price: entry.price,
-                entry_quantity: exit_quantity,
-                exit_price: market_price,
-                exit_quantity,
-                entry_time: self.open_time.clone(), // We could add entry_time to EntryPrice if we need exact times
-                exit_time: time.to_string(),
-            });
-
             // Calculate PnL for this portion
             let portion_booked_pnl = calculate_theoretical_pnl(
                 self.account.brokerage,
@@ -462,6 +453,17 @@ impl Position {
                 self.exchange_rate_multiplier,
                 account_currency
             );
+
+            // Record the trade
+            self.completed_trades.push(Trade {
+                entry_price: entry.price,
+                entry_quantity: exit_quantity,
+                exit_price: market_price,
+                exit_quantity,
+                entry_time: self.open_time.clone(), // We could add entry_time to EntryPrice if we need exact times
+                exit_time: time.to_string(),
+                profit: portion_booked_pnl
+            });
 
             // If we didn't use all of this entry, we need to put back the remainder
             let remaining_entry_volume = entry.volume - exit_quantity;

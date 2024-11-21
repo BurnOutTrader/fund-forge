@@ -767,11 +767,6 @@ impl Ledger {
                 for entry in self.positions_closed.iter() {
                     for position in entry.value() {
                         for trade in &position.completed_trades {
-                            let pnl = match position.side {
-                                PositionSide::Long => (trade.exit_price - trade.entry_price) * trade.entry_quantity,
-                                PositionSide::Short => (trade.entry_price - trade.exit_price) * trade.entry_quantity,
-                            };
-
                             let export = TradeExport {
                                 symbol_code: position.symbol_code.clone(),
                                 position_id: position.position_id.clone(),
@@ -782,7 +777,7 @@ impl Ledger {
                                 exit_quantity: trade.exit_quantity,
                                 entry_time: trade.entry_time.clone(),
                                 exit_time: trade.exit_time.clone(),
-                                pnl: pnl.round_dp(2),
+                                pnl: trade.profit,
                                 tag: position.tag.clone(),
                             };
 
@@ -825,12 +820,7 @@ impl Ledger {
                 for trade in &position.completed_trades {
                     total_trades += 1;
 
-                    let pnl = match position.side {
-                        PositionSide::Long => (trade.exit_price - trade.entry_price) * trade.entry_quantity,
-                        PositionSide::Short => (trade.entry_price - trade.exit_price) * trade.entry_quantity,
-                    };
-
-                    total_pnl += pnl;
+                    let pnl = trade.profit;
 
                     if pnl > dec!(0.0) {
                         wins += 1;
