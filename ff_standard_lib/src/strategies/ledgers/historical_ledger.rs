@@ -205,9 +205,10 @@ impl Ledger {
                         if !self.positions_closed.contains_key(&symbol_code) {
                             self.positions_closed.insert(symbol_code.clone(), vec![]);
                         }
-                        if let Some(mut positions_closed) = self.positions_closed.get_mut(&symbol_code) {
-                            positions_closed.value_mut().push(existing_position);
-                        }
+                        self.positions_closed
+                            .entry(symbol_code.clone())
+                            .or_insert_with(Vec::new)
+                            .push(existing_position);
                         //println!("Closed Position: {}", symbol_name);
                     }
                     _ => panic!("This shouldn't happen")
