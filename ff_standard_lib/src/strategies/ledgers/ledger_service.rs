@@ -111,7 +111,8 @@ impl LedgerService {
 
     pub fn print_ledgers(&self) {
         for ledger in self.ledgers.iter() {
-            ledger.value().print();
+            let msg = ledger.value().ledger_statistics_to_string();
+            println!("{}", msg);
         }
     }
 
@@ -129,7 +130,7 @@ impl LedgerService {
 
     pub fn print_trade_statistics(&self, account: &Account) {
         if let Some(ledger) = self.ledgers.get(account) {
-            let msg = ledger.print_trade_statistics();
+            let msg = ledger.trade_statistics_to_string();
             println!("{}", msg);
         }
     }
@@ -144,7 +145,7 @@ impl LedgerService {
 
     pub fn print_ledger(&self, account: &Account) {
        if let Some(ledger) = self.ledgers.get(account) {
-           let string = ledger.value().print(); //todo need to return the string here
+           let string = ledger.value().ledger_statistics_to_string(); //todo need to return the string here
            println!("{}", string);
        }
     }

@@ -468,7 +468,7 @@ impl Ledger {
         true
     }
 
-    pub fn print(&self) -> String {
+    pub fn ledger_statistics_to_string(&self) -> String {
         let mut total_trades: usize = 0;
         let mut losses: usize = 0;
         let mut wins: usize = 0;
@@ -801,7 +801,7 @@ impl Ledger {
         }
     }
 
-    pub fn print_trade_statistics(&self) -> String {
+    pub fn trade_statistics_to_string(&self) -> String {
         let mut total_trades: usize = 0;
         let mut wins: usize = 0;
         let mut losses: usize = 0;
