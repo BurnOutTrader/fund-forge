@@ -166,7 +166,7 @@ pub async fn match_pnl_plant_id(
                     let key = (client.brokerage, Account::new(client.brokerage, account_id.clone()), symbol_code.clone());
                     if !PROGRESS_PNL.contains_key(&key) && (buy_qty > 0 || sell_qty > 0) {
                         let message_bar = MULTIBAR.add(ProgressBar::new_spinner());
-                        let prefix = format!("{}: {}", client.brokerage, account_id);
+                        let prefix = format!("{} {}: {}", symbol_code, client.brokerage, account_id);
                         let bright_green_prefix = format!("\x1b[92m{}\x1b[0m", prefix);
                         // Set the colored prefix
                         message_bar.set_prefix(bright_green_prefix);
@@ -178,7 +178,7 @@ pub async fn match_pnl_plant_id(
                         PROGRESS_PNL.insert(key.clone(), message_bar);
                     }
                     if let Some(message_bar) = PROGRESS_PNL.get(&key) {
-                        let msg = format!("Pnl Update: {:?}, Pnl: {:?}, Buy Quantity: {:?}, Sell Quantity: {:?}", msg.symbol, msg.open_position_pnl, msg.buy_qty, msg.sell_qty);
+                        let msg = format!("Pnl: {:?}, Buy Quantity: {:?}, Sell Quantity: {:?}", msg.open_position_pnl, msg.buy_qty, msg.sell_qty);
                         message_bar.set_message(msg);
                     }
                 } else if let (Some(account_id), Some(net_quantity)) = (msg.account_id.clone(), msg.net_quantity) {
