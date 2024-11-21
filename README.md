@@ -82,9 +82,8 @@ See [Live Trading](#current-state-of-live-trading) & [Rithmic Setup](ff_data_ser
 [more on architecture](#Architecture)
 
 ## Historical Data
-You can download data that I have already parsed [here](https://1drv.ms/f/s!AllvRPz1aHoThKQU2hQbLEBqZyQ5RA?e=nzilot) The Oanda folder should be put into the following directory "ff_data_server/data/historical/". 
 
-Or you can configure the data server to download any desired data for you automatically.
+You can configure the data server to download any desired data for you automatically.
 Just see the setup guide for your data vendor/brokerage.
 
 If backtesting with 1 hour data resolution, set the buffer duration >= 1 second to avoid slow back tests.

@@ -1532,7 +1532,7 @@ Remember:
 # Statistics
 Trade statistics are recorded in 2 ways.
 1. Position statistics: using a flat to flat algorithm, where a position might consist of multiple trades, a position is closed only when the account becomes flat the symbol.
-2. Trade statistics: using either first in first out, or last in first out, where a trade is a single entry and exit or partial exit, a trade is created(closed) whenever an opposing order is filled.
+2. Trade statistics: using either first in first out, or last in first out, depending on brokerage, where a trade is a single entry and exit or partial exit, a trade is created(closed) whenever an opposing order is filled.
 
 ```rust
 fn example(strategy: &FundForgeStrategy) {
