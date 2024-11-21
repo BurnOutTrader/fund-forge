@@ -1,5 +1,6 @@
 use std::collections::VecDeque;
 use std::fmt;
+use std::fmt::Display;
 use std::str::FromStr;
 use chrono::{DateTime, Duration, TimeZone, Utc};
 use chrono_tz::Tz;
@@ -240,6 +241,25 @@ impl EntryPrice {
 #[derive(Clone, Serialize_rkyv, Deserialize_rkyv, Archive, Debug, PartialEq, Serialize, Deserialize, PartialOrd,)]
 #[archive(compare(PartialEq), check_bytes)]
 #[archive_attr(derive(Debug))]
+pub enum TradeResult {
+    Profit,
+    Loss,
+    BreakEven,
+}
+impl Display for TradeResult {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let str = match self {
+            TradeResult::Profit => "Win".to_string(),
+            TradeResult::Loss => "Loss".to_string(),
+            TradeResult::BreakEven => "BreakEven".to_string(),
+        };
+        write!(f, "{}", str)
+    }
+}
+
+#[derive(Clone, Serialize_rkyv, Deserialize_rkyv, Archive, Debug, PartialEq, Serialize, Deserialize, PartialOrd,)]
+#[archive(compare(PartialEq), check_bytes)]
+#[archive_attr(derive(Debug))]
 pub struct Trade {
     pub entry_price: Price,
     pub entry_quantity: Volume,
@@ -248,6 +268,7 @@ pub struct Trade {
     pub entry_time: String,
     pub exit_time: String,
     pub profit: Price,
+    pub result: TradeResult,
 }
 
 #[derive(Debug)]
@@ -454,6 +475,11 @@ impl Position {
                 account_currency
             );
 
+            let result = match portion_booked_pnl {
+                pnl if pnl > dec!(0.0) => TradeResult::Profit,
+                pnl if pnl < dec!(0.0) => TradeResult::Loss,
+                _ => TradeResult::BreakEven,
+            };
             // Record the trade
             self.completed_trades.push(Trade {
                 entry_price: entry.price,
@@ -462,7 +488,8 @@ impl Position {
                 exit_quantity,
                 entry_time: self.open_time.clone(), // We could add entry_time to EntryPrice if we need exact times
                 exit_time: time.to_string(),
-                profit: portion_booked_pnl
+                profit: portion_booked_pnl,
+                result
             });
 
             // If we didn't use all of this entry, we need to put back the remainder

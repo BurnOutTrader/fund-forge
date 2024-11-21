@@ -21,7 +21,7 @@ use crate::standardized_types::broker_enum::Brokerage;
 use crate::standardized_types::enums::{OrderSide, PositionSide, StrategyMode};
 use crate::standardized_types::new_types::{Price, Volume};
 use crate::standardized_types::orders::{OrderId, OrderUpdateEvent};
-use crate::standardized_types::position::{Position, PositionCalculationMode, PositionId, PositionUpdateEvent};
+use crate::standardized_types::position::{Position, PositionCalculationMode, PositionId, PositionUpdateEvent, TradeResult};
 use crate::standardized_types::subscriptions::{SymbolCode, SymbolName};
 use crate::standardized_types::symbol_info::SymbolInfo;
 use crate::standardized_types::time_slices::TimeSlice;
@@ -779,6 +779,7 @@ impl Ledger {
                                 exit_time: trade.exit_time.clone(),
                                 pnl: trade.profit,
                                 tag: position.tag.clone(),
+                                result: trade.result.to_string()
                             };
 
                             if let Err(e) = wtr.serialize(export) {
@@ -819,19 +820,20 @@ impl Ledger {
             for position in entry.value() {
                 for trade in &position.completed_trades {
                     total_trades += 1;
+                    total_pnl += trade.profit;
 
-                    let pnl = trade.profit;
-
-                    if pnl > dec!(0.0) {
-                        wins += 1;
-                        win_pnl += pnl;
-                        largest_win = largest_win.max(pnl);
-                    } else if pnl < dec!(0.0) {
-                        losses += 1;
-                        loss_pnl += pnl;
-                        largest_loss = largest_loss.min(pnl);
-                    } else {
-                        break_even += 1;
+                    match trade.result {
+                        TradeResult::Profit => {
+                            wins += 1;
+                            win_pnl += trade.profit;
+                            largest_win = largest_win.max(trade.profit);
+                        },
+                        TradeResult::Loss => {
+                            losses += 1;
+                            loss_pnl += trade.profit;
+                            largest_loss = largest_loss.min(trade.profit);
+                        },
+                        TradeResult::BreakEven => break_even += 1,
                     }
 
                     // Calculate hold time
@@ -865,6 +867,15 @@ impl Ledger {
             dec!(0.0)
         };
 
+        // Calculate average risk/reward
+        let risk_reward = if avg_loss.abs() > dec!(0.0) {
+            avg_win / avg_loss.abs()
+        } else if avg_win > dec!(0.0) {
+            dec!(1000.0) // No losses, so effectively infinite R:R
+        } else {
+            dec!(0.0)
+        };
+
         let profit_factor = if loss_pnl.abs() > dec!(0.0) {
             win_pnl / loss_pnl.abs()
         } else if win_pnl > dec!(0.0) {
@@ -881,23 +892,24 @@ impl Ledger {
 
         format!(
             "\nDetailed Trade Statistics:\n\
-            Total Trades: {}\n\
-            Win Rate: {}%\n\
-            Wins: {}\n\
-            Losses: {}\n\
-            Break Even: {}\n\
-            Total PnL: {}\n\
-            Win PnL: {}\n\
-            Loss PnL: {}\n\
-            Average Win: {}\n\
-            Average Loss: {}\n\
-            Largest Win: {}\n\
-            Largest Loss: {}\n\
-            Profit Factor: {}\n\
-            Average Hold Time: {}\n\
-            Shortest Hold: {}\n\
-            Longest Hold: {}\n\
-            Commission Paid: {}\n",
+        Total Trades: {}\n\
+        Win Rate: {}%\n\
+        Wins: {}\n\
+        Losses: {}\n\
+        Break Even: {}\n\
+        Total PnL: {}\n\
+        Win PnL: {}\n\
+        Loss PnL: {}\n\
+        Average Win: {}\n\
+        Average Loss: {}\n\
+        Average Risk/Reward: {}\n\
+        Largest Win: {}\n\
+        Largest Loss: {}\n\
+        Profit Factor: {}\n\
+        Average Hold Time: {}\n\
+        Shortest Hold: {}\n\
+        Longest Hold: {}\n\
+        Commission Paid: {}\n",
             total_trades,
             win_rate,
             wins,
@@ -908,6 +920,7 @@ impl Ledger {
             loss_pnl.round_dp(2),
             avg_win.round_dp(2),
             avg_loss.round_dp(2),
+            risk_reward.round_dp(2),
             largest_win.round_dp(2),
             largest_loss.round_dp(2),
             profit_factor.round_dp(2),
@@ -932,4 +945,5 @@ struct TradeExport {
     exit_time: String,
     pnl: Decimal,
     tag: String,
+    result: String
 }
