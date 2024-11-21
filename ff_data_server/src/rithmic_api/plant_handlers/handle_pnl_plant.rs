@@ -1,4 +1,3 @@
-use std::collections::VecDeque;
 use std::str::FromStr;
 use std::sync::Arc;
 use chrono::{TimeZone, Utc};
@@ -18,12 +17,11 @@ use ff_standard_lib::standardized_types::accounts::Account;
 use ff_standard_lib::standardized_types::broker_enum::Brokerage;
 use ff_standard_lib::standardized_types::enums::PositionSide;
 use ff_standard_lib::standardized_types::new_types::Volume;
-use ff_standard_lib::standardized_types::position::{EntryPrice, Position, PositionCalculationMode};
+use ff_standard_lib::standardized_types::position::{Position};
 use ff_standard_lib::standardized_types::subscriptions::{SymbolCode};
 use crate::rithmic_api::api_client::RithmicBrokerageClient;
 use crate::rithmic_api::plant_handlers::create_datetime;
 use crate::rithmic_api::plant_handlers::handler_loop::send_updates;
-use ff_standard_lib::product_maps::rithmic::maps::get_futures_symbol_info;
 
 lazy_static! {
     pub static ref POSITIONS: DashMap<SymbolCode, Position> = DashMap::new();
@@ -160,7 +158,9 @@ pub async fn match_pnl_plant_id(
                 let time = create_datetime(ssboe as i64, usecs as i64).to_string();
                 //println!("PNL Update Message: {:?}", msg);
                 println!("{}: Pnl Update: {:?}, Pnl: {:?}, Buy Quantity: {:?}, Sell Quantity: {:?}", client.brokerage, msg.symbol, msg.open_position_pnl, msg.buy_qty, msg.sell_qty);
-                let account_id = match msg.account_id {
+
+                //todo do this with a simple message, quantity open, and position side, symbol name, symbol code
+                /*let account_id = match msg.account_id {
                     None => return,
                     Some(id) => id
                 };
@@ -252,6 +252,7 @@ pub async fn match_pnl_plant_id(
                                     tag,
                                     position_calculation_mode: PositionCalculationMode::FIFO,
                                     open_entry_prices: VecDeque::from(vec![EntryPrice::new(average_price, open_position_quantity)]),
+                                    completed_trades: vec![],
                                 };
                                 POSITIONS.insert(symbol_code.clone(), position.clone());
                             }
@@ -274,7 +275,7 @@ pub async fn match_pnl_plant_id(
                             }
                         };
                     }
-                }
+                }*/
             }
         },
         451 => {
@@ -372,6 +373,7 @@ pub async fn match_pnl_plant_id(
     }
 }
 
+#[allow(dead_code, unused)]
 fn update_position(
     account_id: String,
     symbol_code: &SymbolCode,
