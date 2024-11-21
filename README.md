@@ -20,7 +20,8 @@ See below for all the free historical data you will ever need.
 - 16-11-24: I added a lot of Ai generated indicators that are not tested.
 - 17-11-24: Added consolidators for daily and weekly resolutions (Have not been tested and will need some work to finish off), these need a TradingHours object to be passed in when subscribing to data. [see](ff_standard_lib/src/strategies/STRATEGIES_README.md/#trading-hours), also [see](ff_standard_lib/src/strategies/STRATEGIES_README.md/#subscriptions)
 - 20-11-24: Fixed some data base Serialization issues created when adding compression, add unit tests for data base.
-- 21-11-24: Starting DataBento Api
+- 21-11-24: Starting DataBento Api.
+- 21-11-24: Added Trade statistics for high accuracy backtesting and statistics. [see](ff_standard_lib/src/strategies/STRATEGIES_README.md/#statistics)
 
 ### Current State and Future Development
 The platform is currently in a semi-working state, think of it as a proof of concept, there is a lot of untested functionality, both in backtesting and live trading.
