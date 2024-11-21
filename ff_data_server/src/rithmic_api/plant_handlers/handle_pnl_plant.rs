@@ -1,7 +1,9 @@
+use std::collections::VecDeque;
 use std::str::FromStr;
 use std::sync::Arc;
 use chrono::{TimeZone, Utc};
 use dashmap::DashMap;
+use indicatif::{ProgressBar, ProgressStyle};
 #[allow(unused_imports)]
 use crate::rithmic_api::client_base::rithmic_proto_objects::rti::{AccountListUpdates, AccountPnLPositionUpdate, AccountRmsUpdates, BestBidOffer, BracketUpdates, DepthByOrder, DepthByOrderEndEvent, EndOfDayPrices, ExchangeOrderNotification, FrontMonthContractUpdate, IndicatorPrices, InstrumentPnLPositionUpdate, LastTrade, MarketMode, OpenInterest, OrderBook, OrderPriceLimits, QuoteStatistics, RequestAccountList, RequestAccountRmsInfo, RequestHeartbeat, RequestLoginInfo, RequestMarketDataUpdate, RequestPnLPositionSnapshot, RequestPnLPositionUpdates, RequestProductCodes, RequestProductRmsInfo, RequestReferenceData, RequestTickBarUpdate, RequestTimeBarUpdate, RequestVolumeProfileMinuteBars, ResponseAcceptAgreement, ResponseAccountList, ResponseAccountRmsInfo, ResponseAccountRmsUpdates, ResponseAuxilliaryReferenceData, ResponseBracketOrder, ResponseCancelAllOrders, ResponseCancelOrder, ResponseDepthByOrderSnapshot, ResponseDepthByOrderUpdates, ResponseEasyToBorrowList, ResponseExitPosition, ResponseFrontMonthContract, ResponseGetInstrumentByUnderlying, ResponseGetInstrumentByUnderlyingKeys, ResponseGetVolumeAtPrice, ResponseGiveTickSizeTypeTable, ResponseHeartbeat, ResponseLinkOrders, ResponseListAcceptedAgreements, ResponseListExchangePermissions, ResponseListUnacceptedAgreements, ResponseLogin, ResponseLoginInfo, ResponseLogout, ResponseMarketDataUpdate, ResponseMarketDataUpdateByUnderlying, ResponseModifyOrder, ResponseModifyOrderReferenceData, ResponseNewOrder, ResponseOcoOrder, ResponseOrderSessionConfig, ResponsePnLPositionSnapshot, ResponsePnLPositionUpdates, ResponseProductCodes, ResponseProductRmsInfo, ResponseReferenceData, ResponseReplayExecutions, ResponseResumeBars, ResponseRithmicSystemInfo, ResponseSearchSymbols, ResponseSetRithmicMrktDataSelfCertStatus, ResponseShowAgreement, ResponseShowBracketStops, ResponseShowBrackets, ResponseShowOrderHistory, ResponseShowOrderHistoryDates, ResponseShowOrderHistoryDetail, ResponseShowOrderHistorySummary, ResponseShowOrders, ResponseSubscribeForOrderUpdates, ResponseSubscribeToBracketUpdates, ResponseTickBarReplay, ResponseTickBarUpdate, ResponseTimeBarReplay, ResponseTimeBarUpdate, ResponseTradeRoutes, ResponseUpdateStopBracketLevel, ResponseUpdateTargetBracketLevel, ResponseVolumeProfileMinuteBars, RithmicOrderNotification, SymbolMarginRate, TickBar, TimeBar, TradeRoute, TradeStatistics, UpdateEasyToBorrowList};
 use crate::rithmic_api::client_base::rithmic_proto_objects::rti::Reject;
@@ -12,20 +14,23 @@ use rust_decimal::{Decimal};
 use rust_decimal::prelude::FromPrimitive;
 use rust_decimal_macros::dec;
 use ff_standard_lib::messages::data_server_messaging::DataServerResponse;
+use ff_standard_lib::product_maps::rithmic::maps::get_futures_symbol_info;
 use ff_standard_lib::standardized_types::accounts::Account;
 #[allow(unused_imports)]
 use ff_standard_lib::standardized_types::broker_enum::Brokerage;
 use ff_standard_lib::standardized_types::enums::PositionSide;
 use ff_standard_lib::standardized_types::new_types::Volume;
-use ff_standard_lib::standardized_types::position::{Position};
+use ff_standard_lib::standardized_types::position::{EntryPrice, Position, PositionCalculationMode};
 use ff_standard_lib::standardized_types::subscriptions::{SymbolCode};
 use crate::rithmic_api::api_client::RithmicBrokerageClient;
 use crate::rithmic_api::plant_handlers::create_datetime;
 use crate::rithmic_api::plant_handlers::handler_loop::send_updates;
+use crate::server_features::database::hybrid_storage::MULTIBAR;
 
 lazy_static! {
     pub static ref POSITIONS: DashMap<SymbolCode, Position> = DashMap::new();
     pub static ref POSITION_COUNT: DashMap<SymbolCode, u64> = DashMap::new();
+    pub static ref PROGRESS_PNL: DashMap<(Brokerage, Account, SymbolCode), ProgressBar> = DashMap::new();
 }
 
 #[allow(dead_code, unused)]
@@ -156,11 +161,39 @@ pub async fn match_pnl_plant_id(
                 };
 
                 let time = create_datetime(ssboe as i64, usecs as i64).to_string();
+
+                if let (Some(buy_qty), Some(sell_qty), Some(account_id)) = (msg.buy_qty, msg.sell_qty, msg.account_id.clone()) {
+                    let key = (client.brokerage, Account::new(client.brokerage, account_id.clone()), symbol_code.clone());
+                    if !PROGRESS_PNL.contains_key(&key) && (buy_qty > 0 || sell_qty > 0) {
+                        let message_bar = MULTIBAR.add(ProgressBar::new_spinner());
+                        let prefix = format!("{}: {}", client.brokerage, account_id);
+                        let bright_green_prefix = format!("\x1b[92m{}\x1b[0m", prefix);
+                        // Set the colored prefix
+                        message_bar.set_prefix(bright_green_prefix);
+                        message_bar.set_style(
+                            ProgressStyle::default_spinner()
+                                .template("{spinner:.green} {prefix} {msg}")
+                                .expect("Failed to set style"),
+                        );
+                        PROGRESS_PNL.insert(key.clone(), message_bar);
+                    }
+                    if let Some(message_bar) = PROGRESS_PNL.get(&key) {
+                        let msg = format!("Pnl Update: {:?}, Pnl: {:?}, Buy Quantity: {:?}, Sell Quantity: {:?}", msg.symbol, msg.open_position_pnl, msg.buy_qty, msg.sell_qty);
+                        message_bar.set_message(msg);
+                    }
+                } else if let (Some(account_id), Some(net_quantity)) = (msg.account_id.clone(), msg.net_quantity) {
+                    if net_quantity == 0 {
+                        let key = (client.brokerage, Account::new(client.brokerage, account_id.clone()), symbol_code.clone());
+                        if let Some((key, pb)) = PROGRESS_PNL.remove(&key) {
+                            pb.finish_and_clear();
+                        }
+                    }
+                }
                 //println!("PNL Update Message: {:?}", msg);
-                println!("{}: Pnl Update: {:?}, Pnl: {:?}, Buy Quantity: {:?}, Sell Quantity: {:?}", client.brokerage, msg.symbol, msg.open_position_pnl, msg.buy_qty, msg.sell_qty);
+
 
                 //todo do this with a simple message, quantity open, and position side, symbol name, symbol code
-                /*let account_id = match msg.account_id {
+                let account_id = match msg.account_id {
                     None => return,
                     Some(id) => id
                 };
@@ -275,7 +308,7 @@ pub async fn match_pnl_plant_id(
                             }
                         };
                     }
-                }*/
+                }
             }
         },
         451 => {

@@ -16,6 +16,7 @@ pub(crate) fn live_order_handler(
     mut order_event_receiver: Receiver<(OrderUpdateEvent, DateTime<Utc>)>,
     strategy_event_sender: mpsc::Sender<StrategyEvent>,
     ledger_service: Arc<LedgerService>, //it is better to do this, because using a direct fn call we can concurrently update individual ledgers and have a que per ledger. sending a msg here would cause a bottleneck with more ledgers.
+    #[allow(unused)]
     synchronize_positions: bool
 ) {
     //todo, we need a message que for ledger, where orders and positions are update the ledger 1 at a time per symbol_code, this should fix the possible race conditions of positions updates
@@ -51,10 +52,7 @@ pub(crate) fn live_order_handler(
                          order.state = OrderState::Filled;
 
                          //println!("{}", order_update_event);
-                         match synchronize_positions {
-                             false => ledger_service.update_or_create_position(&account, symbol_name.clone(), symbol_code.clone(), quantity, side.clone(), time_utc, *price, tag.to_string(), None, None).await,
-                             true => {}//ledger_service.process_synchronized_orders(order.clone(), quantity.clone(), time_utc).await
-                         };
+                         ledger_service.update_or_create_position(&account, symbol_name.clone(), symbol_code.clone(), quantity, side.clone(), time_utc, *price, tag.to_string(), None, None).await;
 
                          match strategy_event_sender.send(StrategyEvent::OrderEvents(order_update_event.clone())).await {
                              Ok(_) => {}
@@ -73,10 +71,7 @@ pub(crate) fn live_order_handler(
                        order.quantity_filled += quantity;
                        order.quantity_open -= quantity;
                        order.time_filled_utc = Some(time.clone());
-                       match synchronize_positions {
-                           false => ledger_service.update_or_create_position(&account, symbol_name.clone(), symbol_code.clone(), quantity.clone(), side.clone(), time_utc, *price, tag.to_string(), None, None).await,
-                           true => {}//ledger_service.process_synchronized_orders(order.clone(), quantity.clone(), time_utc).await,
-                       };
+                       ledger_service.update_or_create_position(&account, symbol_name.clone(), symbol_code.clone(), quantity.clone(), side.clone(), time_utc, *price, tag.to_string(), None, None).await;
                        match strategy_event_sender.send(StrategyEvent::OrderEvents(order_update_event.clone())).await {
                            Ok(_) => {}
                            Err(e) => eprintln!("{}", e)
