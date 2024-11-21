@@ -425,6 +425,22 @@ impl Position {
             }
         }
 
+        // Recalculate average entry price from remaining entries
+        if !self.open_entry_prices.is_empty() {
+            let (total_volume, total_weighted_price) = self.open_entry_prices.iter()
+                .fold((dec!(0.0), dec!(0.0)), |(sum_vol, sum_price), entry| {
+                    (
+                        sum_vol + entry.volume,
+                        sum_price + (entry.volume * entry.price)
+                    )
+                });
+
+            self.average_price = (total_weighted_price / total_volume)
+                .round_dp(self.symbol_info.decimal_accuracy);
+        } else {
+            self.average_price = dec!(0.0);
+        }
+
         // Update position
         self.booked_pnl += total_booked_pnl;
         self.open_pnl -= total_booked_pnl;
