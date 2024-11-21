@@ -13,6 +13,7 @@ use prost::{Message as ProstMessage};
 use rust_decimal::{Decimal};
 use rust_decimal::prelude::FromPrimitive;
 use rust_decimal_macros::dec;
+use tokio::task;
 use ff_standard_lib::messages::data_server_messaging::DataServerResponse;
 use ff_standard_lib::product_maps::rithmic::maps::get_futures_symbol_info;
 use ff_standard_lib::standardized_types::accounts::Account;
@@ -250,7 +251,7 @@ pub async fn match_pnl_plant_id(
                             None => dec!(0)
                         };
 
-                        match POSITIONS.remove(symbol_code) {
+                        match POSITIONS.get_mut(symbol_code) {
                             None => {
                                 let tag = match client.last_tag.get(&account_id) {
                                     None => "External Position Modification".to_string(),
@@ -289,22 +290,29 @@ pub async fn match_pnl_plant_id(
                                 };
                                 POSITIONS.insert(symbol_code.clone(), position.clone());
                             }
-                            Some((symbol_code, mut position)) => {
+                            Some(mut position) => {
                                 //println!("Updating Position");
                                 position.quantity_open = open_position_quantity;
                                 position.side = side;;
                                 position.average_price = average_price;
                                 position.open_pnl = open_pnl;
-                                position.is_closed = false;
-                                let clone_position = position.clone();
 
-                                let position_update = DataServerResponse::LivePositionUpdates {
-                                    account: Account::new(client.brokerage, account_id.clone()),
-                                    position: clone_position,
-                                    time,
+                                const ZERO: Decimal = dec!(0);
+                                position.is_closed = if open_position_quantity == ZERO {
+                                    true
+                                } else {
+                                    false
                                 };
-                                send_updates(position_update).await;
-                                POSITIONS.insert(symbol_code, position);
+
+                                let clone_position = position.clone();
+                                task::spawn(async move {
+                                    let position_update = DataServerResponse::LivePositionUpdates {
+                                        account: Account::new(client.brokerage, account_id.clone()),
+                                        position: clone_position,
+                                        time,
+                                    };
+                                    send_updates(position_update).await;
+                                });
                             }
                         };
                     }
