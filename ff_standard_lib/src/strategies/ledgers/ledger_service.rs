@@ -101,13 +101,13 @@ impl LedgerService {
         }
     }
 
-    pub fn export_trades(&self, account: &Account, directory: &str) {
+    pub fn export_trades_to_csv(&self, account: &Account, directory: &str) {
         if let Some(ledger) = self.ledgers.get(account) {
-            ledger.export_positions_to_csv(directory);
+            ledger.export_trades_to_csv(directory);
         }
     }
 
-    pub fn export_trades_to_csv(&self, account: &Account, directory: &str) {
+    pub fn export_positions_to_csv(&self, account: &Account, directory: &str) {
         if let Some(ledger) = self.ledgers.get(account) {
             ledger.export_positions_to_csv(directory);
         }

@@ -197,10 +197,11 @@ pub async fn on_data_received(
                 }
             }
             StrategyEvent::ShutdownEvent(event) => {
-                strategy.flatten_all_for(account_1).await;
+                strategy.flatten_all_for(account_1.clone()).await;
                 let msg = format!("{}",event);
                 println!("{}", msg.as_str().bright_magenta());
-                strategy.export_trades(&String::from("./trades exports"));
+                strategy.export_positions_to_csv(&String::from("./trades exports"));
+                strategy.export_trades_to_csv(&account_1, &String::from("./trades exports"));
                 strategy.print_ledgers();
                 //we should handle shutdown gracefully by first ending the strategy loop.
                 break 'strategy_loop

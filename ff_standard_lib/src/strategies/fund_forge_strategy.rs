@@ -1023,10 +1023,20 @@ impl FundForgeStrategy {
     }
 
     /// Exports trades to a csv file in the directory
-    pub fn export_trades(&self, directory: &str) {
+    pub fn export_positions_to_csv(&self, directory: &str) {
         for account_entry in self.ledger_service.ledgers.iter() {
-            self.ledger_service.export_trades(account_entry.key(), directory);
+            self.ledger_service.export_positions_to_csv(account_entry.key(), directory);
         }
+    }
+
+    /// Exports positions (cumulative) to a csv file in the directory
+    pub fn export_trades_to_csv(&self, account: &Account, directory: &str) {
+        self.ledger_service.export_trades_to_csv(account, directory);
+    }
+
+    /// Exports trades (individual) to a csv file in the directory
+    pub fn print_trade_statistics(&self, account: &Account) {
+        self.ledger_service.print_trade_statistics(account);
     }
 
     // Updated position query functions

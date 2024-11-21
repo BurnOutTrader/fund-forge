@@ -338,7 +338,7 @@ pub async fn on_data_received(
             }
         }
     }
-    strategy.export_trades(&String::from("./trades exports"));
+    strategy.export_positions_to_csv(&String::from("./trades exports"));
     strategy.print_ledgers();
     event_receiver.close();
     println!("Strategy: Event Loop Ended");
