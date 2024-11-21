@@ -6,7 +6,6 @@ use crate::standardized_types::base_data::history::{get_compressed_historical_da
 use crate::standardized_types::enums::StrategyMode;
 use crate::strategies::strategy_events::StrategyEvent;
 use crate::standardized_types::time_slices::TimeSlice;
-use std::thread;
 use std::time::Duration;
 use tokio::sync::mpsc::Sender;
 use crate::standardized_types::subscriptions::DataSubscription;
@@ -84,29 +83,25 @@ impl HistoricalEngine {
             panic!("Engine: Trying to launch backtest engine in live mode");
         }
         println!("Engine: Initializing the strategy...");
-        thread::spawn(move|| {
-            // Run the engine logic on a dedicated OS thread
-            tokio::runtime::Runtime::new().unwrap().block_on(async {
-                let warm_up_start_time = self.start_time - self.warmup_duration;
+        tokio::spawn(async move {
+            let warm_up_start_time = self.start_time - self.warmup_duration;
 
-                match self.mode {
-                    StrategyMode::Backtest => self.historical_data_feed(warm_up_start_time, self.end_time, self.buffer_resolution, self.mode).await,
-                    StrategyMode::Live | StrategyMode::LivePaperTrading  => panic!("Incorrect engine for Live modes"),
+            match self.mode {
+                StrategyMode::Backtest => {
+                    self.historical_data_feed(warm_up_start_time, self.end_time, self.buffer_resolution, self.mode).await;
                 }
+                StrategyMode::Live | StrategyMode::LivePaperTrading => panic!("Incorrect engine for Live modes"),
+            }
 
-                match self.mode {
-                    StrategyMode::Backtest => {
-                        let event = StrategyEvent::ShutdownEvent("Backtest Complete".to_string());
-                        match self.strategy_event_sender.send(event).await {
-                            Ok(_) => {}
-                            Err(e) => eprintln!("Historical Engine: Failed to send event: {}", e)
-                        }
-                    }
-                    _ => {
-                        panic!("Incorrect engine for Live modes")
+            match self.mode {
+                StrategyMode::Backtest => {
+                    let event = StrategyEvent::ShutdownEvent("Backtest Complete".to_string());
+                    if let Err(e) = self.strategy_event_sender.send(event).await {
+                        eprintln!("Historical Engine: Failed to send event: {}", e);
                     }
                 }
-            });
+                _ => panic!("Incorrect engine for Live modes"),
+            }
         });
     }
 
