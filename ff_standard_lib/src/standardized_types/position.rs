@@ -1,10 +1,11 @@
 use std::collections::VecDeque;
 use std::fmt;
 use std::str::FromStr;
-use chrono::{DateTime, TimeZone, Utc};
+use chrono::{DateTime, Duration, TimeZone, Utc};
 use chrono_tz::Tz;
 use rkyv::{Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv};
 use rust_decimal::Decimal;
+use rust_decimal::prelude::ToPrimitive;
 use rust_decimal_macros::dec;
 use serde_derive::{Deserialize, Serialize};
 use crate::helpers::converters::format_duration;
@@ -239,6 +240,33 @@ impl EntryPrice {
 #[derive(Clone, Serialize_rkyv, Deserialize_rkyv, Archive, Debug, PartialEq, Serialize, Deserialize, PartialOrd,)]
 #[archive(compare(PartialEq), check_bytes)]
 #[archive_attr(derive(Debug))]
+pub struct Trade {
+    pub entry_price: Price,
+    pub entry_quantity: Volume,
+    pub exit_price: Price,
+    pub exit_quantity: Volume,
+    pub entry_time: String,
+    pub exit_time: String,
+}
+
+#[derive(Debug)]
+pub struct PositionStatistics {
+    pub total_trades: usize,
+    pub average_entry_price: Decimal,
+    pub average_exit_price: Decimal,
+    pub best_trade_pnl: Decimal,
+    pub worst_trade_pnl: Decimal,
+    pub best_exit_price: Decimal,
+    pub worst_exit_price: Decimal,
+    pub total_quantity_traded: Decimal,
+    pub weighted_avg_hold_time: Duration,
+}
+
+
+
+#[derive(Clone, Serialize_rkyv, Deserialize_rkyv, Archive, Debug, PartialEq, Serialize, Deserialize, PartialOrd,)]
+#[archive(compare(PartialEq), check_bytes)]
+#[archive_attr(derive(Debug))]
 pub struct Position {
     pub symbol_name: SymbolName,
     pub symbol_code: String,
@@ -261,6 +289,7 @@ pub struct Position {
     pub tag: String,
     pub position_calculation_mode: PositionCalculationMode,
     pub open_entry_prices: VecDeque<EntryPrice>,
+    pub completed_trades: Vec<Trade>,
 }
 
 impl Position {
@@ -300,6 +329,7 @@ impl Position {
             tag,
             position_calculation_mode,
             open_entry_prices: VecDeque::from(vec![EntryPrice::new(quantity, average_price)]),
+            completed_trades: vec![]
         }
     }
 
@@ -308,12 +338,35 @@ impl Position {
             None => ("None".to_string(), "N/A".to_string()),
             Some(time) => (time.to_string(), format_duration(DateTime::<Utc>::from_str(time).unwrap() - DateTime::<Utc>::from_str(&self.open_time).unwrap()))
         };
+
+        // Calculate final stats from completed trades
+        let (weighted_entry, weighted_exit, total_quantity) = self.completed_trades.iter()
+            .fold((dec!(0.0), dec!(0.0), dec!(0.0)), |(entry_sum, exit_sum, qty_sum), trade| {
+                (
+                    entry_sum + trade.entry_price * trade.entry_quantity,
+                    exit_sum + trade.exit_price * trade.exit_quantity,
+                    qty_sum + trade.entry_quantity
+                )
+            });
+
+        let final_entry_price = if total_quantity > dec!(0.0) {
+            weighted_entry / total_quantity
+        } else {
+            self.average_price
+        };
+
+        let final_exit_price = if total_quantity > dec!(0.0) {
+            weighted_exit / total_quantity
+        } else {
+            self.average_exit_price.unwrap_or(self.average_price)
+        };
+
         PositionExport {
             symbol_code: self.symbol_code.to_string(),
             position_side: self.side.to_string(),
             quantity: self.quantity_closed,
-            average_entry_price: self.average_price,
-            average_exit_price: self.average_exit_price.unwrap(),
+            average_entry_price: final_entry_price,
+            average_exit_price: final_exit_price,
             booked_pnl: self.booked_pnl.round_dp(2),
             open_pnl: self.open_pnl.round_dp(2),
             highest_recoded_price: self.highest_recoded_price,
@@ -388,6 +441,16 @@ impl Position {
             // Calculate how much we can exit from this entry price level
             let exit_quantity = remaining_exit_quantity.min(entry.volume);
 
+            // Record the trade
+            self.completed_trades.push(Trade {
+                entry_price: entry.price,
+                entry_quantity: exit_quantity,
+                exit_price: market_price,
+                exit_quantity,
+                entry_time: self.open_time.clone(), // We could add entry_time to EntryPrice if we need exact times
+                exit_time: time.to_string(),
+            });
+
             // Calculate PnL for this portion
             let portion_booked_pnl = calculate_theoretical_pnl(
                 self.account.brokerage,
@@ -405,9 +468,7 @@ impl Position {
             if remaining_entry_volume > dec!(0.0) {
                 let remaining_entry = EntryPrice::new(remaining_entry_volume, entry.price);
                 match self.position_calculation_mode {
-                    // For FIFO, we want to maintain order from front to back
                     PositionCalculationMode::FIFO => temp_entries.push_back(remaining_entry),
-                    // For LIFO, we want to maintain order from back to front
                     PositionCalculationMode::LIFO => temp_entries.push_front(remaining_entry),
                 }
             }
@@ -501,17 +562,24 @@ impl Position {
     }
 
     pub(crate) async fn add_to_position(&mut self, mode: StrategyMode, is_simulating_pnl: bool, account_currency: Currency, market_price: Price, quantity: Volume, time: DateTime<Utc>, tag: String) -> PositionUpdateEvent {
-        // Correct the average price calculation with proper parentheses
-        if mode != StrategyMode::Live || is_simulating_pnl {
-            if self.quantity_open + quantity != Decimal::ZERO {
-                self.average_price = ((self.quantity_open * self.average_price + quantity * market_price) / (self.quantity_open + quantity)).round_dp(self.symbol_info.decimal_accuracy);
-            } else {
-                panic!("Average price should not be 0");
-            }
+        // Add new entry price
+        self.open_entry_prices.push_back(EntryPrice::new(quantity, market_price));
+
+        // Recalculate average price from all entries
+        let (total_volume, total_weighted_price) = self.open_entry_prices.iter()
+            .fold((dec!(0.0), dec!(0.0)), |(sum_vol, sum_price), entry| {
+                (
+                    sum_vol + entry.volume,
+                    sum_price + (entry.volume * entry.price)
+                )
+            });
+
+        if total_volume == dec!(0.0) {
+            panic!("Total volume should not be 0");
         }
 
-        // Create and add new entry price
-        self.open_entry_prices.push_back(EntryPrice::new(quantity, market_price));
+        self.average_price = (total_weighted_price / total_volume)
+            .round_dp(self.symbol_info.decimal_accuracy);
 
         // Update the total quantity
         self.quantity_open += quantity;
@@ -544,7 +612,71 @@ impl Position {
             time: time.to_string()
         }
     }
+
+
+    pub fn get_statistics(&self) -> PositionStatistics {
+        let mut stats = PositionStatistics {
+            total_trades: self.completed_trades.len(),
+            average_entry_price: dec!(0.0),
+            average_exit_price: dec!(0.0),
+            best_trade_pnl: dec!(0.0),
+            worst_trade_pnl: dec!(0.0),
+            best_exit_price: dec!(0.0),
+            worst_exit_price: dec!(0.0),
+            total_quantity_traded: dec!(0.0),
+            weighted_avg_hold_time: Duration::zero(),
+        };
+
+        if self.completed_trades.is_empty() {
+            return stats;
+        }
+
+        let mut total_weighted_entry = dec!(0.0);
+        let mut total_weighted_exit = dec!(0.0);
+        let mut total_quantity = dec!(0.0);
+        let mut total_weighted_duration = Duration::zero();
+
+        for trade in &self.completed_trades {
+            let trade_pnl = match self.side {
+                PositionSide::Long => (trade.exit_price - trade.entry_price) * trade.entry_quantity,
+                PositionSide::Short => (trade.entry_price - trade.exit_price) * trade.entry_quantity,
+            };
+
+            // Update best/worst trades
+            stats.best_trade_pnl = stats.best_trade_pnl.max(trade_pnl);
+            stats.worst_trade_pnl = stats.worst_trade_pnl.min(trade_pnl);
+
+            // Track weighted prices
+            total_weighted_entry += trade.entry_price * trade.entry_quantity;
+            total_weighted_exit += trade.exit_price * trade.exit_quantity;
+            total_quantity += trade.entry_quantity;
+
+            // Calculate hold time
+            let entry_time = DateTime::<Utc>::from_str(&trade.entry_time).unwrap();
+            let exit_time = DateTime::<Utc>::from_str(&trade.exit_time).unwrap();
+            let duration = exit_time - entry_time;
+            total_weighted_duration = total_weighted_duration + (duration * trade.entry_quantity.to_i32().unwrap());
+
+            // Track best/worst exits
+            if stats.best_exit_price == dec!(0.0) {
+                stats.best_exit_price = trade.exit_price;
+                stats.worst_exit_price = trade.exit_price;
+            } else {
+                stats.best_exit_price = stats.best_exit_price.max(trade.exit_price);
+                stats.worst_exit_price = stats.worst_exit_price.min(trade.exit_price);
+            }
+        }
+
+        stats.average_entry_price = (total_weighted_entry / total_quantity).round_dp(self.symbol_info.decimal_accuracy);
+        stats.average_exit_price = (total_weighted_exit / total_quantity).round_dp(self.symbol_info.decimal_accuracy);
+        stats.total_quantity_traded = total_quantity;
+        stats.weighted_avg_hold_time = total_weighted_duration / total_quantity.to_i32().unwrap();
+
+        stats
+    }
 }
+
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -849,5 +981,127 @@ mod tests {
             Utc::now(),
             "test-invalid-reduce".to_string()
         ).await;
+    }
+
+    #[tokio::test]
+    async fn test_average_price_calculation_from_entries() {
+        let mut position = setup_basic_position();
+
+        // Initial position
+        let initial_quantity = dec!(1.0);
+        let initial_price = dec!(17500.0);
+        assert_eq!(position.average_price, initial_price);
+
+        // Add second entry
+        let second_quantity = dec!(2.0);
+        let second_price = dec!(17600.0);
+        position.add_to_position(
+            StrategyMode::Backtest,
+            true,
+            Currency::USD,
+            second_price,
+            second_quantity,
+            Utc::now(),
+            "test-add-1".to_string()
+        ).await;
+
+        // Calculate expected average: (17500 * 1 + 17600 * 2) / 3
+        let expected_avg = (initial_price * initial_quantity + second_price * second_quantity) /
+            (initial_quantity + second_quantity);
+        assert_eq!(position.average_price.round_dp(2), expected_avg.round_dp(2));
+
+        // Verify open_entry_prices matches average price calculation
+        let (total_vol, total_weighted) = position.open_entry_prices.iter()
+            .fold((dec!(0.0), dec!(0.0)), |(vol, weighted), entry| {
+                (vol + entry.volume, weighted + entry.volume * entry.price)
+            });
+
+        assert_eq!(position.average_price.round_dp(2), (total_weighted / total_vol).round_dp(2));
+    }
+
+    #[tokio::test]
+    async fn test_trade_statistics() {
+        let mut position = setup_basic_position();
+        let initial_time = Utc::now();
+
+        // Add to position
+        position.add_to_position(
+            StrategyMode::Backtest,
+            true,
+            Currency::USD,
+            dec!(17525.0),
+            dec!(2.0),
+            initial_time + Duration::minutes(30),
+            "add-1".to_string()
+        ).await;
+
+        // Reduce position in parts
+        position.reduce_position_size(
+            dec!(17550.0),
+            dec!(1.5),
+            Currency::USD,
+            dec!(1.0),
+            initial_time + Duration::hours(1),
+            "exit-1".to_string()
+        ).await;
+
+        position.reduce_position_size(
+            dec!(17575.0),
+            dec!(1.5),
+            Currency::USD,
+            dec!(1.0),
+            initial_time + Duration::hours(2),
+            "exit-2".to_string()
+        ).await;
+
+        let stats = position.get_statistics();
+
+        assert_eq!(stats.total_trades, 3);
+        assert!(stats.best_trade_pnl > stats.worst_trade_pnl);
+        assert!(stats.best_exit_price > stats.worst_exit_price);
+        assert_eq!(stats.total_quantity_traded, dec!(3.0));
+    }
+
+    #[tokio::test]
+    async fn test_position_export_with_trades() {
+        let mut position = setup_basic_position();
+        let initial_time = Utc::now();
+
+        // Add to position
+        position.add_to_position(
+            StrategyMode::Backtest,
+            true,
+            Currency::USD,
+            dec!(17525.0),
+            dec!(2.0),
+            initial_time + Duration::minutes(30),
+            "add-1".to_string()
+        ).await;
+
+        // Reduce position in parts
+        position.reduce_position_size(
+            dec!(17550.0),
+            dec!(1.5),
+            Currency::USD,
+            dec!(1.0),
+            initial_time + Duration::hours(1),
+            "exit-1".to_string()
+        ).await;
+
+        position.reduce_position_size(
+            dec!(17575.0),
+            dec!(1.5),
+            Currency::USD,
+            dec!(1.0),
+            initial_time + Duration::hours(2),
+            "exit-2".to_string()
+        ).await;
+
+        let export = position.to_export();
+
+        // Verify the exported data uses trade history for calculations
+        assert!(export.average_entry_price > dec!(0.0));
+        assert!(export.average_exit_price > export.average_entry_price); // Should be profitable
+        assert_eq!(export.quantity, dec!(3.0));
     }
 }

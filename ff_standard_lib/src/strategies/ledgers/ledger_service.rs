@@ -107,6 +107,14 @@ impl LedgerService {
         }
     }
 
+    pub fn booked_pnl_account(&self, account: &Account) -> Decimal {
+        if let Some(ledger) = self.ledgers.get(account) {
+            ledger.total_booked_pnl.clone()
+        } else {
+            dec!(0)
+        }
+    }
+
     pub async fn print_ledger(&self, account: &Account) {
        if let Some(ledger) = self.ledgers.get(account) {
            let string = ledger.value().print().await; //todo need to return the string here

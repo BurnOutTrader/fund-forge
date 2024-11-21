@@ -1058,4 +1058,8 @@ impl FundForgeStrategy {
     pub fn position_size(&self, account: &Account, symbol_name: &SymbolName) -> Decimal {
         self.ledger_service.position_size(account, symbol_name)
     }
+
+    pub fn booked_pnl_account(&self, account: &Account) -> Decimal {
+        self.ledger_service.booked_pnl_account(account)
+    }
 }
