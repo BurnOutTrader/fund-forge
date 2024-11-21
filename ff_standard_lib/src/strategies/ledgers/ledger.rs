@@ -1162,4 +1162,167 @@ mod tests {
         // Wait for all events to be processed
         event_handler.abort();
     }
+
+    #[tokio::test]
+    async fn test_multiple_positions_pnl_calculation() {
+        let (mut ledger, mut strategy_receiver) = setup_test_ledger().await;
+
+        // Spawn a task to consume strategy events
+        let event_handler = tokio::spawn(async move {
+            while let Some(event) = strategy_receiver.recv().await {
+                println!("Received strategy event: {:?}", event);
+            }
+        });
+
+        let symbol1 = "NQ".to_string();
+        let symbol1_code = "NQZ4".to_string();
+        let symbol2 = "ES".to_string();
+        let symbol2_code = "ESZ4".to_string();
+        let time = Utc::now();
+
+        // Opening first position for Symbol1
+        println!("\nOpening long position for Symbol1...");
+        let (tx, rx) = tokio::sync::oneshot::channel();
+        ledger
+            .update_or_create_paper_position(
+                symbol1.clone(),
+                symbol1_code.clone(),
+                dec!(2.0),             // quantity
+                OrderSide::Buy,        // side
+                time,                  // time
+                dec!(17500.0),         // entry price
+                "test".to_string(),
+                "order1".to_string(),
+                tx,
+            )
+            .await;
+        let _ = rx.await;
+
+        println!("Ledger total profit: {}", ledger.total_booked_pnl);
+        let qty_symbol1 = ledger.position_size(&symbol1_code);
+        println!("Position size Symbol1: {}", qty_symbol1);
+        assert_eq!(qty_symbol1, dec!(2.0));
+
+        // Opening position for Symbol2
+        println!("\nOpening long position for Symbol2...");
+        let (tx, rx) = tokio::sync::oneshot::channel();
+        ledger
+            .update_or_create_paper_position(
+                symbol2.clone(),
+                symbol2_code.clone(),
+                dec!(1.0),             // quantity
+                OrderSide::Buy,        // side
+                time + Duration::minutes(2),
+                dec!(4500.0),          // entry price
+                "test".to_string(),
+                "order2".to_string(),
+                tx,
+            )
+            .await;
+        let _ = rx.await;
+
+        println!("Ledger total profit: {}", ledger.total_booked_pnl);
+        let qty_symbol2 = ledger.position_size(&symbol2_code);
+        println!("Position size Symbol2: {}", qty_symbol2);
+        assert_eq!(qty_symbol2, dec!(1.0));
+
+        // Adding to Symbol1 position
+        println!("\nAdding to Symbol1 position...");
+        let (tx, rx) = tokio::sync::oneshot::channel();
+        ledger
+            .update_or_create_paper_position(
+                symbol1.clone(),
+                symbol1_code.clone(),
+                dec!(1.0),             // quantity
+                OrderSide::Buy,        // side
+                time + Duration::minutes(5),
+                dec!(17525.0),         // entry price
+                "add".to_string(),
+                "order3".to_string(),
+                tx,
+            )
+            .await;
+        let _ = rx.await;
+
+        println!("Ledger total profit: {}", ledger.total_booked_pnl);
+        let qty_symbol1 = ledger.position_size(&symbol1_code);
+        println!("Position size Symbol1: {}", qty_symbol1);
+        assert_eq!(qty_symbol1, dec!(3.0));
+
+        // Partial exit for Symbol1
+        println!("\nPartial exit for Symbol1...");
+        let (tx, rx) = tokio::sync::oneshot::channel();
+        ledger
+            .update_or_create_paper_position(
+                symbol1.clone(),
+                symbol1_code.clone(),
+                dec!(1.0),             // quantity
+                OrderSide::Sell,       // side
+                time + Duration::minutes(10),
+                dec!(17550.0),         // exit price
+                "partial_exit".to_string(),
+                "order4".to_string(),
+                tx,
+            )
+            .await;
+        let _ = rx.await;
+
+        println!("Ledger total profit: {}", ledger.total_booked_pnl);
+        let qty_symbol1 = ledger.position_size(&symbol1_code);
+        println!("Position size Symbol1: {}", qty_symbol1);
+        assert_eq!(qty_symbol1, dec!(2.0));
+
+        // Exiting Symbol2 completely
+        println!("\nFinal exit for Symbol2...");
+        ledger
+            .paper_exit_position(
+                &symbol2_code,
+                time + Duration::minutes(15),
+                dec!(4550.0),         // exit price
+                "final_exit".to_string(),
+            )
+            .await;
+
+        println!("Ledger total profit: {}", ledger.total_booked_pnl);
+        let qty_symbol2 = ledger.position_size(&symbol2_code);
+        println!("Position size Symbol2: {}", qty_symbol2);
+        assert_eq!(qty_symbol2, dec!(0.0));
+
+        // Final exit for Symbol1
+        println!("\nFinal exit for Symbol1...");
+        ledger
+            .paper_exit_position(
+                &symbol1_code,
+                time + Duration::minutes(20),
+                dec!(17575.0),        // exit price
+                "final_exit".to_string(),
+            )
+            .await;
+
+        println!("Ledger total profit: {}", ledger.total_booked_pnl);
+        let qty_symbol1 = ledger.position_size(&symbol1_code);
+        assert_eq!(qty_symbol1, dec!(0.0));
+
+        let expected_pnl_symbol1 = dec!(3500.0); // NQ
+        let expected_pnl_symbol2 = dec!(2500.0); // ES
+        let expected_total_pnl = expected_pnl_symbol1 + expected_pnl_symbol2;
+
+        assert_eq!(
+            ledger.total_booked_pnl,
+            expected_total_pnl,
+            "Total PnL mismatch: expected {}, got {}",
+            expected_total_pnl,
+            ledger.total_booked_pnl
+        );
+
+        // Print detailed information
+        println!("\nFinal Ledger Statistics:");
+        println!("{}", ledger.ledger_statistics_to_string());
+
+        println!("\nTrade Statistics:");
+        println!("{}", ledger.trade_statistics_to_string());
+
+        // Wait for all events to be processed
+        event_handler.abort();
+    }
 }
