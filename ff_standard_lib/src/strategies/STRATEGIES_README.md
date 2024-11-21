@@ -1542,7 +1542,7 @@ fn example(strategy: &FundForgeStrategy) {
    strategy.export_positions_to_csv(&String::from("./trades exports"));
    
    // We can print the position statistics to console as part of the ledger print out
-   strategy.print_ledger(event.account());
+   strategy.print_ledger(&account);
     
     // Export the trade statistics for the account
    strategy.export_trades_to_csv(&account, &String::from("./trades exports"));
