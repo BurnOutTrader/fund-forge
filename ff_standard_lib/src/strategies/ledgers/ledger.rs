@@ -823,11 +823,11 @@ impl Ledger {
                     total_pnl += trade.profit;
 
                     match trade.result {
-                        TradeResult::Profit => {
+                        TradeResult::Win => {
                             wins += 1;
                             win_pnl += trade.profit;
                             largest_win = largest_win.max(trade.profit);
-                        },
+                        }
                         TradeResult::Loss => {
                             losses += 1;
                             loss_pnl += trade.profit;

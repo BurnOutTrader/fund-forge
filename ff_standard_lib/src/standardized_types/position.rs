@@ -242,14 +242,14 @@ impl EntryPrice {
 #[archive(compare(PartialEq), check_bytes)]
 #[archive_attr(derive(Debug))]
 pub enum TradeResult {
-    Profit,
+    Win,
     Loss,
     BreakEven,
 }
 impl Display for TradeResult {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let str = match self {
-            TradeResult::Profit => "Win".to_string(),
+            TradeResult::Win => "Win".to_string(),
             TradeResult::Loss => "Loss".to_string(),
             TradeResult::BreakEven => "BreakEven".to_string(),
         };
@@ -476,7 +476,7 @@ impl Position {
             );
 
             let result = match portion_booked_pnl {
-                pnl if pnl > dec!(0.0) => TradeResult::Profit,
+                pnl if pnl > dec!(0.0) => TradeResult::Win,
                 pnl if pnl < dec!(0.0) => TradeResult::Loss,
                 _ => TradeResult::BreakEven,
             };
