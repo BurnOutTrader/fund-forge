@@ -1,5 +1,5 @@
 use dashmap::DashMap;
-use tokio::sync::{oneshot};
+use tokio::sync::{oneshot, Mutex};
 use rust_decimal::Decimal;
 use chrono::{DateTime, Duration, Utc};
 use std::fs::create_dir_all;
@@ -7,6 +7,7 @@ use std::path::Path;
 use std::str::FromStr;
 use csv::Writer;
 use std::sync::Arc;
+use ahash::AHashMap;
 use rust_decimal::prelude::FromPrimitive;
 use rust_decimal_macros::dec;
 use serde_derive::Serialize;
@@ -173,10 +174,17 @@ impl Ledger {
                     LedgerMessage::UpdateOrCreatePosition { .. } => eprintln!("{:?}", message),
                     _ => {}
                 }*/
+                let mut position_locks = AHashMap::new();
                 match message {
                     LedgerMessage::SyncPosition { symbol_name, symbol_code, account, open_quantity, average_price, side, open_pnl, time } => {
                         if !static_self.is_simulating_pnl {
-                            static_self.synchronize_live_position( symbol_name, symbol_code, account, open_quantity, average_price, side, open_pnl, time ).await;
+                            if !position_locks.contains_key(&symbol_code) {
+                                position_locks.insert(symbol_code.clone(), Mutex::new(()));
+                            }
+                            if let Some(lock) = position_locks.get(&symbol_code) {
+                                let _guard = lock.lock().await;
+                                static_self.synchronize_live_position(symbol_name, symbol_code, account, open_quantity, average_price, side, open_pnl, time).await;
+                            }
                         }
                     }
                     LedgerMessage::UpdateOrCreatePosition { symbol_name, symbol_code, quantity, side, time, market_fill_price, tag , paper_response_sender, order_id} => {
