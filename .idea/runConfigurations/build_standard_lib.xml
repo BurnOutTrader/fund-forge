@@ -1,6 +1,7 @@
 <component name="ProjectRunConfigurationManager">
   <configuration default="false" name="build standard lib" type="CargoCommandRunConfiguration" factoryName="Cargo Command">
-    <option name="command" value="build " />
+    <option name="buildProfileId" value="dev" />
+    <option name="command" value="build" />
     <option name="workingDirectory" value="file://$PROJECT_DIR$/ff_standard_lib" />
     <envs />
     <option name="emulateTerminal" value="true" />
