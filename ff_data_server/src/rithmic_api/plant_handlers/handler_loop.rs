@@ -1,4 +1,3 @@
-use std::io::Cursor;
 use std::sync::Arc;
 #[allow(unused_imports)]
 use std::time::Duration;
@@ -31,7 +30,7 @@ use crate::rithmic_api::plant_handlers::handle_tick_plant::match_ticker_plant_id
 use crate::rithmic_api::plant_handlers::reconnect::attempt_reconnect;
 use crate::subscribe_server_shutdown;
 use tokio::sync::mpsc;
-use bytes::{Buf, BytesMut};
+use tokio::task;
 
 pub fn handle_rithmic_responses(
     client: Arc<RithmicBrokerageClient>,
@@ -42,12 +41,12 @@ pub fn handle_rithmic_responses(
     let mut length_buf = [0u8; 4];
 
     // Use bounded channel with backpressure
-    let (tx, mut rx) = mpsc::channel(4096);
+    let (tx, mut rx) = mpsc::channel(10000);
 
     // Spawn message processor task
     let process_client = client.clone();
     let process_plant = plant.clone();
-    let processor = tokio::spawn(async move {
+    tokio::spawn(async move {
         while let Some((template_id, message)) = rx.recv().await {
             match process_plant {
                 SysInfraType::TickerPlant => match_ticker_plant_id(template_id, message, process_client.clone()).await,
@@ -59,7 +58,7 @@ pub fn handle_rithmic_responses(
         }
     });
 
-    let reader_task = tokio::spawn(async move {
+    tokio::spawn(async move {
         'main_loop: loop {
             tokio::select! {
                 Some(Ok(message)) = reader.next() => {
@@ -92,18 +91,18 @@ pub fn handle_rithmic_responses(
                         }
                         Message::Close(close_frame) => {
                             println!("Received close message: {:?}. Attempting reconnection.", close_frame);
-                            while let None = attempt_reconnect(&client, plant.clone()).await {
-                                tokio::time::sleep(Duration::from_secs(1)).await;
-                            }
-                            continue 'main_loop;
+                                task::spawn(async move {
+                                    attempt_reconnect(&client, plant.clone()).await
+                                });
+                            break 'main_loop;
                         }
                         Message::Frame(frame) => {
                             if format!("{:?}", frame).contains("CloseFrame") {
                                 println!("Received close frame. Attempting reconnection.");
-                                while let None = attempt_reconnect(&client, plant.clone()).await {
-                                    tokio::time::sleep(Duration::from_secs(1)).await;
-                                }
-                                continue 'main_loop;
+                                task::spawn(async move {
+                                    attempt_reconnect(&client, plant.clone()).await
+                                });
+                                break 'main_loop;
                             }
                         }
                         Message::Text(text) => println!("{}", text),
@@ -112,6 +111,11 @@ pub fn handle_rithmic_responses(
                 },
                 _ = shutdown_receiver.recv() => {
                     println!("Shutdown signal received. Stopping Rithmic response handler.");
+                    if let Some((_, writer)) = client.writers.remove(&plant) {
+                        if let Err(e) = shutdown_plant(writer).await {
+                            eprintln!("Error shutting down plant: {:?}", e);
+                        }
+                    }
                     break;
                 }
             }
@@ -120,28 +124,6 @@ pub fn handle_rithmic_responses(
         // Cleanup
         println!("Cleaning up Rithmic response handler for plant: {:?}", plant);
         drop(tx);
-
-        if let Some((_, writer)) = client.writers.remove(&plant) {
-            if let Err(e) = shutdown_plant(writer).await {
-                eprintln!("Error shutting down plant: {:?}", e);
-            }
-        }
-    });
-
-    // Spawn supervisor task
-    tokio::spawn(async move {
-        tokio::select! {
-            reader_result = reader_task => {
-                if let Err(e) = reader_result {
-                    eprintln!("Reader task failed: {:?}", e);
-                }
-            }
-            processor_result = processor => {
-                if let Err(e) = processor_result {
-                    eprintln!("Processor task failed: {:?}", e);
-                }
-            }
-        }
     });
 }
 

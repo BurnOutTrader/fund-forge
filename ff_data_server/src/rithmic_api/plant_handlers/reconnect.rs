@@ -1,17 +1,15 @@
 use std::sync::Arc;
 use crate::rithmic_api::client_base::rithmic_proto_objects::rti::request_login::SysInfraType;
-use futures::stream::SplitStream;
-use tokio_tungstenite::{MaybeTlsStream, WebSocketStream};
-use tokio::net::TcpStream;
 use std::time::Duration;
 use chrono::{DateTime, Datelike, TimeZone, Timelike, Utc, Weekday};
 use tokio::time::sleep;
 use crate::rithmic_api::api_client::RithmicBrokerageClient;
+use crate::rithmic_api::plant_handlers::handler_loop::handle_rithmic_responses;
 
 pub(crate) async fn attempt_reconnect(
     client: &Arc<RithmicBrokerageClient>,
     plant: SysInfraType,
-) -> Option<SplitStream<WebSocketStream<MaybeTlsStream<TcpStream>>>> {
+) {
     let mut delay = Duration::from_secs(5); // Initial retry delay
     let max_delay = Duration::from_secs(300); // Maximum delay of 5 mins
 
@@ -35,7 +33,7 @@ pub(crate) async fn attempt_reconnect(
             match client.connect_plant(plant).await {
                 Ok(new_connection) => {
                     println!("Reconnected successfully");
-                    return Some(new_connection);
+                    handle_rithmic_responses(client.clone(), new_connection, plant);
                 }
                 Err(e) => {
                     eprintln!(
