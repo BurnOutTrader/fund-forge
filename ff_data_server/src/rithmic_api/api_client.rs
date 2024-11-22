@@ -197,7 +197,7 @@ impl RithmicBrokerageClient {
             pending_order_updates: Default::default(),
             historical_callbacks: Default::default(),
         };
-        client.start_front_month_cleaner().await;
+
         Ok(client)
     }
 
@@ -526,9 +526,8 @@ impl RithmicBrokerageClient {
         Ok(())
     }
 
-    pub async fn start_front_month_cleaner(&self) {
+    pub async fn start_front_month_cleaner(front_month_info: Arc<DashMap<SymbolName, FrontMonthInfo>>) {
         let mut shutdown_signal = subscribe_server_shutdown();
-        let info_map = self.front_month_info.clone();
         tokio::spawn(async move {
             loop {
                 let chicago_now = Local::now().with_timezone(&Chicago);
@@ -545,7 +544,7 @@ impl RithmicBrokerageClient {
 
                 tokio::select! {
                     _ = sleep_until(target) => {
-                        info_map.clear();
+                        front_month_info.clear();
                     }
                     _ = shutdown_signal.recv() => {
                         log::info!("Front month cleaner received shutdown signal");
@@ -914,6 +913,7 @@ impl RithmicBrokerageClient {
                                     }
                                 }
                             }
+                            RithmicBrokerageClient::start_front_month_cleaner(client.front_month_info.clone()).await;
                             RITHMIC_CLIENTS.insert(system, client.clone());
 
                         }
