@@ -72,7 +72,7 @@ pub async fn manage_async_requests(
         let mut receiver = read_half;
         let mut length_bytes = [0u8; LENGTH];
         let message_bar = MULTIBAR.add(ProgressBar::new_spinner());
-        let bright_green_prefix = format!("\x1b[92mConnected: {}\x1b[0m", stream_name);
+        let bright_green_prefix = format!("\x1b[92mStrategy Connected: {}\x1b[0m", stream_name);
         // Set the colored prefix
         message_bar.set_prefix(bright_green_prefix);
         message_bar.set_style(
