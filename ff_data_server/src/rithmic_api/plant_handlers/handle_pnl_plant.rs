@@ -163,62 +163,99 @@ pub async fn match_pnl_plant_id(
 
                 //this line of code is critical for exit long and exit short to work
                 let (side, quantity) = update_position(account_id.clone(), &symbol_code, msg.buy_qty, msg.sell_qty, &client);
+                let key = (client.brokerage, Account::new(client.brokerage, account_id.clone()), symbol_code.clone());
 
-                if let (Some(buy_qty), Some(sell_qty)) = (msg.buy_qty, msg.sell_qty) {
-                    let key = (client.brokerage, Account::new(client.brokerage, account_id.clone()), symbol_code.clone());
-                    if !PROGRESS_PNL.contains_key(&key) && (buy_qty > 0 || sell_qty > 0) {
-                        let message_bar = MULTIBAR.add(ProgressBar::new_spinner());
-                        let prefix = format!("{} {}: {}", symbol_code, client.brokerage, account_id);
-                        let bright_green_prefix = format!("\x1b[92m{}\x1b[0m", prefix);
-                        // Set the colored prefix
-                        message_bar.set_prefix(bright_green_prefix);
-                        message_bar.set_style(
-                            ProgressStyle::default_spinner()
-                                .template("{spinner:.green} {prefix} {msg}")
-                                .expect("Failed to set style"),
-                        );
-                        PROGRESS_PNL.insert(key.clone(), message_bar);
-                    }
-                    if side != PositionSide::Flat {
-                        if let Some(message_bar) = PROGRESS_PNL.get(&key) {
-                            let msg = format!("Pnl: {:?}, Buy Quantity: {:?}, Sell Quantity: {:?}", msg.open_position_pnl.clone(), msg.buy_qty, msg.sell_qty);
-                            message_bar.set_message(msg);
-                        }
+                if let Some(symbol_name) = msg.product_code {
+                    // fwd position updates to the client
+                    if let (Some(pnl), Some(average_price)) = (msg.open_position_pnl.clone(), msg.avg_open_fill_price) {
+                        //todo do this with a simple message, quantity open, and position side, symbol name, symbol code
+                        let open_position_pnl = match f64::from_str(&pnl) {
+                            Ok(open_position_pnl) => open_position_pnl,
+                            Err(_) => return
+                        };
+
+                        let open_position_quantity = match msg.open_position_quantity {
+                            None => return,
+                            Some(open_position_quantity) => match f64::from_str(&open_position_quantity.to_string()) {
+                                Ok(open_position_quantity) => open_position_quantity,
+                                Err(_) => return
+                            }
+                        };
+
+                        let position_update = DataServerResponse::LivePositionUpdates {
+                            symbol_name: symbol_name.clone(),
+                            symbol_code: symbol_code.clone(),
+                            average_price,
+                            account: Account::new(client.brokerage, account_id.clone()),
+                            open_quantity: open_position_quantity,
+                            side,
+                            time,
+                            open_pnl: open_position_pnl,
+                        };
+                        send_updates(position_update).await;
                     } else if side == PositionSide::Flat {
-                        if let Some((key, pb)) = PROGRESS_PNL.remove(&key) {
-                            pb.finish_and_clear();
+                        let position_update = DataServerResponse::LivePositionUpdates {
+                            symbol_name: symbol_name.clone(),
+                            symbol_code: symbol_code.clone(),
+                            average_price: 0.0,
+                            account: Account::new(client.brokerage, account_id.clone()),
+                            open_quantity: 0.0,
+                            side,
+                            time,
+                            open_pnl: 0.0,
+                        };
+                        send_updates(position_update).await;
+                    }
+                }
+
+                // Update the progress pnl bar
+                if let Some(buy_qty) = msg.buy_qty {
+                    if side == PositionSide::Long {
+                        if !PROGRESS_PNL.contains_key(&key) && buy_qty > 0 {
+                            let message_bar = MULTIBAR.add(ProgressBar::new_spinner());
+                            let prefix = format!("{} {}: {}", symbol_code, client.brokerage, account_id);
+                            let bright_green_prefix = format!("\x1b[92m{}\x1b[0m", prefix);
+                            // Set the colored prefix
+                            message_bar.set_prefix(bright_green_prefix);
+                            message_bar.set_style(
+                                ProgressStyle::default_spinner()
+                                    .template("{spinner:.green} {prefix} {msg}")
+                                    .expect("Failed to set style"),
+                            );
+                            PROGRESS_PNL.insert(key.clone(), message_bar);
                         }
+                    }
+                }
+                if let Some(sell_qty) = msg.sell_qty {
+                    if side == PositionSide::Short {
+                        let key = (client.brokerage, Account::new(client.brokerage, account_id.clone()), symbol_code.clone());
+                        if !PROGRESS_PNL.contains_key(&key) && sell_qty > 0 {
+                            let message_bar = MULTIBAR.add(ProgressBar::new_spinner());
+                            let prefix = format!("{} {}: {}", symbol_code, client.brokerage, account_id);
+                            let bright_green_prefix = format!("\x1b[92m{}\x1b[0m", prefix);
+                            // Set the colored prefix
+                            message_bar.set_prefix(bright_green_prefix);
+                            message_bar.set_style(
+                                ProgressStyle::default_spinner()
+                                    .template("{spinner:.green} {prefix} {msg}")
+                                    .expect("Failed to set style"),
+                            );
+                            PROGRESS_PNL.insert(key.clone(), message_bar);
+                        }
+                    }
+                }
+
+                if side != PositionSide::Flat {
+                    if let Some(message_bar) = PROGRESS_PNL.get(&key) {
+                        let msg = format!("Pnl: {:?}, Buy Quantity: {:?}, Sell Quantity: {:?}", msg.open_position_pnl, msg.buy_qty, msg.sell_qty);
+                        message_bar.set_message(msg);
+                    }
+                } else if side == PositionSide::Flat {
+                    if let Some((key, pb)) = PROGRESS_PNL.remove(&key) {
+                        pb.finish_and_clear();
                     }
                 }
                 //println!("PNL Update Message: {:?}", msg);
-
-                if let (Some(pnl), Some(average_price), Some(symbol_name)) = (msg.open_position_pnl, msg.avg_open_fill_price, msg.product_code) {
-                    //todo do this with a simple message, quantity open, and position side, symbol name, symbol code
-                    let open_position_pnl = match f64::from_str(&pnl) {
-                        Ok(open_position_pnl) => open_position_pnl,
-                        Err(_) => return
-                    };
-
-                    let open_position_quantity = match msg.open_position_quantity {
-                        None => return,
-                        Some(open_position_quantity) => match f64::from_str(&open_position_quantity.to_string()) {
-                            Ok(open_position_quantity) => open_position_quantity,
-                            Err(_) => return
-                        }
-                    };
-
-                    let position_update = DataServerResponse::LivePositionUpdates {
-                        symbol_name: symbol_name.clone(),
-                        symbol_code: symbol_code.clone(),
-                        average_price,
-                        account: Account::new(client.brokerage, account_id.clone()),
-                        open_quantity: open_position_quantity,
-                        side,
-                        time,
-                        open_pnl: open_position_pnl,
-                    };
-                    send_updates(position_update).await;
-                }
             }
         },
         451 => {

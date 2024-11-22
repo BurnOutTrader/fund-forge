@@ -42,7 +42,7 @@ async fn main() {
             (Some(PrimarySubscription::new(Resolution::Ticks(1), BaseDataType::Ticks)), DataSubscription::new (
                 symbol_name.clone(),
                 DataVendor::Rithmic,
-                Resolution::Seconds(5),
+                Resolution::Seconds(3),
                 BaseDataType::Candles,
                 MarketType::Futures(exchange),
             ), None),
@@ -61,7 +61,7 @@ async fn main() {
         core::time::Duration::from_millis(100),
         false,
         false,
-        true,
+        false,
         vec![account_1.clone()],
     ).await;
 

@@ -168,6 +168,11 @@ impl Ledger {
         };
         tokio::spawn(async move {
             while let Some(message) = receiver.recv().await {
+               /* match &message {
+                    LedgerMessage::SyncPosition { .. } => eprintln!("{:?}", message),
+                    LedgerMessage::UpdateOrCreatePosition { .. } => eprintln!("{:?}", message),
+                    _ => {}
+                }*/
                 match message {
                     LedgerMessage::SyncPosition { symbol_name, symbol_code, account, open_quantity, average_price, side, open_pnl, time } => {
                         if !static_self.is_simulating_pnl {
@@ -202,7 +207,9 @@ impl Ledger {
     }
 
     async fn synchronize_live_position(&mut self, symbol_name: SymbolName, symbol_code: SymbolCode, account: Account, open_quantity: f64, average_price: f64, side: PositionSide, open_pnl: f64, time: String) {
+        //sleep(std::time::Duration::from_millis(100)).await;
         let mut to_remove = false;
+        let mut to_create = true;
         let pnl = match Decimal::from_f64_retain(open_pnl) {
             Some(pnl) => pnl,
             None => return
@@ -224,7 +231,7 @@ impl Ledger {
                 if position.quantity_open == quantity && position.side == side {
                     return
                 }
-                if position.side == position.side {
+                if position.side == side {
                     if position.quantity_open == quantity {
                         return;
                     }
@@ -238,9 +245,9 @@ impl Ledger {
                             symbol_code: symbol_code.clone(),
                             open_pnl: pnl,
                             booked_pnl: position.booked_pnl.clone(),
-                            account,
+                            account: account.clone(),
                             originating_order_tag: position.tag.clone(),
-                            time,
+                            time: time.clone(),
                         };
                         position.quantity_open = quantity;
                         position.average_price = average_price;
@@ -250,16 +257,6 @@ impl Ledger {
                             PositionSide::Long => OrderSide::Buy,
                             PositionSide::Short => OrderSide::Sell,
                             PositionSide::Flat => OrderSide::Sell //this is only for market price so it's not critical
-                        };
-                        let market_price = match price_service_request_market_price(order_side, position.symbol_name.clone(), symbol_code.clone()).await {
-                            Ok(price) => match price {
-                                PriceServiceResponse::MarketPrice(price) => match price {
-                                    None => return,
-                                    Some(p) => p
-                                }
-                                _ => return
-                            },
-                            Err(_) => return
                         };
                         let reduced_size = position.quantity_open - quantity;
                         let exchange_rate = if self.currency != position.symbol_info.pnl_currency {
@@ -273,13 +270,26 @@ impl Ledger {
                         } else {
                             dec!(1.0)
                         };
+                        let market_price = match average_price > dec!(0) {
+                            false => match price_service_request_market_price(order_side, position.symbol_name.clone(), symbol_code.clone()).await {
+                                Ok(price) => match price {
+                                    PriceServiceResponse::MarketPrice(price) => match price {
+                                        None => return,
+                                        Some(p) => p
+                                    },
+                                    _ => return
+                                },
+                                Err(_) => return
+                            },
+                            true => average_price
+                        };
                         let event = position.reduce_position_size(market_price, reduced_size, self.currency, exchange_rate, Utc::now(), "Synchronizing Position: Reduce Size".to_string()).await;
                         self.strategy_sender.send(StrategyEvent::PositionEvents(event)).await.unwrap();
-
                         if position.is_closed {
                             to_remove = true;
                         }
                     }
+                    to_create = false;
                 } else if side != position.side {
                     let order_side = match side {
                         PositionSide::Long => OrderSide::Sell,
@@ -311,15 +321,17 @@ impl Ledger {
                     let event = position.reduce_position_size(market_price, quantity, self.currency, exchange_rate, Utc::now(), "Synchronizing Position: Reduce Size".to_string()).await;
                     self.strategy_sender.send(StrategyEvent::PositionEvents(event)).await.unwrap();
                     to_remove = true;
+                    to_create = true;
                 }
                 if to_remove {
                     match self.positions.remove(&symbol_code) {
-                        Some((_,p)) => self.positions_closed.entry(symbol_code).or_insert_with(Vec::new).push(p),
+                        Some((_,p)) => self.positions_closed.entry(symbol_code.clone()).or_insert_with(Vec::new).push(p),
                         None => {}
                     }
                 }
             }
-        } else {
+        }
+        if to_create && quantity > dec!(0) {
             let order_side = match side {
                 PositionSide::Long => OrderSide::Buy,
                 PositionSide::Short => OrderSide::Sell,
