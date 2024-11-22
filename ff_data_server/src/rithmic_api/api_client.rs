@@ -915,7 +915,6 @@ impl RithmicBrokerageClient {
                             }
                             RithmicBrokerageClient::start_front_month_cleaner(client.front_month_info.clone()).await;
                             RITHMIC_CLIENTS.insert(system, client.clone());
-
                         }
                         Err(e) => {
                             eprintln!("Failed to create rithmic client for: {}, reason: {}", system, e);
