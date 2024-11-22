@@ -32,6 +32,14 @@ The first objective was to get everything 'sort of working' so that I could get 
 Now that Oanda and Rithmic are in a sort of working state, I will finish the Bitget api, once the bitget api is complete I will be focused on consolidating the code base into a consistent design pattern, to make maintenance and future api implementations easier.
 This step will be done slowly by testing strategies under live and historical conditions, improving functions to handle errors and refactoring as I go to create a simple, easy to understand standard for future integrations.
 
+Oanda: Live is Incomplete.
+
+Rithmic: Works in Live using unsynchrnoized account mode, but should be monitored or have some sort of trader risk rules set on rithmic side.
+
+Bitget: Not yet implemented.
+
+DataBento: Not yet implemented.
+
 ### Initial Setup
 1. Install [rust](https://www.rust-lang.org/tools/install).
 2. Install OpenSSL, `brew install openssl`.
