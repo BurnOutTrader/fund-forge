@@ -34,7 +34,7 @@ This step will be done slowly by testing strategies under live and historical co
 
 Oanda: Live is Incomplete.
 
-Rithmic: Works in Live using unsynchrnoized account mode, but should be monitored or have some sort of trader risk rules set on rithmic side.
+Rithmic: Working in Live using un-synchronized account mode, but should be monitored or have some sort of trader risk rules set on rithmic side.
 
 Bitget: Not yet implemented.
 
