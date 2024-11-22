@@ -1010,6 +1010,7 @@ dependencies = [
  "indicatif",
  "indicatif-log-bridge",
  "lazy_static",
+ "log",
  "memmap2",
  "once_cell",
  "parking_lot",

@@ -5,7 +5,8 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 use ahash::AHashMap;
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, Datelike, Local, TimeZone, Timelike, Utc, Weekday};
+use chrono_tz::America::Chicago;
 use dashmap::DashMap;
 use futures::{SinkExt, StreamExt};
 use futures::future::join_all;
@@ -31,7 +32,7 @@ use rust_decimal_macros::dec;
 use tokio::net::TcpStream;
 use tokio::{select, task};
 use tokio::task::JoinHandle;
-use tokio::time::{interval, timeout};
+use tokio::time::{interval, sleep_until, timeout, Instant};
 use tokio_tungstenite::{MaybeTlsStream, WebSocketStream};
 use tungstenite::Message;
 use ff_standard_lib::apis::rithmic::rithmic_systems::RithmicSystem;
@@ -48,7 +49,7 @@ use crate::rithmic_api::client_base::rithmic_proto_objects::rti::request_login::
 use crate::rithmic_api::client_base::rithmic_proto_objects::rti::{request_tick_bar_replay, RequestAccountRmsInfo, RequestFrontMonthContract, RequestHeartbeat, RequestNewOrder, RequestPnLPositionUpdates, RequestShowOrders, RequestSubscribeForOrderUpdates, RequestTickBarReplay, RequestTimeBarReplay, RequestTradeRoutes};
 use crate::rithmic_api::client_base::rithmic_proto_objects::rti::request_new_order::{OrderPlacement, PriceType, TransactionType};
 use crate::rithmic_api::plant_handlers::handler_loop::handle_rithmic_responses;
-use ff_standard_lib::product_maps::rithmic::maps::get_exchange_by_symbol_name;
+use ff_standard_lib::product_maps::rithmic::maps::{get_exchange_by_symbol_name};
 use once_cell::sync::OnceCell;
 use ff_standard_lib::standardized_types::resolution::Resolution;
 use crate::rithmic_api::client_base::rithmic_proto_objects::rti::request_time_bar_replay::{Direction, TimeOrder};
@@ -93,7 +94,7 @@ pub struct RithmicBrokerageClient {
     pub heartbeat_tasks: Arc<DashMap<SysInfraType, JoinHandle<()>>>,
     /// Rithmic clients
     pub client: Arc<RithmicApiClient>,
-    pub front_month_info: DashMap<SymbolName, FrontMonthInfo>,
+    pub front_month_info: Arc<DashMap<SymbolName, FrontMonthInfo>>,
 
     // accounts
     pub account_info: DashMap<AccountId, AccountInfo>,
@@ -196,6 +197,7 @@ impl RithmicBrokerageClient {
             pending_order_updates: Default::default(),
             historical_callbacks: Default::default(),
         };
+        client.start_front_month_cleaner().await;
         Ok(client)
     }
 
@@ -524,7 +526,37 @@ impl RithmicBrokerageClient {
         Ok(())
     }
 
-    pub async fn front_month(&self, stream_name: StreamName, symbol_name: SymbolName, exchange: FuturesExchange) -> Result<FrontMonthInfo, String> {
+    pub async fn start_front_month_cleaner(&self) {
+        let mut shutdown_signal = subscribe_server_shutdown();
+        let info_map = self.front_month_info.clone();
+        tokio::spawn(async move {
+            loop {
+                let chicago_now = Local::now().with_timezone(&Chicago);
+                let today_weekday = chicago_now.weekday();
+
+                let next_close = match today_weekday {
+                    Weekday::Fri if chicago_now.hour() >= 16 => Chicago.with_ymd_and_hms(chicago_now.year(), chicago_now.month(), chicago_now.day() + 3, 16, 0, 0).unwrap(),
+                    Weekday::Sat => Chicago.with_ymd_and_hms(chicago_now.year(), chicago_now.month(), chicago_now.day() + 2, 16, 0, 0).unwrap(),
+                    Weekday::Sun => Chicago.with_ymd_and_hms(chicago_now.year(), chicago_now.month(), chicago_now.day() + 1, 16, 0, 0).unwrap(),
+                    _ if chicago_now.hour() >= 16 => Chicago.with_ymd_and_hms(chicago_now.year(), chicago_now.month(), chicago_now.day() + 1, 16, 0, 0).unwrap(),
+                    _ => Chicago.with_ymd_and_hms(chicago_now.year(), chicago_now.month(), chicago_now.day(), 16, 0, 0).unwrap(),
+                };
+                let target = Instant::now() + (next_close - chicago_now).to_std().unwrap();
+
+                tokio::select! {
+                    _ = sleep_until(target) => {
+                        info_map.clear();
+                    }
+                    _ = shutdown_signal.recv() => {
+                        log::info!("Front month cleaner received shutdown signal");
+                        break;
+                    }
+                }
+            }
+        });
+    }
+
+    pub async fn get_front_month(&self, stream_name: StreamName, symbol_name: SymbolName, exchange: FuturesExchange) -> Result<FrontMonthInfo, String> {
         const PLANT: SysInfraType = SysInfraType::TickerPlant;
         if let Some(info) = self.front_month_info.get(&symbol_name) {
             Ok(info.clone())
@@ -585,7 +617,7 @@ impl RithmicBrokerageClient {
                     };
                     match order.symbol_code == order.symbol_name {
                         true => {
-                            let front_month = match self.front_month(stream_name, order.symbol_name.clone(), exchange.clone()).await {
+                            let front_month = match self.get_front_month(stream_name, order.symbol_name.clone(), exchange.clone()).await {
                                 Ok(info) => info,
                                 Err(e) => return Err(RithmicBrokerageClient::reject_order(&order, format!("{}", e)))
                             };

@@ -54,3 +54,18 @@ pub struct FrontMonthInfo {
     pub symbol_name: SymbolName,
     pub symbol_code: SymbolCode
 }
+
+
+impl FrontMonthInfo {
+    pub fn new(
+        exchange: FuturesExchange,
+        symbol_name: SymbolName,
+        symbol_code: SymbolCode
+    ) -> Self {
+        Self {
+            exchange,
+            symbol_name,
+            symbol_code
+        }
+    }
+}

@@ -3,7 +3,7 @@ use chrono::{DateTime, Utc};
 use ff_standard_lib::messages::data_server_messaging::{DataServerResponse, FundForgeError};
 use crate::server_features::server_side_brokerage::BrokerApiResponse;
 use ff_standard_lib::standardized_types::broker_enum::Brokerage;
-use ff_standard_lib::standardized_types::enums::{OrderSide, StrategyMode};
+use ff_standard_lib::standardized_types::enums::{FuturesExchange, OrderSide, StrategyMode};
 use ff_standard_lib::standardized_types::new_types::{TimeString};
 use ff_standard_lib::standardized_types::orders::{Order, OrderId, OrderUpdateEvent, OrderUpdateType};
 use ff_standard_lib::standardized_types::subscriptions::SymbolName;
@@ -66,6 +66,38 @@ pub async fn commission_info_response(mode: StrategyMode, brokerage: Brokerage, 
     };
 
     timeout(TIMEOUT_DURATION, operation).await.unwrap_or_else(|_| DataServerResponse::Error { callback_id, error: FundForgeError::ServerErrorDebug("Operation timed out".to_string()) })
+}
+
+pub async fn front_month_info_response(brokerage: Brokerage, symbol_name: SymbolName, exchange: FuturesExchange, stream_name: StreamName, callback_id: u64) -> DataServerResponse {
+    let operation = async {
+        match brokerage {
+            Brokerage::Rithmic(system) => {
+                if let Some(api_client) = RITHMIC_CLIENTS.get(&system) {
+                    if let Ok(info) = api_client.get_front_month(stream_name, symbol_name, exchange).await {
+                        return DataServerResponse::FrontMonthInfo {
+                            callback_id,
+                            info
+                        }
+                    }
+                }
+                DataServerResponse::Error {
+                    callback_id,
+                    error: FundForgeError::ClientSideErrorDebug("Failed to get front month info from Rithmic".to_string())
+                }
+            }
+            _ => {
+                DataServerResponse::Error {
+                    callback_id,
+                    error: FundForgeError::ClientSideErrorDebug("Brokerage not supported for FrontMonthInfo request".to_string())
+                }
+            }
+        }
+    };
+
+    timeout(TIMEOUT_DURATION, operation).await.unwrap_or_else(|_| DataServerResponse::Error {
+        callback_id,
+        error: FundForgeError::ServerErrorDebug("Operation timed out".to_string())
+    })
 }
 
 /// return `DataServerResponse::Symbols` or `DataServerResponse::Error(FundForgeError)`.

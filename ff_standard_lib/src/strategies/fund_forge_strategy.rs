@@ -7,7 +7,7 @@ use crate::strategies::handlers::indicator_handler::IndicatorHandler;
 use crate::strategies::indicators::indicators_trait::{IndicatorName, Indicators};
 use crate::strategies::indicators::indicator_values::IndicatorValues;
 use crate::standardized_types::base_data::history::range_history_data;
-use crate::standardized_types::enums::{OrderSide, StrategyMode, PrimarySubscription};
+use crate::standardized_types::enums::{OrderSide, StrategyMode, PrimarySubscription, FuturesExchange};
 use crate::standardized_types::rolling_window::RollingWindow;
 use crate::strategies::strategy_events::StrategyEvent;
 use crate::strategies::handlers::subscription_handler::SubscriptionHandler;
@@ -19,8 +19,9 @@ use std::sync::Arc;
 use std::time::Duration;
 use dashmap::DashMap;
 use rust_decimal::Decimal;
-use tokio::sync::{mpsc, Notify};
+use tokio::sync::{mpsc, oneshot, Notify};
 use tokio::sync::mpsc::Sender;
+use tokio::time::timeout;
 use uuid::Uuid;
 use crate::helpers::converters::{naive_date_time_to_tz, naive_date_time_to_utc, resolve_market_datetime_in_timezone};
 use crate::strategies::client_features::server_connections::{init_connections, is_warmup_complete};
@@ -28,13 +29,16 @@ use crate::standardized_types::base_data::candle::Candle;
 use crate::standardized_types::base_data::quote::Quote;
 use crate::standardized_types::base_data::quotebar::QuoteBar;
 use crate::standardized_types::base_data::tick::Tick;
-use crate::messages::data_server_messaging::DataServerRequest;
+use crate::messages::data_server_messaging::{DataServerRequest, DataServerResponse};
+use crate::product_maps::rithmic::rollover::get_front_month;
 use crate::standardized_types::accounts::{Account, Currency};
 use crate::standardized_types::base_data::base_data_enum::BaseDataEnum;
+use crate::standardized_types::broker_enum::Brokerage;
 use crate::standardized_types::market_hours::TradingHours;
 use crate::standardized_types::new_types::{Price, Volume};
 use crate::standardized_types::orders::{Order, OrderId, OrderRequest, OrderType, OrderUpdateType, TimeInForce};
 use crate::standardized_types::position::Position;
+use crate::strategies::client_features::client_side_brokerage::TIME_OUT;
 use crate::strategies::client_features::connection_types::ConnectionType;
 use crate::strategies::client_features::live_subscriptions::live_subscription_handler;
 use crate::strategies::client_features::request_handler::{send_request, StrategyRequest};
@@ -232,6 +236,56 @@ impl FundForgeStrategy {
             live_warm_up(Utc::now() - warmup_duration, buffering_duration, subscription_handler, strategy_event_sender, timed_event_handler, ledger_service, indicator_handler).await;
         }
         strategy
+    }
+
+    /// In backtesting this will return the front month using:
+    /// ```rust
+    /// ff_standard_lib::product_maps::rithmic::rollover::get_front_month;
+    /// ```
+    /// In Live or LivePaper mode, this function will instead call the rithmic api via the ff_data_server to get the front month.
+    /// The front month is automatically adjusted each trading day during rollover, there is no automatic position rollover, this must be handled by the strategy.
+    pub async fn get_front_month(&self, brokerage: Brokerage, symbol_name: SymbolName, exchange: FuturesExchange) -> Option<SymbolCode> {
+        match self.mode {
+            StrategyMode::Backtest => {
+                match get_front_month(&symbol_name, self.time_utc()) {
+                    Ok(symbol_code) => Some(symbol_code),
+                    Err(_) => panic!("Error getting front month for backtest")
+                }
+            }
+            StrategyMode::LivePaperTrading | StrategyMode::Live => {
+                let request = DataServerRequest::FrontMonthInfo {
+                    callback_id: 0,
+                    symbol_name,
+                    exchange,
+                    brokerage,
+                };
+                let (sender, receiver) = oneshot::channel();
+                let msg = StrategyRequest::CallBack(ConnectionType::Broker(brokerage), request, sender);
+                send_request(msg).await;
+                match timeout(TIME_OUT, receiver).await {
+                    Ok(receiver_result) => match receiver_result {
+                        Ok(response) => {
+                            match response {
+                                DataServerResponse::FrontMonthInfo { info, .. } => Some(info.symbol_code),
+                                DataServerResponse::Error { error, .. } => {
+                                    eprintln!("Error getting front month: {:?}", error);
+                                    None
+                                },
+                                _ => None
+                            }
+                        },
+                        Err(e) => {
+                            eprintln!("Error getting front month: {:?}", e);
+                            None
+                        }
+                    },
+                    Err(e) => {
+                        eprintln!("Error getting front month: {:?}", e);
+                        None
+                    }
+                }
+            }
+        }
     }
 
     pub fn accounts(&self) -> &Vec<Account> {

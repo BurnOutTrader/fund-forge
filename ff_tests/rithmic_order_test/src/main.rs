@@ -61,7 +61,7 @@ async fn main() {
         core::time::Duration::from_millis(100),
         false,
         false,
-        false,
+        true,
         vec![account_1.clone()],
     ).await;
 

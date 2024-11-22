@@ -1,4 +1,4 @@
-use crate::standardized_types::enums::{MarketType, OrderSide, StrategyMode, PrimarySubscription, PositionSide};
+use crate::standardized_types::enums::{MarketType, OrderSide, StrategyMode, PrimarySubscription, PositionSide, FuturesExchange};
 use crate::standardized_types::subscriptions::{DataSubscription, Symbol, SymbolCode, SymbolName};
 use crate::standardized_types::bytes_trait::Bytes;
 use rkyv::{Archive, Deserialize, Serialize};
@@ -130,6 +130,12 @@ pub enum DataServerRequest {
         from_time: String,
         to_time: String
     },
+    FrontMonthInfo {
+        callback_id: u64,
+        symbol_name: SymbolName,
+        exchange: FuturesExchange,
+        brokerage: Brokerage
+    },
     Accounts{callback_id: u64, brokerage: Brokerage},
     SymbolNames{callback_id: u64, brokerage: Brokerage, time: Option<String>},
     RegisterStreamer{port: u16, secs: u64, subsec: u32},
@@ -169,6 +175,7 @@ impl DataServerRequest {
             DataServerRequest::WarmUpResolutions { callback_id, .. } => {*callback_id = id}
             DataServerRequest::ExchangeRate { callback_id, .. } => {*callback_id = id}
             DataServerRequest::GetCompressedHistoricalData { callback_id, .. } => {*callback_id = id}
+            DataServerRequest::FrontMonthInfo { callback_id, .. } => {*callback_id = id}
         }
     }
 }

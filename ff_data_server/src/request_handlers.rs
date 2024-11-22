@@ -18,7 +18,7 @@ use tokio::sync::mpsc::{Receiver, Sender};
 use tokio::time::timeout;
 use tokio_rustls::server::TlsStream;
 use crate::server_features::database::hybrid_storage::{DATA_STORAGE, MULTIBAR};
-use crate::server_side_brokerage::{account_info_response, accounts_response, commission_info_response, live_market_order, symbol_info_response, symbol_names_response, live_enter_long, live_exit_long, live_exit_short, live_enter_short, other_orders, cancel_order, flatten_all_for, update_order, cancel_orders_on_account, exchange_rate_response};
+use crate::server_side_brokerage::{account_info_response, accounts_response, commission_info_response, live_market_order, symbol_info_response, symbol_names_response, live_enter_long, live_exit_long, live_exit_short, live_enter_short, other_orders, cancel_order, flatten_all_for, update_order, cancel_orders_on_account, exchange_rate_response, front_month_info_response};
 use crate::server_side_datavendor::{base_data_types_response, decimal_accuracy_response, markets_response, resolutions_response, symbols_response, tick_size_response};
 use ff_standard_lib::standardized_types::enums::StrategyMode;
 use ff_standard_lib::standardized_types::orders::{Order, OrderRequest, OrderType, OrderUpdateEvent};
@@ -241,6 +241,12 @@ pub async fn manage_async_requests(
                     DataServerRequest::CommissionInfo { callback_id, brokerage, symbol_name } => {
                         handle_callback(
                             || commission_info_response(mode, brokerage, symbol_name, stream_name, callback_id),
+                            sender.clone()).await
+                    }
+
+                    DataServerRequest::FrontMonthInfo { callback_id, symbol_name, exchange, brokerage } => {
+                        handle_callback(
+                            || front_month_info_response(brokerage, symbol_name, exchange, stream_name, callback_id),
                             sender.clone()).await
                     }
 
