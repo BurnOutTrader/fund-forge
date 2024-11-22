@@ -92,7 +92,7 @@ pub fn handle_rithmic_responses(
                         Message::Close(close_frame) => {
                             println!("Received close message: {:?}. Attempting reconnection.", close_frame);
                                 task::spawn(async move {
-                                    attempt_reconnect(&client, plant.clone()).await
+                                    attempt_reconnect(client.clone(), plant.clone()).await
                                 });
                             break 'main_loop;
                         }
@@ -100,7 +100,7 @@ pub fn handle_rithmic_responses(
                             if format!("{:?}", frame).contains("CloseFrame") {
                                 println!("Received close frame. Attempting reconnection.");
                                 task::spawn(async move {
-                                    attempt_reconnect(&client, plant.clone()).await
+                                    attempt_reconnect(client.clone(), plant.clone()).await
                                 });
                                 break 'main_loop;
                             }

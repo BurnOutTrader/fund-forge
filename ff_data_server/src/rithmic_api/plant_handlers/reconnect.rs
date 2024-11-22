@@ -7,7 +7,7 @@ use crate::rithmic_api::api_client::RithmicBrokerageClient;
 use crate::rithmic_api::plant_handlers::handler_loop::handle_rithmic_responses;
 
 pub(crate) async fn attempt_reconnect(
-    client: &Arc<RithmicBrokerageClient>,
+    client: Arc<RithmicBrokerageClient>,
     plant: SysInfraType,
 ) {
     let mut delay = Duration::from_secs(5); // Initial retry delay
