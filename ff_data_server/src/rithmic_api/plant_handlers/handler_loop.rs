@@ -39,18 +39,15 @@ pub fn handle_rithmic_responses(
     plant: SysInfraType,
 ) {
     let mut shutdown_receiver = subscribe_server_shutdown();
-
-    // Pre-allocate buffers
     let mut length_buf = [0u8; 4];
-    let mut message_buf = BytesMut::with_capacity(16384);
 
     // Use bounded channel with backpressure
-    let (tx, mut rx) = mpsc::channel(1024);
+    let (tx, mut rx) = mpsc::channel(4096);
 
     // Spawn message processor task
     let process_client = client.clone();
     let process_plant = plant.clone();
-    tokio::spawn(async move {
+    let processor = tokio::spawn(async move {
         while let Some((template_id, message)) = rx.recv().await {
             match process_plant {
                 SysInfraType::TickerPlant => match_ticker_plant_id(template_id, message, process_client.clone()).await,
@@ -62,41 +59,35 @@ pub fn handle_rithmic_responses(
         }
     });
 
-    tokio::spawn(async move {
+    let reader_task = tokio::spawn(async move {
         'main_loop: loop {
             tokio::select! {
                 Some(Ok(message)) = reader.next() => {
                     match message {
                         Message::Binary(bytes) => {
-                            let mut cursor = Cursor::new(bytes);
+                            // Fast path: direct slice access
+                            if bytes.len() >= 4 {
+                                length_buf.copy_from_slice(&bytes[..4]);
+                                let length = u32::from_be_bytes(length_buf) as usize;
 
-                            match cursor.chunk().len() {
-                                n if n >= 4 => {
-                                    length_buf.copy_from_slice(&cursor.chunk()[..4]);
-                                    cursor.advance(4);
-                                    let length = u32::from_be_bytes(length_buf) as usize;
+                                // Validate message length
+                                if bytes.len() != length + 4 {
+                                    eprintln!("Invalid message length. Expected: {}, Got: {}", length + 4, bytes.len());
+                                    continue;
+                                }
 
-                                    if message_buf.capacity() < length {
-                                        message_buf.reserve(length - message_buf.capacity());
-                                    }
-                                    message_buf.resize(length, 0);
+                                // Extract template ID and send message
+                                if let Some(template_id) = extract_template_id(&bytes[4..]) {
+                                    // Zero-copy slice of the message data
+                                    let message_data = bytes[4..].to_vec();
 
-                                    if cursor.chunk().len() >= length {
-                                        message_buf[..length].copy_from_slice(&cursor.chunk()[..length]);
-
-                                        if let Some(template_id) = extract_template_id(&message_buf) {
-                                            let message_data = message_buf[..length].to_vec();
-
-                                            // Wait for the message to be sent - never drop messages
-                                            if let Err(e) = tx.send((template_id, message_data)).await {
-                                                eprintln!("Fatal error sending message to processor: {}", e);
-                                                // In a real system, you might want to initiate shutdown here
-                                                break 'main_loop;
-                                            }
-                                        }
+                                    if let Err(e) = tx.send((template_id, message_data)).await {
+                                        eprintln!("Fatal error sending message to processor: {}", e);
+                                        break 'main_loop;
                                     }
                                 }
-                                _ => eprintln!("Message too short"),
+                            } else {
+                                eprintln!("Message too short: {} bytes", bytes.len());
                             }
                         }
                         Message::Close(close_frame) => {
@@ -116,7 +107,7 @@ pub fn handle_rithmic_responses(
                             }
                         }
                         Message::Text(text) => println!("{}", text),
-                        Message::Ping(_) | Message::Pong(_) => {} // Still ignore ping/pong as they don't carry market data
+                        Message::Ping(_) | Message::Pong(_) => {}
                     }
                 },
                 _ = shutdown_receiver.recv() => {
@@ -128,11 +119,27 @@ pub fn handle_rithmic_responses(
 
         // Cleanup
         println!("Cleaning up Rithmic response handler for plant: {:?}", plant);
-        drop(tx); // Drop sender to close the channel and let processor task complete
+        drop(tx);
 
         if let Some((_, writer)) = client.writers.remove(&plant) {
             if let Err(e) = shutdown_plant(writer).await {
                 eprintln!("Error shutting down plant: {:?}", e);
+            }
+        }
+    });
+
+    // Spawn supervisor task
+    tokio::spawn(async move {
+        tokio::select! {
+            reader_result = reader_task => {
+                if let Err(e) = reader_result {
+                    eprintln!("Reader task failed: {:?}", e);
+                }
+            }
+            processor_result = processor => {
+                if let Err(e) = processor_result {
+                    eprintln!("Processor task failed: {:?}", e);
+                }
             }
         }
     });
