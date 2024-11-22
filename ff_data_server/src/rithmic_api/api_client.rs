@@ -967,7 +967,7 @@ impl RithmicBrokerageClient {
                     bar_type_specifier: Some("1".to_string()),
                     start_index: Some(window_start.timestamp() as i32),
                     finish_index: Some(window_end.timestamp() as i32),
-                    user_max_count: Some(max_bars),
+                    user_max_count: Some(5000),
                     custom_session_open_ssm: None,
                     custom_session_close_ssm: None,
                     direction: Some(request_tick_bar_replay::Direction::First.into()),
