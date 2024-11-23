@@ -79,6 +79,7 @@ impl Ledger {
 
     pub(crate) async fn paper_exit_position(
         &mut self,
+        order_id: OrderId,
         symbol_code: &SymbolCode,
         time: DateTime<Utc>,
         market_price: Price,
@@ -105,7 +106,7 @@ impl Ledger {
                 dec!(1.0)
             };
             self.charge_commission(&symbol_name, existing_position.quantity_open, exchange_rate).await;
-            let event = existing_position.reduce_position_size(market_price, existing_position.quantity_open, self.currency, exchange_rate, time, tag).await;
+            let event = existing_position.reduce_position_size(market_price, existing_position.quantity_open, order_id, self.currency, exchange_rate, time, tag).await;
             match &event {
                 PositionUpdateEvent::PositionClosed { booked_pnl, .. } => {
                     // TODO[Strategy]: Add option to mirror account position or use internal position curating.
@@ -172,7 +173,7 @@ impl Ledger {
                     dec!(1.0)
                 };
                 self.charge_commission(&symbol_name, existing_position.quantity_open, exchange_rate).await;
-                let event = existing_position.reduce_position_size(market_fill_price, quantity, self.currency,exchange_rate, time, tag.clone()).await;
+                let event = existing_position.reduce_position_size(market_fill_price, quantity, order_id.clone(), self.currency,exchange_rate, time, tag.clone()).await;
 
                // eprintln!("symbol_code: {}, existing_position: {:?}", symbol_code, existing_position);
 
@@ -236,7 +237,7 @@ impl Ledger {
                         return
                     }
                 }
-                let event = existing_position.add_to_position(self.mode, self.is_simulating_pnl, self.currency, market_fill_price, quantity, time, tag.clone()).await;
+                let event = existing_position.add_to_position(self.mode, self.is_simulating_pnl, order_id.clone(), self.currency, market_fill_price, quantity, time, tag.clone()).await;
                 self.positions.insert(symbol_code.clone(), existing_position);
 
                 self.cash_value = self.cash_used + self.cash_available;
@@ -301,6 +302,7 @@ impl Ledger {
             let position = Position::new(
                 symbol_name.clone(),
                 symbol_code.clone(),
+                order_id,
                 self.account.clone(),
                 position_side.clone(),
                 remaining_quantity,
@@ -381,8 +383,8 @@ impl Ledger {
                 Err(_) => continue
             };
 
-            let tag = "Flatten All".to_string();
-            self.paper_exit_position(&symbol_code, time, market_price, tag).await;
+            const FLATTEN_ALL_ID_TAG: &str = "Flatten All"; //use this as tag and order_id
+            self.paper_exit_position(FLATTEN_ALL_ID_TAG.to_string(), &symbol_code, time, market_price, FLATTEN_ALL_ID_TAG.to_string()).await;
         }
     }
 }

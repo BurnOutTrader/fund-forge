@@ -50,9 +50,9 @@ pub(crate) fn live_order_handler(
                          order.quantity_open = dec!(0.0);
                          order.time_filled_utc = Some(time.clone());
                          order.state = OrderState::Filled;
-
+                         closed_order_cache.insert(order_id.clone(), order.clone());
                          //println!("{}", order_update_event);
-                         ledger_service.update_or_create_position(&account, symbol_name.clone(), symbol_code.clone(), quantity, side.clone(), time_utc, *price, tag.to_string(), None, None).await;
+                         ledger_service.update_or_create_position(&account, symbol_name.clone(), symbol_code.clone(), quantity, side.clone(), time_utc, *price, tag.to_string(), None, order_id).await;
 
                          match strategy_event_sender.send(StrategyEvent::OrderEvents(order_update_event.clone())).await {
                              Ok(_) => {}
@@ -71,7 +71,7 @@ pub(crate) fn live_order_handler(
                        order.quantity_filled += quantity;
                        order.quantity_open -= quantity;
                        order.time_filled_utc = Some(time.clone());
-                       ledger_service.update_or_create_position(&account, symbol_name.clone(), symbol_code.clone(), quantity.clone(), side.clone(), time_utc, *price, tag.to_string(), None, None).await;
+                       ledger_service.update_or_create_position(&account, symbol_name.clone(), symbol_code.clone(), quantity.clone(), side.clone(), time_utc, *price, tag.to_string(), None, order_id.clone()).await;
                        match strategy_event_sender.send(StrategyEvent::OrderEvents(order_update_event.clone())).await {
                            Ok(_) => {}
                            Err(e) => eprintln!("{}", e)

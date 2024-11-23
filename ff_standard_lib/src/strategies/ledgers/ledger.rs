@@ -39,10 +39,10 @@ use crate::strategies::strategy_events::StrategyEvent;
 #[derive(Debug)]
 pub enum LedgerMessage {
     SyncPosition{symbol_name: SymbolName, symbol_code: SymbolCode, account: Account, open_quantity: f64, average_price: f64, side: PositionSide, open_pnl: f64, time: String},
-    UpdateOrCreatePosition{symbol_name: SymbolName, symbol_code: SymbolCode, quantity: Volume, side: OrderSide, time: DateTime<Utc>, market_fill_price: Price, tag: String, paper_response_sender: Option<oneshot::Sender<Option<OrderUpdateEvent>>>, order_id: Option<OrderId>},
+    UpdateOrCreatePosition{symbol_name: SymbolName, symbol_code: SymbolCode, quantity: Volume, side: OrderSide, time: DateTime<Utc>, market_fill_price: Price, tag: String, paper_response_sender: Option<oneshot::Sender<Option<OrderUpdateEvent>>>, order_id: OrderId},
     TimeSliceUpdate{time_slice: Arc<TimeSlice>},
     LiveAccountUpdate{cash_value: Decimal, cash_available: Decimal, cash_used: Decimal},
-    ExitPaperPosition{symbol_code: SymbolCode, time: DateTime<Utc>, market_fill_price: Price, tag: String},
+    ExitPaperPosition{symbol_code: SymbolCode, order_id: OrderId, time: DateTime<Utc>, market_fill_price: Price, tag: String},
     PaperFlattenAll{time: DateTime<Utc>},
 }
 
@@ -189,10 +189,10 @@ impl Ledger {
                     }
                     LedgerMessage::UpdateOrCreatePosition { symbol_name, symbol_code, quantity, side, time, market_fill_price, tag , paper_response_sender, order_id} => {
                         match mode {
-                            StrategyMode::Backtest | StrategyMode::LivePaperTrading => static_self.update_or_create_paper_position(symbol_name, symbol_code, quantity, side, time, market_fill_price, tag, order_id.unwrap(), paper_response_sender.unwrap()).await,
+                            StrategyMode::Backtest | StrategyMode::LivePaperTrading => static_self.update_or_create_paper_position(symbol_name, symbol_code, quantity, side, time, market_fill_price, tag, order_id.clone(), paper_response_sender.unwrap()).await,
                             StrategyMode::Live => {
                                 if static_self.is_simulating_pnl {
-                                    static_self.update_or_create_live_position(symbol_name, symbol_code, quantity, side, time, market_fill_price, tag).await
+                                    static_self.update_or_create_live_position(symbol_name, symbol_code, order_id, quantity, side, time, market_fill_price, tag).await
                                 }
                             }
                         };
@@ -203,8 +203,8 @@ impl Ledger {
                     LedgerMessage::LiveAccountUpdate { cash_value, cash_available, cash_used } => {
                         static_self.update(cash_value, cash_available, cash_used);
                     }
-                    LedgerMessage::ExitPaperPosition { symbol_code, time, market_fill_price, tag } => {
-                        static_self.paper_exit_position(&symbol_code, time, market_fill_price, tag).await;
+                    LedgerMessage::ExitPaperPosition { symbol_code, order_id,time, market_fill_price, tag } => {
+                        static_self.paper_exit_position(order_id, &symbol_code, time, market_fill_price, tag).await;
                     }
                     LedgerMessage::PaperFlattenAll { time } => {
                         static_self.flatten_all_for_paper_account(time).await;
@@ -291,7 +291,7 @@ impl Ledger {
                             },
                             true => average_price
                         };
-                        let event = position.reduce_position_size(market_price, reduced_size, self.currency, exchange_rate, Utc::now(), "Synchronizing Position: Reduce Size".to_string()).await;
+                        let event = position.reduce_position_size(market_price, reduced_size, "NULL".to_string(), self.currency, exchange_rate, Utc::now(), "Synchronizing Position: Reduce Size".to_string()).await;
                         self.strategy_sender.send(StrategyEvent::PositionEvents(event)).await.unwrap();
                         if position.is_closed {
                             to_remove = true;
@@ -326,7 +326,7 @@ impl Ledger {
                         dec!(1.0)
                     };
                     let quantity = position.quantity_open.clone();
-                    let event = position.reduce_position_size(market_price, quantity, self.currency, exchange_rate, Utc::now(), "Synchronizing Position: Reduce Size".to_string()).await;
+                    let event = position.reduce_position_size(market_price, quantity, "NULL".to_string(), self.currency, exchange_rate, Utc::now(), "Synchronizing Position: Reduce Size".to_string()).await;
                     self.strategy_sender.send(StrategyEvent::PositionEvents(event)).await.unwrap();
                     to_remove = true;
                     to_create = true;
@@ -345,7 +345,7 @@ impl Ledger {
                 PositionSide::Short => OrderSide::Sell,
                 PositionSide::Flat => return
             };
-            self.update_or_create_live_position(symbol_name, symbol_code.clone(), quantity, order_side, Utc::now(), average_price, "Synchronizing Position: Position Opened".to_string()).await;
+            self.update_or_create_live_position(symbol_name, symbol_code.clone(), "NULL".to_string(), quantity, order_side, Utc::now(), average_price, "Synchronizing Position: Position Opened".to_string()).await;
             if let Some(position) = self.positions.get(&symbol_code) {
                 let event = PositionUpdateEvent::PositionOpened {
                     average_price,
@@ -687,6 +687,7 @@ impl Ledger {
         &mut self,
         symbol_name: SymbolName,
         symbol_code: SymbolCode,
+        order_id: OrderId,
         quantity: Volume,
         side: OrderSide,
         time: DateTime<Utc>,
@@ -720,7 +721,7 @@ impl Ledger {
                 } else {
                     dec!(1.0)
                 };
-                let event= existing_position.reduce_position_size(market_fill_price, quantity, self.currency, exchange_rate, time, tag.clone()).await;
+                let event= existing_position.reduce_position_size(market_fill_price, quantity, order_id.clone(), self.currency, exchange_rate, time, tag.clone()).await;
                 match &event {
                     PositionUpdateEvent::PositionReduced { booked_pnl, .. } => {
                         self.positions.insert(symbol_code.clone(), existing_position);
@@ -755,7 +756,7 @@ impl Ledger {
                 }
                 position_events.push(event);
             } else {
-                let event = existing_position.add_to_position(self.mode, self.is_simulating_pnl, self.currency, market_fill_price, quantity, time, tag.clone()).await;
+                let event = existing_position.add_to_position(self.mode, self.is_simulating_pnl, order_id.clone(), self.currency, market_fill_price, quantity, time, tag.clone()).await;
                 self.positions.insert(symbol_code.clone(), existing_position);
 
                 position_events.push(event);
@@ -797,6 +798,7 @@ impl Ledger {
             let position = Position::new(
                 symbol_code.clone(),
                 symbol_code.clone(),
+                order_id,
                 self.account.clone(),
                 position_side,
                 remaining_quantity,
@@ -1041,7 +1043,7 @@ struct TradeExport {
     exit_time: String,
     pnl: Decimal,
     tag: String,
-    result: String
+    result: String,
 }
 
 #[cfg(test)]

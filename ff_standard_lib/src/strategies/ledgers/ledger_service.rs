@@ -75,7 +75,7 @@ impl LedgerService {
         market_fill_price: Price, // we use the passed in price because we don't know what sort of order was filled, limit or market
         tag: String,
         paper_response_sender: Option<oneshot::Sender<Option<OrderUpdateEvent>>>,
-        order_id: Option<OrderId>
+        order_id: OrderId
     ) {
         if let Some(sender) = self.ledger_senders.get(account) {
             let msg = LedgerMessage::UpdateOrCreatePosition{symbol_name, symbol_code, quantity, side, time, market_fill_price, tag, paper_response_sender, order_id};
@@ -87,6 +87,7 @@ impl LedgerService {
         &self,
         account: &Account,
         symbol_code: SymbolCode,
+        order_id: OrderId,
         time: DateTime<Utc>,
         market_price: Price,
         tag: String
@@ -94,6 +95,7 @@ impl LedgerService {
         if let Some(ledger_sender) = self.ledger_senders.get(account) {
             let msg = LedgerMessage::ExitPaperPosition {
                 symbol_code,
+                order_id,
                 time,
                 tag,
                 market_fill_price: market_price,

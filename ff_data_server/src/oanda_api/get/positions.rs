@@ -146,6 +146,7 @@ pub fn parse_oanda_position(position: OandaPosition, account: Account) -> Option
     let mut position = Position::new(
         symbol_name.clone(),
         symbol_name,
+        "Exising_Order".to_string(),
         account.clone(),
         side,
         quantity,

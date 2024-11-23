@@ -573,7 +573,7 @@ pub(crate) async fn simulated_order_matching (
                     Err(_) => continue
                 };
                 if ledger_service.is_short(&order.account, &order.symbol_code) {
-                    ledger_service.paper_exit_position(&order.account,  order.symbol_code.clone(), time, market_fill_price, String::from("Force Exit By Enter Long")).await;
+                    ledger_service.paper_exit_position(&order.account,  order.symbol_code.clone(),  order.id.clone(), time, market_fill_price, String::from("Force Exit By Enter Long")).await;
                 }
                 filled.push((order.id.clone(), market_fill_price));
             }
@@ -586,7 +586,7 @@ pub(crate) async fn simulated_order_matching (
                     Err(_) => continue,
                 };
                 if ledger_service.is_long(&order.account, &order.symbol_code) {
-                    ledger_service.paper_exit_position(&order.account,  order.symbol_code.clone(), time, market_fill_price, String::from("Force Exit By Enter Short")).await;
+                    ledger_service.paper_exit_position(&order.account,  order.symbol_code.clone(), order.id.clone(), time, market_fill_price, String::from("Force Exit By Enter Short")).await;
                 }
                 filled.push((order.id.clone(), market_fill_price));
             }
@@ -662,7 +662,7 @@ async fn fill_order(
 ) {
     if let Some((_, mut order)) = open_order_cache.remove(order_id) {  // Remove the order here
        let (sender, receiver) = oneshot::channel();
-        ledger_service.update_or_create_position(&order.account, order.symbol_name.clone(), order.symbol_code.clone(), order.quantity_open.clone(), order.side.clone(), time.clone(), market_price, order.tag.clone(), Some(sender), Some(order_id.clone())).await;
+        ledger_service.update_or_create_position(&order.account, order.symbol_name.clone(), order.symbol_code.clone(), order.quantity_open.clone(), order.side.clone(), time.clone(), market_price, order.tag.clone(), Some(sender), order_id.clone()).await;
         match receiver.await {
             Ok(event) => {
                 match event {
@@ -715,7 +715,7 @@ async fn partially_fill_order(
 ) {
     if let Some((_, mut order)) = open_order_cache.remove(order_id) {
         let (sender, receiver) = oneshot::channel();
-        ledger_service.update_or_create_position(&order.account, order.symbol_name.clone(),  order.symbol_code.clone(), fill_volume, order.side.clone(), time, fill_price, order.tag.clone(), Some(sender), Some(order_id.clone())).await;
+        ledger_service.update_or_create_position(&order.account, order.symbol_name.clone(),  order.symbol_code.clone(), fill_volume, order.side.clone(), time, fill_price, order.tag.clone(), Some(sender), order_id.clone()).await;
 
         match receiver.await {
             Ok(event) => {

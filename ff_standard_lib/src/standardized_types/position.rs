@@ -17,6 +17,7 @@ use crate::standardized_types::broker_enum::Brokerage;
 use crate::standardized_types::enums::{PositionSide, StrategyMode};
 use crate::standardized_types::subscriptions::{SymbolCode, SymbolName};
 use crate::standardized_types::new_types::{Price, Volume};
+use crate::standardized_types::orders::OrderId;
 use crate::standardized_types::symbol_info::SymbolInfo;
 
 pub type PositionId = String;
@@ -231,11 +232,12 @@ pub enum PositionCalculationMode {
 pub struct EntryPrice {
     pub volume: Volume,
     pub price: Price,
+    pub order_id: OrderId
 }
 
 impl EntryPrice {
-    pub fn new(volume: Volume, price: Price) -> Self {
-        Self { volume, price }
+    pub fn new(volume: Volume, price: Price, order_id: OrderId) -> Self {
+        Self { volume, price, order_id }
     }
 }
 
@@ -263,8 +265,10 @@ impl Display for TradeResult {
 #[archive_attr(derive(Debug))]
 pub struct Trade {
     pub entry_price: Price,
+    pub entry_order_id: OrderId,
     pub entry_quantity: Volume,
     pub exit_price: Price,
+    pub exit_order_id: OrderId,
     pub exit_quantity: Volume,
     pub entry_time: String,
     pub exit_time: String,
@@ -319,6 +323,7 @@ impl Position {
     pub fn new (
         symbol_name: SymbolName,
         symbol_code: String,
+        entry_order_id: OrderId,
         account: Account,
         side: PositionSide,
         quantity: Volume,
@@ -351,7 +356,7 @@ impl Position {
             exchange_rate_multiplier,
             tag,
             position_calculation_mode,
-            open_entry_prices: VecDeque::from(vec![EntryPrice::new(quantity, average_price)]),
+            open_entry_prices: VecDeque::from(vec![EntryPrice::new(quantity, average_price, entry_order_id)]),
             completed_trades: vec![]
         }
     }
@@ -444,7 +449,7 @@ impl Position {
     }
 
     /// Reduces position size a position event, this event will include a booked_pnl property
-    pub(crate) async fn reduce_position_size(&mut self, market_price: Price, quantity: Volume, account_currency: Currency, exchange_rate: Decimal, time: DateTime<Utc>, tag: String) -> PositionUpdateEvent {
+    pub(crate) async fn reduce_position_size(&mut self, market_price: Price, quantity: Volume, order_id: OrderId, account_currency: Currency, exchange_rate: Decimal, time: DateTime<Utc>, tag: String) -> PositionUpdateEvent {
         if quantity > self.quantity_open {
             panic!("Something wrong with logic, ledger should know this not to be possible")
         }
@@ -486,19 +491,21 @@ impl Position {
             // Record the trade
             self.completed_trades.push(Trade {
                 entry_price: entry.price,
+                entry_order_id: entry.order_id.clone(),
                 entry_quantity: exit_quantity,
                 exit_price: market_price,
                 exit_quantity,
                 entry_time: self.open_time.clone(), // We could add entry_time to EntryPrice if we need exact times
                 exit_time: time.to_string(),
                 profit: portion_booked_pnl,
+                exit_order_id: order_id.clone(),
                 result
             });
 
             // If we didn't use all of this entry, we need to put back the remainder
             let remaining_entry_volume = entry.volume - exit_quantity;
             if remaining_entry_volume > dec!(0.0) {
-                let remaining_entry = EntryPrice::new(remaining_entry_volume, entry.price);
+                let remaining_entry = EntryPrice::new(remaining_entry_volume, entry.price, entry.order_id.clone());
                 match self.position_calculation_mode {
                     PositionCalculationMode::FIFO => temp_entries.push_back(remaining_entry),
                     PositionCalculationMode::LIFO => temp_entries.push_front(remaining_entry),
@@ -593,9 +600,9 @@ impl Position {
         }
     }
 
-    pub(crate) async fn add_to_position(&mut self, mode: StrategyMode, is_simulating_pnl: bool, account_currency: Currency, market_price: Price, quantity: Volume, time: DateTime<Utc>, tag: String) -> PositionUpdateEvent {
+    pub(crate) async fn add_to_position(&mut self, mode: StrategyMode, is_simulating_pnl: bool, order_id: OrderId, account_currency: Currency, market_price: Price, quantity: Volume, time: DateTime<Utc>, tag: String) -> PositionUpdateEvent {
         // Add new entry price
-        self.open_entry_prices.push_back(EntryPrice::new(quantity, market_price));
+        self.open_entry_prices.push_back(EntryPrice::new(quantity, market_price, order_id));
 
         // Recalculate average price from all entries
         let (total_volume, total_weighted_price) = self.open_entry_prices.iter()
