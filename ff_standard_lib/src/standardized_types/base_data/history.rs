@@ -170,12 +170,17 @@ pub async fn get_compressed_historical_data(
 
         let results = join_all(futures).await;
         let mut combined_data = BTreeMap::new();
-
         for result in results {
             match result {
                 Ok(payload) => {
                     let partial_data = process_payload(payload, from_time, to_time).await?;
-                    combined_data.extend(partial_data);
+                    // Properly merge TimeSlices for same timestamps
+                    for (timestamp, time_slice) in partial_data {
+                        combined_data
+                            .entry(timestamp)
+                            .and_modify(|existing: &mut TimeSlice| existing.merge(time_slice.clone()))
+                            .or_insert(time_slice);
+                    }
                 },
                 Err(e) => return Err(e),
             }
