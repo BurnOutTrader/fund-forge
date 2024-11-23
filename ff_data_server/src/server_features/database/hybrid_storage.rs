@@ -569,7 +569,7 @@ impl HybridStorage {
 }
 
 #[cfg(test)]
-mod tests {
+mod test {
     use tempfile::TempDir;
     use ff_standard_lib::standardized_types::base_data::candle::generate_5_day_candle_data;
     use super::*;

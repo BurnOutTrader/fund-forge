@@ -1047,7 +1047,7 @@ struct TradeExport {
 }
 
 #[cfg(test)]
-mod tests {
+mod test {
     use super::*;
     use rust_decimal_macros::dec;
     use crate::apis::rithmic::rithmic_systems::RithmicSystem;

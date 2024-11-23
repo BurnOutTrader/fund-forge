@@ -718,7 +718,7 @@ impl Position {
 
 
 #[cfg(test)]
-mod tests {
+mod test {
     use super::*;
     use rust_decimal_macros::dec;
     use crate::product_maps::rithmic::maps::get_futures_symbol_info;
