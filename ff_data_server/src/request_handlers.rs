@@ -469,7 +469,7 @@ fn create_order_rejected(order: &Order, reason: String) -> OrderUpdateEvent {
     OrderUpdateEvent::OrderRejected {
         account: order.account.clone(),
         symbol_name: order.symbol_name.clone(),
-        symbol_code: "".to_string(),
+        symbol_code: order.symbol_code.clone(),
         order_id: order.id.clone(),
         reason,
         tag: order.tag.clone(),
