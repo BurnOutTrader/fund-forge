@@ -25,6 +25,7 @@ use ff_standard_lib::standardized_types::enums::StrategyMode;
 use ff_standard_lib::standardized_types::orders::{Order, OrderRequest, OrderType, OrderUpdateEvent};
 use ff_standard_lib::StreamName;
 use crate::{stream_listener};
+use crate::stream_tasks::deregister_streamer;
 
 lazy_static!(
     pub static ref RESPONSE_SENDERS: Arc<DashMap<StreamName, Sender<DataServerResponse>>> = Arc::new(DashMap::new());
@@ -132,7 +133,8 @@ pub async fn manage_async_requests(
             match receiver.read_exact(&mut message_body).await {
                 Ok(_) => {},
                 Err(e) => {
-                    eprintln!("Error reading message body: {}", e);
+                    let msg = format!("Error reading message body: {}", e);
+                    message_bar.set_message(msg);
                     // Break the loop and stop processing on disconnection
                     break;
                 }
@@ -141,7 +143,8 @@ pub async fn manage_async_requests(
             let request = match DataServerRequest::from_bytes(&message_body) {
                 Ok(req) => req,
                 Err(e) => {
-                    eprintln!("Failed to parse request: {:?}", e);
+                    let msg = format!("Failed to parse request: {:?}", e);
+                    message_bar.set_message(msg);
                     continue;
                 }
             };
@@ -358,7 +361,9 @@ pub async fn manage_async_requests(
             });
         }
         // Deregister when disconnected
-        //deregister_streamer(&stream_name).await;
+        if strategy_mode != StrategyMode::Backtest {
+            deregister_streamer(&stream_name).await;
+        }
         RESPONSE_SENDERS.remove(&stream_name);
         message_bar.finish_and_clear();
     });

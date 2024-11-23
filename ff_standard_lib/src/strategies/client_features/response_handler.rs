@@ -33,7 +33,6 @@ pub async fn response_handler(
     ledger_service: Arc<LedgerService>, //it is better to do this than use messaging, because using a direct fn call we can concurrently update individual ledgers and have a que per ledger. sending a msg here would cause a bottleneck with more ledgers.
     indicator_handler: Arc<IndicatorHandler>,
     subscription_handler: Arc<SubscriptionHandler>,
-
 ) {
     let settings_map = SETTINGS_MAP.clone();
     for (connection, settings) in settings_map.iter() {
@@ -120,12 +119,17 @@ pub async fn response_handler(
                                         live_data_receiver::handle_live_data(settings.clone(), port, buffer_duration, strategy_event_sender.clone(), ledger_service.clone(), indicator_handler.clone(), subscription_handler.clone()).await;
                                     }
                                 }
-                                _ => panic!("Incorrect response here: {:?}", response)
+                                _ => unreachable!("Incorrect response here: {:?}", response)
                             }
                         }
                         Some(id) => {
                             if let Some((_, callback)) = callbacks.remove(&id) {
-                                let _ = callback.send(response);
+                                match callback.send(response) {
+                                    Ok(_) => {}
+                                    Err(e) => eprintln!("Error sending callback: {:?}", e)
+                                }
+                            } else {
+                                eprintln!("No callback found for id: {}", id);
                             }
                         }
                     }
