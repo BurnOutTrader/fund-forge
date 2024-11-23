@@ -4,6 +4,7 @@ use crate::standardized_types::bytes_trait::Bytes;
 use rkyv::{Archive, Deserialize, Serialize};
 use serde::{Deserialize as SerdeDeserialize, Serialize as SerdeSerialize};
 use std::fmt::{Debug, Display};
+use rkyv::ser::Serializer;
 use rust_decimal::Decimal;
 use crate::standardized_types::accounts::{Account, AccountId, AccountInfo, Currency};
 use crate::standardized_types::broker_enum::Brokerage;
@@ -321,8 +322,10 @@ impl Bytes<DataServerResponse> for DataServerResponse {
         }
     }
     fn to_bytes(&self) -> Vec<u8> {
-        let vec = rkyv::to_bytes::<_, 1024>(self).unwrap();
-        vec.into()
+        use rkyv::ser::serializers::AllocSerializer;
+        let mut serializer = AllocSerializer::<0>::default();
+        serializer.serialize_value(self).unwrap();
+        serializer.into_serializer().into_inner().into()
     }
 }
 
