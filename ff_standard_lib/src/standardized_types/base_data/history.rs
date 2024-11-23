@@ -111,7 +111,6 @@ pub async fn get_compressed_historical_data(
         );
 
         send_request(request).await;
-        //todo make the time out increased for live mode.
         let response = tokio::time::timeout(std::time::Duration::from_secs(time_out_seconds), rx)
             .await
             .expect("Timed out waiting for response after 15 seconds!");
@@ -227,8 +226,8 @@ pub async fn range_history_data(
             Ok(data) => {
                 data
             }
-            Err(e) => {
-                eprintln!("No data available or error: {}", e);
+            Err(_e) => {
+                //eprintln!("No data available or error: {}", e);
                 return BTreeMap::new()
             }
         };

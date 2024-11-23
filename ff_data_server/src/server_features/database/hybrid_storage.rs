@@ -528,6 +528,10 @@ impl HybridStorage {
         for subscription in subscription {
             let file_paths = self.get_files_in_range(&subscription.symbol, &subscription.resolution, &subscription.base_data_type, start, end).await?;
 
+            if file_paths.is_empty() {
+                continue;
+            }
+
             for file_path in file_paths {
                 let path_str = file_path.to_string_lossy().to_string();
                 let semaphore = self.file_locks
@@ -570,6 +574,10 @@ impl HybridStorage {
                 files_data.push(compressed_data);
                 drop(permit);
             }
+        }
+
+        if files_data.is_empty() {
+            return Err(FundForgeError::ServerErrorDebug("No files found in range".to_string()));
         }
         Ok(files_data)
     }
