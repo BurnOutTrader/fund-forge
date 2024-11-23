@@ -63,7 +63,7 @@ pub(crate) async fn backtest_matching_engine(
                                 continue
                             }
                             // check limit price
-                            if order.order_type == OrderType::StopLimit || order.order_type == OrderType::Limit &&
+                            if (order.order_type == OrderType::StopLimit || order.order_type == OrderType::Limit) &&
                                 ((order.side == OrderSide::Buy && order.limit_price.unwrap() > market_price)
                                 || (order.side == OrderSide::Sell && order.limit_price.unwrap() < market_price))
                             {
