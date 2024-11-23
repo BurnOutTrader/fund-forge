@@ -153,9 +153,7 @@ pub async fn manage_async_requests(
                                     callback_id,
                                     error: FundForgeError::ServerErrorDebug(format!("Invalid time format: {}", e))
                                 };
-                                if let Err(e) = sender.send(msg).await {
-                                    eprintln!("Failed to send response to stream handler: {:?}", e);
-                                }
+                                let _ = sender.send(msg).await;
                                 return;
                             }
                         };
