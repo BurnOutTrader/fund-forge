@@ -85,12 +85,11 @@ pub(crate) async fn backtest_matching_engine(
                                 }
                                 continue
                             }
-                            ///check trigger price
+                            //check trigger price
                             if (order.order_type == OrderType::StopMarket || order.order_type == OrderType::StopLimit || order.order_type == OrderType::MarketIfTouched) &&
                                 ((order.side == OrderSide::Sell && order.trigger_price.unwrap() >= market_price) ||
                                     (order.side == OrderSide::Buy && order.trigger_price.unwrap() <= market_price))
                             {
-
                                 let side_string = match order.side {
                                     OrderSide::Buy => "Above",  // Changed from "Below"
                                     OrderSide::Sell => "Below"  // Changed from "Above"
