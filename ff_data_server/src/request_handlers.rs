@@ -70,25 +70,15 @@ pub async fn compressed_file_response(
     };
 
     if to_time.date_naive() >= Utc::now().date_naive() {
-        // Use a bounded stream for pre-subscribe tasks
-        let mut tasks = FuturesUnordered::new();
-        for subscription in &subscriptions {
-            tasks.push(data_storage.pre_subscribe_updates(
+        let tasks: Vec<_> = subscriptions.iter().map(|subscription| {
+            data_storage.pre_subscribe_updates(
                 subscription.symbol.clone(),
                 subscription.resolution,
                 subscription.base_data_type
-            ));
-        }
+            )
+        }).collect();
 
-        // Process with timeout
-        if let Err(_) = timeout(Duration::from_secs(900), async {
-            while let Some(_) = tasks.next().await {}
-        }).await {
-            return DataServerResponse::Error {
-                callback_id,
-                error: FundForgeError::ServerErrorDebug("Pre-subscribe operations timed out".to_string())
-            };
-        }
+        futures::future::join_all(tasks).await;
     }
 
     match data_storage.get_compressed_files_in_range(subscriptions, from_time, to_time).await {
@@ -198,29 +188,9 @@ pub async fn manage_async_requests(
                     ).await,
 
                     DataServerRequest::GetCompressedHistoricalData { callback_id, subscriptions, from_time, to_time } => {
-                        let time = match DateTime::<Utc>::from_str(&to_time) {
-                            Ok(t) => t,
-                            Err(e) => {
-                                let msg = DataServerResponse::Error {
-                                    callback_id,
-                                    error: FundForgeError::ServerErrorDebug(format!("Invalid time format: {}", e))
-                                };
-                                let _ = sender.send(msg).await;
-                                return;
-                            }
-                        };
-                        match time.date_naive() >= Utc::now().date_naive() {
-                            true => {
-                                handle_callback_no_timeouts (
-                                    || compressed_file_response(subscriptions, from_time, to_time, callback_id),
-                                    sender.clone()).await
-                            }
-                            false => {
-                                handle_callback (
-                                    || compressed_file_response(subscriptions, from_time, to_time, callback_id),
-                                    sender.clone(), callback_id).await
-                            }
-                        }
+                        handle_callback_no_timeouts (
+                            || compressed_file_response(subscriptions, from_time, to_time, callback_id),
+                            sender.clone()).await
                     }
 
                     DataServerRequest::SymbolsVendor {
