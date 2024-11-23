@@ -512,19 +512,8 @@ impl HybridStorage {
         if subscription.is_empty() {
             return Err(FundForgeError::ClientSideErrorDebug("No subscriptions provided for file range".to_string()));
         }
-        const MB: usize = 1024 * 1024;
-        let buffer_size = match subscription.get(0).unwrap().resolution {
-            Resolution::Minutes(_) => 1 * MB,
-            Resolution::Hours(_) => 1 * MB,
-            Resolution::Instant => 20 * MB,
-            Resolution::Ticks(_) => 13 * MB,
-            Resolution::Seconds(_) => 5 * MB,
-            _ => 1 * MB
-        };
         // Create a single large buffer to be reused for all files
-        let mut buffer = vec![0; buffer_size];
         let mut files_data = Vec::new();
-
         for subscription in subscription {
             let file_paths = self.get_files_in_range(&subscription.symbol, &subscription.resolution, &subscription.base_data_type, start, end).await?;
 
@@ -552,27 +541,26 @@ impl HybridStorage {
                     .map_err(|e| FundForgeError::ServerErrorDebug(format!("Error getting file size {:?}: {}", file_path, e)))?
                     .len() as usize;
 
-                let mut compressed_data = Vec::new();
+                let mut compressed_data: Vec<u8> = Vec::new();
                 compressed_data.try_reserve(file_size)
                     .map_err(|e| FundForgeError::ServerErrorDebug(format!("Failed to allocate memory for file {:?}: {}", file_path, e)))?;
 
-                loop {
-                    match file.read(&mut buffer[..]) {
-                        Ok(0) => break,
-                        Ok(n) => {
-                            compressed_data.try_reserve(n)
-                                .map_err(|e| FundForgeError::ServerErrorDebug(
-                                    format!("Failed to allocate memory during read {:?}: {}", file_path, e)
-                                ))?;
-                            compressed_data.extend_from_slice(&buffer[..n]);
-                        }
-                        Err(e) => {
-                            return Err(FundForgeError::ServerErrorDebug(
-                                format!("Error reading file {:?}: {}", file_path, e)
-                            ));
-                        }
+                // Since we already know the file size
+                let file_size = match file.metadata() {
+                    Ok(meta) => meta.len() as usize,
+                    Err(e) => {
+                        drop(permit);
+                        return Err(FundForgeError::ServerErrorDebug(
+                            format!("Error getting file size {:?}: {}", file_path, e)
+                        ));
                     }
-                }
+                };
+                let mut compressed_data = Vec::with_capacity(file_size);
+                // Single read operation
+                file.read_to_end(&mut compressed_data)
+                    .map_err(|e| FundForgeError::ServerErrorDebug(
+                        format!("Error reading file {:?}: {}", file_path, e)
+                    ))?;
 
                 files_data.push(compressed_data);
                 drop(permit);
