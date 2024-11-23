@@ -24,14 +24,14 @@ use crate::server_side_datavendor::{base_data_types_response, decimal_accuracy_r
 use ff_standard_lib::standardized_types::enums::StrategyMode;
 use ff_standard_lib::standardized_types::orders::{Order, OrderRequest, OrderType, OrderUpdateEvent};
 use ff_standard_lib::StreamName;
-use crate::{stream_listener};
+use crate::{stream_listener, subscribe_server_shutdown};
 use crate::stream_tasks::deregister_streamer;
 
 lazy_static!(
     pub static ref RESPONSE_SENDERS: Arc<DashMap<StreamName, Sender<DataServerResponse>>> = Arc::new(DashMap::new());
-    //todo, we should have a disconnect broadcaster so that we broadcast on disconnect of a streamer, this needs to be done for base data response, where we await updates for before live streams
 );
 
+//todo i need to debug this and determine cause of time outs
 pub async fn compressed_file_response(
     subscriptions: Vec<DataSubscription>,
     from_time: String,
@@ -108,12 +108,16 @@ pub async fn manage_async_requests(
     stream: TlsStream<TcpStream>,
     stream_name: StreamName,
 ) {
-    println!("stream name: {}", stream_name);
+    //println!("stream name: {}", stream_name);
     let (read_half, write_half) = io::split(stream);
     let strategy_mode = strategy_mode;
     let (response_sender, request_receiver) = mpsc::channel(1000);
     RESPONSE_SENDERS.insert(stream_name.clone(), response_sender.clone());
-    let read_task = tokio::spawn(async move {
+    // Response handler for outgoing messages
+    let write_task = tokio::spawn(async move {
+        response_handler(request_receiver, write_half).await;
+    });
+    tokio::spawn(async move {
         const LENGTH: usize = 8;
         let mut receiver = read_half;
         let mut length_bytes = [0u8; LENGTH];
@@ -330,7 +334,7 @@ pub async fn manage_async_requests(
                         request
                     } => {
                         if mode != StrategyMode::Live && mode != StrategyMode::LivePaperTrading {
-                            eprintln!("Incorrect strategy mode for stream: {:?}", strategy_mode);
+                            //eprintln!("Incorrect strategy mode for stream: {:?}", strategy_mode);
                             return
                         }
                         //1. download latest data and await
@@ -344,7 +348,7 @@ pub async fn manage_async_requests(
                         request
                     } => {
                         if mode != StrategyMode::Live {
-                            eprintln!("Incorrect strategy mode for orders: {:?}", strategy_mode);
+                            //eprintln!("Incorrect strategy mode for orders: {:?}", strategy_mode);
                             return;
                         }
                         //println!("{:?}", request);
@@ -364,54 +368,42 @@ pub async fn manage_async_requests(
         if strategy_mode != StrategyMode::Backtest {
             deregister_streamer(&stream_name).await;
         }
+        write_task.abort();
         RESPONSE_SENDERS.remove(&stream_name);
         message_bar.finish_and_clear();
     });
-
-    // Response handler for outgoing messages
-    let write_task = tokio::spawn(async move {
-        response_handler(request_receiver, write_half).await;
-    });
-
-    // Wait for both tasks to complete, handle if any one task finishes first
-    tokio::select! {
-        _ = read_task => {
-            // The read task finished (client likely disconnected)
-            //println!("Read task finished for stream: {}", stream_name);
-        },
-        _ = write_task => {
-            // The write task finished (likely due to shutdown)
-            //println!("Write task finished for stream: {}", stream_name);
-        }
-    }
 }
 
-async fn response_handler(receiver: Receiver<DataServerResponse>, writer: WriteHalf<TlsStream<TcpStream>>)  {
+async fn response_handler(receiver: Receiver<DataServerResponse>, writer: WriteHalf<TlsStream<TcpStream>>) {
     let mut receiver = receiver;
     let mut writer = writer;
-    'receiver_loop: loop {
-        match receiver.recv().await {
-            Some(response) => {
+    let mut shutdown_receiver = subscribe_server_shutdown();
+
+    loop {
+        tokio::select! {
+            Some(response) = receiver.recv() => {
                 // Convert the response to bytes
                 let bytes = response.to_bytes();
 
                 // Prepare the message with a 4-byte length header in big-endian format
                 let length = (bytes.len() as u64).to_be_bytes();
                 let mut prefixed_msg = Vec::new();
-                prefixed_msg.extend_from_slice(& length);
-                prefixed_msg.extend_from_slice( & bytes);
+                prefixed_msg.extend_from_slice(&length);
+                prefixed_msg.extend_from_slice(&bytes);
 
                 // Write the response to the stream
-                match writer.write_all( & prefixed_msg).await {
-                    Err(e) => {
-                        eprintln!("Shutting down response handler {}", e);
-                        break 'receiver_loop
-                    }
-                    Ok(_) => {}
+                if let Err(e) = writer.write_all(&prefixed_msg).await {
+                    eprintln!("Shutting down response handler {}", e);
+                    break;
                 }
             }
-            None => {
-                break 'receiver_loop
+            _ = shutdown_receiver.recv() => {
+                // Server shutdown signal received
+                break;
+            }
+            else => {
+                // Both channels closed
+                break;
             }
         }
     }
