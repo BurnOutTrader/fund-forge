@@ -60,40 +60,40 @@ async fn process_compressed_payload(
         .map_err(|e| FundForgeError::ClientSideErrorDebug(format!("Failed to parse data: {}", e)))
 }
 
+async fn process_payload(
+    payload: Vec<Vec<u8>>,
+    from_time: DateTime<Utc>,
+    to_time: DateTime<Utc>,
+) -> Result<BTreeMap<i64, TimeSlice>, FundForgeError> {
+    let mut combined_data: BTreeMap<i64, TimeSlice> = BTreeMap::new();
+
+    for compressed_data in payload {
+        if let Ok(base_data_vec) = process_compressed_payload(&compressed_data).await {
+            for data in base_data_vec {
+                if data.time_closed_utc() >= from_time && data.time_closed_utc() <= to_time {
+                    let timestamp = data.time_closed_utc().timestamp_nanos_opt()
+                        .ok_or_else(|| FundForgeError::ClientSideErrorDebug(
+                            "Failed to convert timestamp to nanos".to_string()
+                        ))?;
+
+                    combined_data
+                        .entry(timestamp)
+                        .or_insert_with(TimeSlice::new)
+                        .add(data);
+                }
+            }
+        }
+    }
+
+    Ok(combined_data)
+}
+
 pub async fn get_compressed_historical_data(
     subscriptions: Vec<DataSubscription>,
     from_time: DateTime<Utc>,
     to_time: DateTime<Utc>,
 ) -> Result<BTreeMap<i64, TimeSlice>, FundForgeError> {
     let connections = SETTINGS_MAP.clone();
-
-    async fn process_payload(
-        payload: Vec<Vec<u8>>,
-        from_time: DateTime<Utc>,
-        to_time: DateTime<Utc>,
-    ) -> Result<BTreeMap<i64, TimeSlice>, FundForgeError> {
-        let mut combined_data: BTreeMap<i64, TimeSlice> = BTreeMap::new();
-
-        for compressed_data in payload {
-            if let Ok(base_data_vec) = process_compressed_payload(&compressed_data).await {
-                for data in base_data_vec {
-                    if data.time_closed_utc() >= from_time && data.time_closed_utc() <= to_time {
-                        let timestamp = data.time_closed_utc().timestamp_nanos_opt()
-                            .ok_or_else(|| FundForgeError::ClientSideErrorDebug(
-                                "Failed to convert timestamp to nanos".to_string()
-                            ))?;
-
-                        combined_data
-                            .entry(timestamp)
-                            .or_insert_with(TimeSlice::new)
-                            .add(data);
-                    }
-                }
-            }
-        }
-
-        Ok(combined_data)
-    }
 
     if connections.len() <= 2 {
         // Single connection case
@@ -110,6 +110,7 @@ pub async fn get_compressed_historical_data(
         );
 
         send_request(request).await;
+        //todo make the time out increased for live mode.
         let response = tokio::time::timeout(std::time::Duration::from_secs(15), rx)
             .await
             .expect("Timed out waiting for response after 15 seconds!");
