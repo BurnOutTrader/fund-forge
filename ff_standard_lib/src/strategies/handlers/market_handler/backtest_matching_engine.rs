@@ -45,6 +45,7 @@ pub(crate) async fn backtest_matching_engine(
                                 }
                                 Err(_) => panic!("No market price found")
                             };
+                            eprintln!("Market Price: {}", market_price);
                             if order.quantity_open <= dec!(0) {
                                 open_order_cache.remove(&order.id);
                                 let fail_event = StrategyEvent::OrderEvents(OrderUpdateEvent::OrderRejected {
@@ -62,7 +63,10 @@ pub(crate) async fn backtest_matching_engine(
                                 continue
                             }
                             // check limit price
-                            if order.order_type == OrderType::StopLimit || order.order_type == OrderType::Limit && ((order.side == OrderSide::Buy && order.limit_price.unwrap() > market_price) || (order.side == OrderSide::Sell && order.limit_price.unwrap() < market_price)) {
+                            if order.order_type == OrderType::StopLimit || order.order_type == OrderType::Limit &&
+                                ((order.side == OrderSide::Buy && order.limit_price.unwrap() > market_price)
+                                || (order.side == OrderSide::Sell && order.limit_price.unwrap() < market_price))
+                            {
                                 let side_string = match order.side {
                                     OrderSide::Buy => "Below",
                                     OrderSide::Sell => "Above"
@@ -82,9 +86,11 @@ pub(crate) async fn backtest_matching_engine(
                                 continue
                             }
                             ///check trigger price
-                            if order.order_type == OrderType::StopMarket || order.order_type == OrderType::StopLimit || order.order_type == OrderType::MarketIfTouched &&
-                                ((order.side == OrderSide::Sell && order.trigger_price.unwrap() >= market_price) ||  // Changed <= to >=
-                                    (order.side == OrderSide::Buy && order.trigger_price.unwrap() <= market_price)) {   // Changed >= to <=
+                            if (order.order_type == OrderType::StopMarket || order.order_type == OrderType::StopLimit || order.order_type == OrderType::MarketIfTouched) &&
+                                ((order.side == OrderSide::Sell && order.trigger_price.unwrap() >= market_price) ||
+                                    (order.side == OrderSide::Buy && order.trigger_price.unwrap() <= market_price))
+                            {
+
                                 let side_string = match order.side {
                                     OrderSide::Buy => "Above",  // Changed from "Below"
                                     OrderSide::Sell => "Below"  // Changed from "Above"
