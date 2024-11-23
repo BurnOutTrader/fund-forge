@@ -160,8 +160,7 @@ pub(crate) async fn backtest_matching_engine(
                             simulated_order_matching(&open_order_cache, &closed_order_cache, strategy_event_sender.clone(), &ledger_service).await;
                         }
                         OrderRequest::Cancel { account,order_id } => {
-                            let existing_order = open_order_cache.remove(&order_id);
-                            if let Some((existing_order_id, order)) = existing_order {
+                            if let Some((existing_order_id, order)) = open_order_cache.remove(&order_id) {
                                 let cancel_event = StrategyEvent::OrderEvents(OrderUpdateEvent::OrderCancelled {
                                     account,
                                     symbol_name: order.symbol_name.clone(),
@@ -175,6 +174,7 @@ pub(crate) async fn backtest_matching_engine(
                                     Ok(_) => {}
                                     Err(e) => eprintln!("Timed Event Handler: Failed to send event: {}", e)
                                 }
+                                //eprintln!("Order Cancelled: {:?}", order_id);
                                 closed_order_cache.insert(order_id, order);
                             } else {
                                 let fail_event = StrategyEvent::OrderEvents(OrderUpdateEvent::OrderUpdateRejected {
