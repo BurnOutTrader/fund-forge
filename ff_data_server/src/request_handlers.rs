@@ -157,7 +157,7 @@ pub async fn manage_async_requests(
                                 return;
                             }
                         };
-                        match time.naive_utc().date() >= Utc::now().date_naive() {
+                        match time.date_naive() >= Utc::now().date_naive() {
                             true => {
                                 handle_callback_no_timeouts (
                                     || compressed_file_response(subscriptions, from_time, to_time, callback_id),
