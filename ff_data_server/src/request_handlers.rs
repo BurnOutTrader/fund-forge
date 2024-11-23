@@ -68,18 +68,20 @@ pub async fn compressed_file_response(
     };
 
     if to_time.date_naive() >= Utc::now().date_naive() {
+
         let tasks: Vec<_> = subscriptions.iter().map(|subscription| {
             data_storage.pre_subscribe_updates(
                 subscription.symbol.clone(),
                 subscription.resolution,
-                subscription.base_data_type
+                subscription.base_data_type,
+                None //fundamentals needs a special subscription fn for live plus historical
             )
         }).collect();
 
         futures::future::join_all(tasks).await;
     }
 
-    match data_storage.get_compressed_files_in_range(subscriptions, from_time, to_time).await {
+    match data_storage.get_compressed_files_in_range(subscriptions, None, from_time, to_time).await {
         Ok(data) => DataServerResponse::CompressedHistoricalData {
             callback_id,
             payload: data

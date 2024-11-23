@@ -12,10 +12,11 @@ impl HybridStorage {
     pub async fn get_earliest_data_time(
         &self,
         symbol: &Symbol,
+        name: Option<String>,
         resolution: &Resolution,
         data_type: &BaseDataType,
     ) -> Result<Option<DateTime<Utc>>, Box<dyn std::error::Error>> {
-        let base_path = self.get_base_path(symbol, resolution, data_type, false);
+        let base_path = self.get_base_path(symbol, name, resolution, data_type, false);
         if !base_path.exists() {
             return Ok(None);
         }
@@ -65,10 +66,11 @@ impl HybridStorage {
     pub async fn get_latest_data_time(
         &self,
         symbol: &Symbol,
+        data_name: Option<String>,
         resolution: &Resolution,
         data_type: &BaseDataType,
     ) -> Result<Option<DateTime<Utc>>, Box<dyn std::error::Error>> {
-        let base_path = self.get_base_path(symbol, resolution, data_type, false);
+        let base_path = self.get_base_path(symbol, data_name, resolution, data_type, false);
         if !base_path.exists() {
             return Ok(None);
         }
@@ -123,11 +125,12 @@ impl HybridStorage {
         &self,
         symbol: &Symbol,
         resolution: &Resolution,
+        name: Option<String>,
         data_type: &BaseDataType,
         target_time: DateTime<Utc>,
     ) -> Result<Option<BaseDataEnum>, FundForgeError> {
         // Get the file path for the target date
-        let file_path = self.get_file_path(symbol, resolution, data_type, &target_time, false);
+        let file_path = self.get_file_path(symbol, name, resolution, data_type, &target_time, false);
 
         // If the file exists for the target date, check it first
         if file_path.exists() {
@@ -161,6 +164,7 @@ impl HybridStorage {
             current_date = prev_date;
             let file_path = self.get_file_path(
                 symbol,
+                None,
                 resolution,
                 data_type,
                 &DateTime::<Utc>::from_naive_utc_and_offset(
@@ -207,11 +211,12 @@ impl HybridStorage {
         symbol: &Symbol,
         resolution: &Resolution,
         data_type: &BaseDataType,
+        name: Option<String>,
         start: DateTime<Utc>,
         end: DateTime<Utc>,
     ) -> Result<Vec<BaseDataEnum>, FundForgeError> {
         let mut all_data = Vec::new();
-        let base_path = self.get_base_path(symbol, resolution, data_type, false);
+        let base_path = self.get_base_path(symbol, name, resolution, data_type, false);
         if !base_path.exists() {
             return Ok(Vec::new());
         }

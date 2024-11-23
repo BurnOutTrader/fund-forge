@@ -36,7 +36,7 @@ impl HybridStorage {
         if has_symbol {
             // Try direct currency pair
             for resolution in &resolutions {
-                match self.get_data_point_asof(&Symbol::new(symbol_name.clone(), data_vendor, market_type), resolution, &base_data_type, date_time).await {
+                match self.get_data_point_asof(&Symbol::new(symbol_name.clone(), data_vendor, market_type), resolution, None, &base_data_type, date_time).await {
                     Ok(Some(data)) => {
                         match data {
                             BaseDataEnum::Candle(candle) => {
@@ -73,7 +73,7 @@ impl HybridStorage {
 
             if has_symbol {
                 for resolution in &resolutions {
-                    match self.get_data_point_asof(&Symbol::new(symbol_name.clone(), data_vendor, market_type), resolution, &base_data_type, date_time).await {
+                    match self.get_data_point_asof(&Symbol::new(symbol_name.clone(), data_vendor, market_type), resolution, None, &base_data_type, date_time).await {
                         Ok(Some(data)) => {
                             match data {
                                 BaseDataEnum::Candle(candle) => {

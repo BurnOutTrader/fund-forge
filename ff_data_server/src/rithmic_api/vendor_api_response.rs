@@ -392,6 +392,7 @@ impl VendorApiResponse for RithmicBrokerageClient {
                 .unwrap()
                 .progress_chars("=>-")
         );
+        progress_bar.set_message(format!("Starting Download for ({}: {}) from: {}, to {}: Message will not change if no data found", resolution, base_data_type, from, to));
 
         let mut empty_windows = 0;
         let mut combined_data = BTreeMap::new();
@@ -467,7 +468,7 @@ impl VendorApiResponse for RithmicBrokerageClient {
 
             if window_start.day() != last_save_day || is_end {
                 let save_data: Vec<BaseDataEnum> = combined_data.clone().into_values().collect();
-                if let Err(e) = data_storage.save_data_bulk(save_data, is_bulk_download).await {
+                if let Err(e) = data_storage.save_data_bulk(save_data, is_bulk_download, None).await {
                     progress_bar.set_message(format!("Failed to save data for: {} - {}, {}", window_start, window_end, e));
                     break 'main_loop;
                 }
@@ -483,7 +484,7 @@ impl VendorApiResponse for RithmicBrokerageClient {
         }
         if !combined_data.is_empty() {
             let save_data: Vec<BaseDataEnum> = combined_data.clone().into_values().collect();
-            if let Err(e) = data_storage.save_data_bulk(save_data, is_bulk_download).await {
+            if let Err(e) = data_storage.save_data_bulk(save_data, is_bulk_download, None).await {
                 progress_bar.set_message(format!("Failed to save data for: {} - {}, {}", window_start, window_start + resolution_multiplier, e));
             }
         }

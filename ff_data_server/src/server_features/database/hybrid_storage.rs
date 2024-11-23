@@ -115,10 +115,14 @@ impl HybridStorage {
         });
     }
 
-    pub(crate) fn get_base_path(&self, symbol: &Symbol, resolution: &Resolution, data_type: &BaseDataType, is_saving: bool) -> PathBuf {
+    pub(crate) fn get_base_path(&self, symbol: &Symbol, data_name: Option<String>, resolution: &Resolution, data_type: &BaseDataType, is_saving: bool) -> PathBuf {
+        let path_3 = match data_name {
+            None => symbol.market_type.to_string(),
+            Some(name) => name
+        };
         let base_path = self.base_path
             .join(symbol.data_vendor.to_string())
-            .join(symbol.market_type.to_string())
+            .join(path_3)
             .join(symbol.name.to_string())
             .join(resolution.to_string())
             .join(data_type.to_string());
@@ -132,8 +136,8 @@ impl HybridStorage {
         base_path
     }
 
-    pub(crate) fn get_file_path(&self, symbol: &Symbol, resolution: &Resolution, data_type: &BaseDataType, date: &DateTime<Utc>, is_saving: bool) -> PathBuf {
-        let base_path = self.get_base_path(symbol, resolution, data_type, is_saving);
+    pub(crate) fn get_file_path(&self, symbol: &Symbol, data_name: Option<String>, resolution: &Resolution, data_type: &BaseDataType, date: &DateTime<Utc>, is_saving: bool) -> PathBuf {
+        let base_path = self.get_base_path(symbol, data_name, resolution, data_type, is_saving);
         let path = base_path
             .join(format!("{:04}", date.year()))
             .join(format!("{:02}", date.month()));
@@ -143,13 +147,14 @@ impl HybridStorage {
         path.join(format!("{:04}{:02}{:02}.bin", date.year(), date.month(), date.day()))
     }
 
-    pub async fn save_data(&self, data: &BaseDataEnum) -> io::Result<()> {
+    pub async fn save_data(&self, data: &BaseDataEnum, data_name: Option<String>,) -> io::Result<()> {
         if !data.is_closed() {
             return Ok(());
         }
 
         let file_path = self.get_file_path(
             data.symbol(),
+            data_name,
             &data.resolution(),
             &data.base_data_type(),
             &data.time_closed_utc(),
@@ -158,7 +163,7 @@ impl HybridStorage {
         self.save_data_to_file(&file_path, &[data.clone()], false).await
     }
 
-    pub async fn save_data_bulk(&self, data: Vec<BaseDataEnum>, is_bulk_download: bool) -> io::Result<()> {
+    pub async fn save_data_bulk(&self, data: Vec<BaseDataEnum>, is_bulk_download: bool, data_name: Option<String>) -> io::Result<()> {
         if data.is_empty() {
             return Ok(());
         }
@@ -181,7 +186,7 @@ impl HybridStorage {
         //println!("Grouped data into {} files", grouped_data.len());
 
         for ((symbol, resolution, data_type, date), group) in grouped_data {
-            let file_path = self.get_file_path(&symbol, &resolution, &data_type, &date, true);
+            let file_path = self.get_file_path(&symbol, data_name.clone(), &resolution, &data_type, &date, true);
             //println!("Saving {} data points to file: {:?}", group.len(), file_path);
             self.save_data_to_file(&file_path, &group, is_bulk_download).await?;
         }
@@ -439,13 +444,14 @@ impl HybridStorage {
     pub async fn get_files_in_range (
         &self,
         symbol: &Symbol,
+        data_name: Option<String>,
         resolution: &Resolution,
         data_type: &BaseDataType,
         start: DateTime<Utc>,
         end: DateTime<Utc>,
     ) -> Result<Vec<PathBuf>, FundForgeError> {
         let mut file_paths = Vec::new();
-        let base_path = self.get_base_path(symbol, resolution, data_type, false);
+        let base_path = self.get_base_path(symbol, data_name, resolution, data_type, false);
 
         let start_year = start.year();
         let end_year = end.year();
@@ -506,6 +512,7 @@ impl HybridStorage {
     pub async fn get_compressed_files_in_range(
         &self,
         subscription: Vec<DataSubscription>,
+        name: Option<String>,
         start: DateTime<Utc>,
         end: DateTime<Utc>,
     ) -> Result<Vec<Vec<u8>>, FundForgeError> {
@@ -515,7 +522,7 @@ impl HybridStorage {
         // Create a single large buffer to be reused for all files
         let mut files_data = Vec::new();
         for subscription in subscription {
-            let file_paths = self.get_files_in_range(&subscription.symbol, &subscription.resolution, &subscription.base_data_type, start, end).await?;
+            let file_paths = self.get_files_in_range(&subscription.symbol, name.clone(), &subscription.resolution, &subscription.base_data_type, start, end).await?;
 
             if file_paths.is_empty() {
                 continue;
@@ -601,12 +608,14 @@ mod tests {
         // Verify earliest and latest times
         let earliest = storage.get_earliest_data_time(
             test_data[0].symbol(),
+            None,
             &Resolution::Hours(1),
             &BaseDataType::Candles
         ).await.unwrap().unwrap();
 
         let latest = storage.get_latest_data_time(
             test_data[0].symbol(),
+            None,
             &Resolution::Hours(1),
             &BaseDataType::Candles
         ).await.unwrap().unwrap();
@@ -647,6 +656,7 @@ mod tests {
                 test_data[0].symbol(),
                 &Resolution::Hours(1),
                 &BaseDataType::Candles,
+                None,
                 start,
                 end
             ).await.unwrap();
@@ -681,6 +691,7 @@ mod tests {
         // Call `get_latest_data_time` and verify the result
         let latest_time = storage.get_latest_data_time(
             test_data[0].symbol(),
+            None
             &Resolution::Hours(1),
             &BaseDataType::Candles
         ).await.unwrap();
@@ -710,6 +721,7 @@ mod tests {
         // Call `get_earliest_data_time` and verify the result
         let earliest_time = storage.get_earliest_data_time(
             test_data[0].symbol(),
+            None,
             &Resolution::Hours(1),
             &BaseDataType::Candles
         ).await.unwrap();
@@ -753,6 +765,7 @@ mod tests {
                 test_data[0].symbol(),
                 &Resolution::Hours(1),
                 &BaseDataType::Candles,
+                None,
                 start,
                 end
             ).await.unwrap();
@@ -807,6 +820,7 @@ mod tests {
             let result = storage.get_data_point_asof(
                 test_data[0].symbol(),
                 &Resolution::Hours(1),
+                None,
                 &BaseDataType::Candles,
                 target_time
             ).await.unwrap();
