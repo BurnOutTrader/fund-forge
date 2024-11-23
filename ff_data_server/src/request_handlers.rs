@@ -377,11 +377,11 @@ pub async fn manage_async_requests(
     tokio::select! {
         _ = read_task => {
             // The read task finished (client likely disconnected)
-            println!("Read task finished for stream: {}", stream_name);
+            //println!("Read task finished for stream: {}", stream_name);
         },
         _ = write_task => {
             // The write task finished (likely due to shutdown)
-            println!("Write task finished for stream: {}", stream_name);
+            //println!("Write task finished for stream: {}", stream_name);
         }
     }
 }
