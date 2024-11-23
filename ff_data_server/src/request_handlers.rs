@@ -29,7 +29,6 @@ lazy_static!(
     pub static ref RESPONSE_SENDERS: Arc<DashMap<StreamName, Sender<DataServerResponse>>> = Arc::new(DashMap::new());
 );
 
-//todo i need to debug this and determine cause of time outs
 pub async fn compressed_file_response(
     subscriptions: Vec<DataSubscription>,
     from_time: String,
@@ -81,6 +80,7 @@ pub async fn compressed_file_response(
         futures::future::join_all(tasks).await;
     }
 
+    //todo i need to debug this and determine cause of time outs
     match data_storage.get_compressed_files_in_range(subscriptions, None, from_time, to_time).await {
         Ok(data) => DataServerResponse::CompressedHistoricalData {
             callback_id,
@@ -108,7 +108,7 @@ pub async fn manage_async_requests(
         response_handler(request_receiver, write_half).await;
     });
     tokio::spawn(async move {
-        const LENGTH: usize = 8;
+        const LENGTH: usize = 4;
         let mut receiver = read_half;
         let mut length_bytes = [0u8; LENGTH];
         let message_bar = MULTIBAR.add(ProgressBar::new_spinner());
@@ -121,7 +121,7 @@ pub async fn manage_async_requests(
                 .expect("Failed to set style"),
         );
         while let Ok(_) = receiver.read_exact(&mut length_bytes).await {
-            let msg_length = u64::from_be_bytes(length_bytes) as usize;
+            let msg_length = u32::from_be_bytes(length_bytes) as usize;
             let mut message_body = vec![0u8; msg_length];
 
             match receiver.read_exact(&mut message_body).await {

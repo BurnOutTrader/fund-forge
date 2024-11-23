@@ -112,12 +112,12 @@ pub(crate) async fn async_server(config: ServerConfig, addr: SocketAddr) {
     drop(listener);
 }
 async fn handle_async_connection(mut tls_stream: TlsStream<TcpStream>, _peer_addr: SocketAddr) {
-    const LENGTH: usize = 8;
+    const LENGTH: usize = 4;
     let mut length_bytes = [0u8; LENGTH];
     let mut mode = StrategyMode::Backtest;
     while let Ok(_) = tls_stream.read_exact(&mut length_bytes).await {
         // Parse the length from the header
-        let msg_length = u64::from_be_bytes(length_bytes) as usize;
+        let msg_length = u32::from_be_bytes(length_bytes) as usize;
         let mut message_body = vec![0u8; msg_length];
 
         // Read the message body based on the length
@@ -158,7 +158,7 @@ async fn handle_async_connection(mut tls_stream: TlsStream<TcpStream>, _peer_add
 
         // Prepare the message with a 4-byte length header in big-endian format
         let length = (bytes.len() as u64).to_be_bytes();
-        let mut prefixed_msg = Vec::new();
+        let mut prefixed_msg = Vec::with_capacity(8 + bytes.len());
         prefixed_msg.extend_from_slice(&length);
         prefixed_msg.extend_from_slice(&bytes);
 

@@ -26,19 +26,19 @@ use crate::strategies::ledgers::ledger_service::LedgerService;
 
 lazy_static! {
     static ref WARM_UP_COMPLETE: AtomicBool = AtomicBool::new(false);
-    pub static ref SETTINGS_MAP: Arc<HashMap<ConnectionType, ConnectionSettings>> = Arc::new(initialise_settings().unwrap());
+    pub(crate) static ref SETTINGS_MAP: Arc<HashMap<ConnectionType, ConnectionSettings>> = Arc::new(initialise_settings().unwrap());
 }
 
 #[inline(always)]
-pub fn set_warmup_complete() {
+pub(crate) fn set_warmup_complete() {
     WARM_UP_COMPLETE.store(true, Ordering::SeqCst);
 }
 #[inline(always)]
-pub fn is_warmup_complete() -> bool {
+pub(crate) fn is_warmup_complete() -> bool {
     WARM_UP_COMPLETE.load(Ordering::SeqCst)
 }
 
-pub async fn init_connections(
+pub(crate) async fn init_connections(
     gui_enabled: bool,
     buffer_duration: Duration,
     mode: StrategyMode,

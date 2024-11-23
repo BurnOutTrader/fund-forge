@@ -31,6 +31,7 @@ pub mod bitget_api;
 pub mod stream_tasks;
 pub mod oanda_api;
 pub mod server_features;
+pub mod fred;
 
 #[derive(Debug, StructOpt, Clone)]
 #[allow(dead_code)]
