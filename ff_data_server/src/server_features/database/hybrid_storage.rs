@@ -241,7 +241,7 @@ impl HybridStorage {
             Resolution::Minutes(_) => 1 * MB,
             Resolution::Hours(_) => 1 * MB,
             Resolution::Instant => 20 * MB,
-            Resolution::Ticks(_) => 20 * MB,
+            Resolution::Ticks(_) => 13 * MB,
             Resolution::Seconds(_) => 5 * MB,
             _ => 1 * MB
         };
@@ -344,7 +344,7 @@ impl HybridStorage {
                 Resolution::Minutes(_) => 1 * MB,
                 Resolution::Hours(_) => 1 * MB,
                 Resolution::Instant => 20 * MB,
-                Resolution::Ticks(_) => 20 * MB,
+                Resolution::Ticks(_) => 13 * MB,
                 Resolution::Seconds(_) => 5 * MB,
                 _ => 1 * MB
             };
@@ -517,7 +517,7 @@ impl HybridStorage {
             Resolution::Minutes(_) => 1 * MB,
             Resolution::Hours(_) => 1 * MB,
             Resolution::Instant => 20 * MB,
-            Resolution::Ticks(_) => 20 * MB,
+            Resolution::Ticks(_) => 13 * MB,
             Resolution::Seconds(_) => 5 * MB,
             _ => 1 * MB
         };
