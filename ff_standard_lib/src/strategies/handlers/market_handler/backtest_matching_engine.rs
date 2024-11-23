@@ -45,7 +45,7 @@ pub(crate) async fn backtest_matching_engine(
                                 }
                                 Err(_) => panic!("No market price found")
                             };
-                            eprintln!("Market Price: {}", market_price);
+                            //eprintln!("Market Price: {}", market_price);
                             if order.quantity_open <= dec!(0) {
                                 open_order_cache.remove(&order.id);
                                 let fail_event = StrategyEvent::OrderEvents(OrderUpdateEvent::OrderRejected {
