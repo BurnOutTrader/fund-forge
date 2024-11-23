@@ -61,12 +61,17 @@ pub(crate) async fn backtest_matching_engine(
                                 }
                                 continue
                             }
-                            if order.order_type == OrderType::Limit && order.side == OrderSide::Sell && order.limit_price.unwrap() < market_price {
+                            // check limit price
+                            if order.order_type == OrderType::StopLimit || order.order_type == OrderType::Limit && ((order.side == OrderSide::Buy && order.limit_price.unwrap() < market_price) || (order.side == OrderSide::Sell && order.limit_price.unwrap() > market_price)) {
+                                let side_string = match order.side {
+                                    OrderSide::Buy => "Below",
+                                    OrderSide::Sell => "Above"
+                                };
                                 let fail_event = StrategyEvent::OrderEvents(OrderUpdateEvent::OrderRejected {
                                     account,
                                     symbol_name: order.symbol_name,
                                     symbol_code: order.symbol_code,
-                                    order_id: order.id.clone(), reason: String::from("Sell Limit Price Must Be At or Above Market Price"),
+                                    order_id: order.id.clone(), reason: String::from(format!("{} Limit Price Must Be {} or Equal to Market Price", order.side, side_string)),
                                     tag: order.tag,
                                     time: time.to_string()
                                 });
@@ -76,213 +81,17 @@ pub(crate) async fn backtest_matching_engine(
                                 }
                                 continue
                             }
-                            if order.order_type == OrderType::Limit && order.side == OrderSide::Buy && order.limit_price.unwrap() > market_price {
+                            ///check trigger price
+                            if order.order_type == OrderType::StopMarket || order.order_type == OrderType::StopLimit || order.order_type == OrderType::MarketIfTouched && ( (order.side == OrderSide::Sell && order.trigger_price.unwrap() >= market_price) || (order.side == OrderSide::Buy && order.trigger_price.unwrap() <= market_price) ) {
+                                let side_string = match order.side {
+                                    OrderSide::Buy => "Below",
+                                    OrderSide::Sell => "Above"
+                                };
                                 let fail_event = StrategyEvent::OrderEvents(OrderUpdateEvent::OrderRejected {
                                     account,
                                     symbol_name: order.symbol_name,
                                     symbol_code: order.symbol_code,
-                                    order_id: order.id.clone(), reason: String::from("Buy Limit Price Must Be At or Below Market Price"),
-                                    tag: order.tag,
-                                    time: time.to_string()
-                                });
-                                match strategy_event_sender.send(fail_event).await {
-                                    Ok(_) => {}
-                                    Err(e) => eprintln!("Timed Event Handler: Failed to send event: {}", e)
-                                }
-                                continue
-                            }
-                            if order.order_type == OrderType::StopMarket && order.side == OrderSide::Sell && order.trigger_price.unwrap() >= market_price {
-                                let fail_event = StrategyEvent::OrderEvents(OrderUpdateEvent::OrderRejected {
-                                    account,
-                                    symbol_name: order.symbol_name,
-                                    symbol_code: order.symbol_code,
-                                    order_id: order.id.clone(), reason: String::from("Sell Stop Price Must Be Below Market Price"),
-                                    tag: order.tag,
-                                    time: time.to_string()
-                                });
-                                match strategy_event_sender.send(fail_event).await {
-                                    Ok(_) => {}
-                                    Err(e) => eprintln!("Timed Event Handler: Failed to send event: {}", e)
-                                }
-                                continue
-                            }
-                            if order.order_type == OrderType::StopMarket && order.side == OrderSide::Buy && order.trigger_price.unwrap() <= market_price {
-                                let fail_event = StrategyEvent::OrderEvents(OrderUpdateEvent::OrderRejected {
-                                    account,
-                                    symbol_name: order.symbol_name,
-                                    symbol_code: order.symbol_code,
-                                    order_id: order.id.clone(), reason: String::from("Buy Stop Price Must Be Above Market Price"),
-                                    tag: order.tag,
-                                    time: time.to_string()
-                                });
-                                match strategy_event_sender.send(fail_event).await {
-                                    Ok(_) => {}
-                                    Err(e) => eprintln!("Timed Event Handler: Failed to send event: {}", e)
-                                }
-                                continue
-                            }
-                            if order.order_type == OrderType::StopLimit && order.side == OrderSide::Sell && order.trigger_price.unwrap() >= market_price {
-                                let fail_event = StrategyEvent::OrderEvents(OrderUpdateEvent::OrderRejected {
-                                    account,
-                                    symbol_name: order.symbol_name,
-                                    symbol_code: order.symbol_code,
-                                    order_id: order.id.clone(), reason: String::from("Sell Stop Price Must Be Below Market Price"),
-                                    tag: order.tag,
-                                    time: time.to_string()
-                                });
-                                match strategy_event_sender.send(fail_event).await {
-                                    Ok(_) => {}
-                                    Err(e) => eprintln!("Timed Event Handler: Failed to send event: {}", e)
-                                }
-                                continue
-                            }
-                            if order.order_type == OrderType::StopLimit && order.side == OrderSide::Buy && order.trigger_price.unwrap() <= market_price {
-                                open_order_cache.remove(&order.id);
-                                let fail_event = StrategyEvent::OrderEvents(OrderUpdateEvent::OrderRejected {
-                                    account,
-                                    symbol_name: order.symbol_name,
-                                    symbol_code: order.symbol_code,
-                                    order_id: order.id.clone(), reason: String::from("Buy Stop Price Must Be Above Market Price"),
-                                    tag: order.tag,
-                                    time: time.to_string()
-                                });
-                                match strategy_event_sender.send(fail_event).await {
-                                    Ok(_) => {}
-                                    Err(e) => eprintln!("Timed Event Handler: Failed to send event: {}", e)
-                                }
-                                continue
-                            }
-                            if order.order_type == OrderType::StopLimit && order.side == OrderSide::Sell && order.limit_price.unwrap() < market_price {
-                                let fail_event = StrategyEvent::OrderEvents(OrderUpdateEvent::OrderRejected {
-                                    account,
-                                    symbol_name: order.symbol_name,
-                                    symbol_code: order.symbol_code,
-                                    order_id: order.id.clone(), reason: String::from("Sell Limit Price Must Be At or Above Market Price"),
-                                    tag: order.tag,
-                                    time: time.to_string()
-                                });
-                                match strategy_event_sender.send(fail_event).await {
-                                    Ok(_) => {}
-                                    Err(e) => eprintln!("Timed Event Handler: Failed to send event: {}", e)
-                                }
-                                continue
-                            }
-                            if order.order_type == OrderType::StopLimit && order.side == OrderSide::Buy && order.limit_price.unwrap() > market_price {
-                                open_order_cache.remove(&order.id);
-                                let fail_event = StrategyEvent::OrderEvents(OrderUpdateEvent::OrderRejected {
-                                    account,
-                                    symbol_name: order.symbol_name,
-                                    symbol_code: order.symbol_code,
-                                    order_id: order.id.clone(), reason: String::from("Buy Limit Price Must Be At or Below Market Price"),
-                                    tag: order.tag,
-                                    time: time.to_string()
-                                });
-                                match strategy_event_sender.send(fail_event).await {
-                                    Ok(_) => {}
-                                    Err(e) => eprintln!("Timed Event Handler: Failed to send event: {}", e)
-                                }
-                                continue
-                            }
-                            if order.order_type == OrderType::MarketIfTouched && order.side == OrderSide::Sell && order.trigger_price.unwrap() >= market_price {
-                                open_order_cache.remove(&order.id);
-                                let fail_event = StrategyEvent::OrderEvents(OrderUpdateEvent::OrderRejected {
-                                    account,
-                                    symbol_name: order.symbol_name,
-                                    symbol_code: order.symbol_code,
-                                    order_id: order.id.clone(), reason: String::from("Sell MIT Price Must Be Below Market Price"),
-                                    tag: order.tag,
-                                    time: time.to_string()
-                                });
-                                match strategy_event_sender.send(fail_event).await {
-                                    Ok(_) => {}
-                                    Err(e) => eprintln!("Timed Event Handler: Failed to send event: {}", e)
-                                }
-                                continue
-                            }
-                            if order.order_type == OrderType::MarketIfTouched && order.side == OrderSide::Buy && order.trigger_price.unwrap() <= market_price {
-                                open_order_cache.remove(&order.id);
-                                let fail_event = StrategyEvent::OrderEvents(OrderUpdateEvent::OrderRejected {
-                                    account,
-                                    symbol_name: order.symbol_name,
-                                    symbol_code: order.symbol_code,
-                                    order_id: order.id.clone(), reason: String::from("Buy MIT Price Must Be Above Market Price"),
-                                    tag: order.tag,
-                                    time: time.to_string()
-                                });
-                                match strategy_event_sender.send(fail_event).await {
-                                    Ok(_) => {}
-                                    Err(e) => eprintln!("Timed Event Handler: Failed to send event: {}", e)
-                                }
-                                continue
-                            }
-                            if order.order_type == OrderType::MarketIfTouched && order.side == OrderSide::Sell && order.trigger_price.unwrap () < market_price {
-                                let fail_event = StrategyEvent::OrderEvents(OrderUpdateEvent::OrderRejected {
-                                    account,
-                                    symbol_name: order.symbol_name,
-                                    symbol_code: order.symbol_code,
-                                    order_id: order.id.clone(), reason: String::from("Sell MIT Price Must Be Below Market Price"),
-                                    tag: order.tag,
-                                    time: time.to_string()
-                                });
-                                match strategy_event_sender.send(fail_event).await {
-                                    Ok(_) => {}
-                                    Err(e) => eprintln!("Timed Event Handler: Failed to send event: {}", e)
-                                }
-                                continue
-                            }
-                            if order.order_type == OrderType::MarketIfTouched && order.side == OrderSide::Buy && order.trigger_price.unwrap() > market_price {
-                                let fail_event = StrategyEvent::OrderEvents(OrderUpdateEvent::OrderRejected {
-                                    account,
-                                    symbol_name: order.symbol_name,
-                                    symbol_code: order.symbol_code,
-                                    order_id: order.id.clone(), reason: String::from("Buy MIT Price Must Be Above Market Price"),
-                                    tag: order.tag,
-                                    time: time.to_string()
-                                });
-                                match strategy_event_sender.send(fail_event).await {
-                                    Ok(_) => {}
-                                    Err(e) => eprintln!("Timed Event Handler: Failed to send event: {}", e)
-                                }
-                                continue
-                            }
-                            if order.order_type == OrderType::MarketIfTouched && order.side == OrderSide::Sell && order.trigger_price.unwrap() < market_price {
-                                let fail_event = StrategyEvent::OrderEvents(OrderUpdateEvent::OrderRejected {
-                                    account,
-                                    symbol_name: order.symbol_name,
-                                    symbol_code: order.symbol_code,
-                                    order_id: order.id.clone(), reason: String::from("Sell MIT Price Must Be Below Market Price"),
-                                    tag: order.tag,
-                                    time: time.to_string()
-                                });
-                                match strategy_event_sender.send(fail_event).await {
-                                    Ok(_) => {}
-                                    Err(e) => eprintln!("Timed Event Handler: Failed to send event: {}", e)
-                                }
-                                continue
-                            }
-
-                            if (order.order_type == OrderType::StopLimit || order.order_type == OrderType::StopMarket) &&  order.side == OrderSide::Buy && order.limit_price.unwrap() < market_price {
-                                let fail_event = StrategyEvent::OrderEvents(OrderUpdateEvent::OrderRejected {
-                                    account,
-                                    symbol_name: order.symbol_name,
-                                    symbol_code: order.symbol_code,
-                                    order_id: order.id.clone(), reason: String::from("Buy Limit Price Must Be At or Below Market Price"),
-                                    tag: order.tag,
-                                    time: time.to_string()
-                                });
-                                match strategy_event_sender.send(fail_event).await {
-                                    Ok(_) => {}
-                                    Err(e) => eprintln!("Timed Event Handler: Failed to send event: {}", e)
-                                }
-                                continue
-                            }
-
-                            if (order.order_type == OrderType::StopLimit || order.order_type == OrderType::StopMarket) && order.side == OrderSide::Sell && order.limit_price.unwrap() > market_price {
-                                let fail_event = StrategyEvent::OrderEvents(OrderUpdateEvent::OrderRejected {
-                                    account,
-                                    symbol_name: order.symbol_name,
-                                    symbol_code: order.symbol_code,
-                                    order_id: order.id.clone(), reason: String::from("Sell Limit Price Must Be At or Below Market Price"),
+                                    order_id: order.id.clone(), reason: String::from(format!("{} Trigger Price Must Be {} Market Price", order.side, side_string)),
                                     tag: order.tag,
                                     time: time.to_string()
                                 });
