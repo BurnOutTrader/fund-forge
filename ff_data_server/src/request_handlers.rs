@@ -387,7 +387,7 @@ async fn response_handler(receiver: Receiver<DataServerResponse>, writer: WriteH
 
                 // Prepare the message with a 4-byte length header in big-endian format
                 let length = (bytes.len() as u64).to_be_bytes();
-                let mut prefixed_msg = Vec::new();
+                let mut prefixed_msg = Vec::with_capacity(8 + bytes.len());
                 prefixed_msg.extend_from_slice(&length);
                 prefixed_msg.extend_from_slice(&bytes);
 
