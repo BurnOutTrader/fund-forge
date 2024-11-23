@@ -1426,4 +1426,240 @@ mod tests {
         // Wait for all events to be processed
         event_handler.abort();
     }
+
+    #[tokio::test]
+    async fn test_short_positions_pnl_calculation() {
+        let (mut ledger, mut strategy_receiver) = setup_test_ledger().await;
+
+        let event_handler = tokio::spawn(async move {
+            while let Some(event) = strategy_receiver.recv().await {
+                println!("Received strategy event: {:?}", event);
+            }
+        });
+
+        let symbol1 = "NQ".to_string();
+        let symbol1_code = "NQZ4".to_string();
+        let symbol2 = "ES".to_string();
+        let symbol2_code = "ESZ4".to_string();
+        let time = Utc::now();
+
+        // Opening first short position for Symbol1
+        println!("\nOpening short position for Symbol1...");
+        let (tx, rx) = tokio::sync::oneshot::channel();
+        ledger
+            .update_or_create_paper_position(
+                symbol1.clone(),
+                symbol1_code.clone(),
+                dec!(2.0),             // quantity stays positive
+                OrderSide::Sell,       // side (SHORT)
+                time,
+                dec!(17500.0),         // entry price
+                "test".to_string(),
+                "order1".to_string(),
+                tx,
+            )
+            .await;
+        let _ = rx.await;
+
+        assert_eq!(ledger.position_size(&symbol1_code), dec!(2.0)); // Position size stays positive
+
+        // Opening short position for Symbol2
+        println!("\nOpening short position for Symbol2...");
+        let (tx, rx) = tokio::sync::oneshot::channel();
+        ledger
+            .update_or_create_paper_position(
+                symbol2.clone(),
+                symbol2_code.clone(),
+                dec!(1.0),             // quantity stays positive
+                OrderSide::Sell,       // side (SHORT)
+                time + Duration::minutes(2),
+                dec!(4500.0),          // entry price
+                "test".to_string(),
+                "order2".to_string(),
+                tx,
+            )
+            .await;
+        let _ = rx.await;
+
+        assert_eq!(ledger.position_size(&symbol2_code), dec!(1.0)); // Position size stays positive
+
+        // Covering half of Symbol1 position
+        println!("\nPartial cover for Symbol1...");
+        let (tx, rx) = tokio::sync::oneshot::channel();
+        ledger
+            .update_or_create_paper_position(
+                symbol1.clone(),
+                symbol1_code.clone(),
+                dec!(1.0),             // quantity to reduce
+                OrderSide::Buy,        // side (COVER)
+                time + Duration::minutes(10),
+                dec!(17450.0),         // exit price (profit - price went down)
+                "partial_cover".to_string(),
+                "order3".to_string(),
+                tx,
+            )
+            .await;
+        let _ = rx.await;
+
+        assert_eq!(ledger.position_size(&symbol1_code), dec!(1.0)); // Should be reduced by 1.0
+
+        // Cover Symbol2 completely
+        println!("\nFinal cover for Symbol2...");
+        ledger
+            .paper_exit_position(
+                "Test".to_string(),
+                &symbol2_code,
+                time + Duration::minutes(15),
+                dec!(4450.0),          // exit price (profit - price went down)
+                "final_cover".to_string(),
+            )
+            .await;
+
+        // Final cover for Symbol1
+        println!("\nFinal cover for Symbol1...");
+        ledger
+            .paper_exit_position(
+                "Test".to_string(),
+                &symbol1_code,
+                time + Duration::minutes(20),
+                dec!(17400.0),         // exit price (profit - price went down)
+                "final_cover".to_string(),
+            )
+            .await;
+
+        let expected_pnl_symbol1 = dec!(3000.0); // (17500 - 17450) * 1 + (17500 - 17400) * 1
+        let expected_pnl_symbol2 = dec!(2500.0); // (4500 - 4450) * 1
+        let expected_total_pnl = expected_pnl_symbol1 + expected_pnl_symbol2;
+
+        assert_eq!(
+            ledger.total_booked_pnl,
+            expected_total_pnl,
+            "Total PnL mismatch: expected {}, got {}",
+            expected_total_pnl,
+            ledger.total_booked_pnl
+        );
+
+        println!("\nFinal Ledger Statistics:");
+        println!("{}", ledger.ledger_statistics_to_string());
+
+        println!("\nTrade Statistics:");
+        println!("{}", ledger.trade_statistics_to_string());
+
+        event_handler.abort();
+    }
+
+    #[tokio::test]
+    async fn test_losing_trades_pnl_calculation() {
+        let (mut ledger, mut strategy_receiver) = setup_test_ledger().await;
+
+        let event_handler = tokio::spawn(async move {
+            while let Some(event) = strategy_receiver.recv().await {
+                println!("Received strategy event: {:?}", event);
+            }
+        });
+
+        let symbol1 = "NQ".to_string();
+        let symbol1_code = "NQZ4".to_string();
+        let symbol2 = "ES".to_string();
+        let symbol2_code = "ESZ4".to_string();
+        let time = Utc::now();
+
+        // Opening long position for Symbol1 (will be a losing trade)
+        println!("\nOpening long position for Symbol1...");
+        let (tx, rx) = tokio::sync::oneshot::channel();
+        ledger
+            .update_or_create_paper_position(
+                symbol1.clone(),
+                symbol1_code.clone(),
+                dec!(2.0),             // quantity
+                OrderSide::Buy,        // side
+                time,
+                dec!(17500.0),         // entry price
+                "test".to_string(),
+                "order1".to_string(),
+                tx,
+            )
+            .await;
+        let _ = rx.await;
+
+        // Opening short position for Symbol2 (will be a losing trade)
+        println!("\nOpening short position for Symbol2...");
+        let (tx, rx) = tokio::sync::oneshot::channel();
+        ledger
+            .update_or_create_paper_position(
+                symbol2.clone(),
+                symbol2_code.clone(),
+                dec!(1.0),             // quantity
+                OrderSide::Sell,       // side
+                time + Duration::minutes(2),
+                dec!(4500.0),          // entry price
+                "test".to_string(),
+                "order2".to_string(),
+                tx,
+            )
+            .await;
+        let _ = rx.await;
+
+        // Partial exit for Symbol1 at a loss
+        println!("\nPartial exit for Symbol1...");
+        let (tx, rx) = tokio::sync::oneshot::channel();
+        ledger
+            .update_or_create_paper_position(
+                symbol1.clone(),
+                symbol1_code.clone(),
+                dec!(1.0),             // quantity
+                OrderSide::Sell,       // side
+                time + Duration::minutes(10),
+                dec!(17450.0),         // exit price (LOSS - price went down)
+                "partial_exit".to_string(),
+                "order3".to_string(),
+                tx,
+            )
+            .await;
+        let _ = rx.await;
+
+        // Exit Symbol2 at a loss
+        println!("\nFinal exit for Symbol2...");
+        ledger
+            .paper_exit_position(
+                "Test".to_string(),
+                &symbol2_code,
+                time + Duration::minutes(15),
+                dec!(4550.0),          // exit price (LOSS - price went up)
+                "final_exit".to_string(),
+            )
+            .await;
+
+        // Final exit for Symbol1 at a further loss
+        println!("\nFinal exit for Symbol1...");
+        ledger
+            .paper_exit_position(
+                "Test".to_string(),
+                &symbol1_code,
+                time + Duration::minutes(20),
+                dec!(17400.0),         // exit price (LOSS - price went down more)
+                "final_exit".to_string(),
+            )
+            .await;
+
+        let expected_pnl_symbol1 = dec!(-3000.0); // (17450 - 17500) * 1 + (17400 - 17500) * 1
+        let expected_pnl_symbol2 = dec!(-2500.0); // (4500 - 4550) * 1
+        let expected_total_pnl = expected_pnl_symbol1 + expected_pnl_symbol2;
+
+        assert_eq!(
+            ledger.total_booked_pnl,
+            expected_total_pnl,
+            "Total PnL mismatch: expected {}, got {}",
+            expected_total_pnl,
+            ledger.total_booked_pnl
+        );
+
+        println!("\nFinal Ledger Statistics:");
+        println!("{}", ledger.ledger_statistics_to_string());
+
+        println!("\nTrade Statistics:");
+        println!("{}", ledger.trade_statistics_to_string());
+
+        event_handler.abort();
+    }
 }
