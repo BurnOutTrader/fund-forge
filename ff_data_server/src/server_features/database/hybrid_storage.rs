@@ -197,7 +197,33 @@ impl HybridStorage {
             return Ok(Arc::clone(mmap.value()));
         }
 
-        // ... cache eviction code ...
+        // Handle cache eviction
+        let oldest_path = if self.mmap_cache.len() >= 200 {
+            self.cache_last_accessed
+                .iter()
+                .min_by_key(|entry| entry.value().clone())
+                .map(|entry| entry.key().clone())
+        } else {
+            None
+        };
+
+        if let Some(oldest_path) = oldest_path {
+            if let Some(semaphore) = self.file_locks.get(&oldest_path) {
+                let permit = semaphore.value().acquire().await.map_err(|e| {
+                    io::Error::new(
+                        io::ErrorKind::Other,
+                        format!("Error acquiring lock for cache cleanup: {}", e)
+                    )
+                })?;
+
+                if let Some((_, mmap)) = self.mmap_cache.remove(&file_path.to_string_lossy().to_string()) {
+                    drop(mmap);
+                }
+                self.cache_last_accessed.remove(&oldest_path);
+                drop(permit);
+            }
+            self.file_locks.remove(&oldest_path);
+        }
 
         let mut file = File::open(file_path)?;
         let file_size = file.metadata()?.len() as usize;
