@@ -9,6 +9,8 @@ use crate::messages::data_server_messaging::{DataServerRequest, DataServerRespon
 use crate::strategies::client_features::connection_types::ConnectionType;
 use crate::strategies::client_features::server_connections::SETTINGS_MAP;
 use tokio::io::{AsyncWriteExt, WriteHalf};
+
+#[derive(Debug)]
 pub(crate) enum StrategyRequest {
     CallBack(ConnectionType, DataServerRequest, oneshot::Sender<DataServerResponse>),
     OneWay(ConnectionType, DataServerRequest),

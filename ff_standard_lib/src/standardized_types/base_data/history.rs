@@ -109,11 +109,12 @@ pub async fn get_compressed_historical_data(
             },
             tx
         );
-
+        //println!("{:?}", request);
         send_request(request).await;
+        let fail_msg = format!("Timed out waiting for response after {} seconds!", time_out_seconds);
         let response = tokio::time::timeout(std::time::Duration::from_secs(time_out_seconds), rx)
             .await
-            .expect("Timed out waiting for response after 15 seconds!");
+            .expect(fail_msg.as_str());
 
         match response {
             Ok(DataServerResponse::CompressedHistoricalData { payload, .. }) => {
