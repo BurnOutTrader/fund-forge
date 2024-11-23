@@ -148,10 +148,10 @@ pub async fn manage_async_requests(
                     DataServerRequest::GetCompressedHistoricalData { callback_id, subscriptions, from_time, to_time } => {
                         let time = match DateTime::<Utc>::from_str(&to_time) {
                             Ok(t) => t,
-                            Err(_) => {
+                            Err(e) => {
                                 let msg = DataServerResponse::Error {
                                     callback_id,
-                                    error: FundForgeError::ServerErrorDebug("Invalid time format".to_string())
+                                    error: FundForgeError::ServerErrorDebug(format!("Invalid time format: {}", e))
                                 };
                                 if let Err(e) = sender.send(msg).await {
                                     eprintln!("Failed to send response to stream handler: {:?}", e);
