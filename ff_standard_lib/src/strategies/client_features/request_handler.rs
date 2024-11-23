@@ -49,13 +49,12 @@ pub async fn request_handler(
                     if let Some(mut sender) = server_senders.get_mut(&connection_type) {
                         // Prepare the message with a 8-byte length header in big-endian format
                         let data = request.to_bytes();
-                        let length = (data.len() as u64).to_be_bytes();
-                        let mut prefixed_msg = Vec::new();
-                        prefixed_msg.extend_from_slice(&length);
+                        let mut prefixed_msg = Vec::with_capacity(8 + data.len());
+                        prefixed_msg.extend_from_slice(&(data.len() as u64).to_be_bytes());
                         prefixed_msg.extend_from_slice(&data);
                         // Lock the mutex to get_requests mutable access
                         if let Err(e) =  sender.value_mut().write_all(&prefixed_msg).await {
-                            panic!("Error sending message: {:?}", e);
+                            eprintln!("Error sending message: {:?}", e);
                         }
                     }
                 }
@@ -67,13 +66,12 @@ pub async fn request_handler(
                     if let Some(mut sender) = server_senders.get_mut(&connection_type) {
                         // Prepare the message with a 8-byte length header in big-endian format
                         let data = request.to_bytes();
-                        let length = (data.len() as u64).to_be_bytes();
-                        let mut prefixed_msg = Vec::new();
-                        prefixed_msg.extend_from_slice(&length);
+                        let mut prefixed_msg = Vec::with_capacity(8 + data.len());
+                        prefixed_msg.extend_from_slice(&(data.len() as u64).to_be_bytes());
                         prefixed_msg.extend_from_slice(&data);
                         // Lock the mutex to get_requests mutable access
                         if let Err(e) =  sender.value_mut().write_all(&prefixed_msg).await {
-                            panic!("Error sending message: {:?}", e);
+                            eprintln!("Error sending message: {:?}", e);
                         }
                     }
                 }
