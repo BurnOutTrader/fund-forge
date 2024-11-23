@@ -26,20 +26,19 @@ use crate::strategies::consolidators::consolidator_enum::ConsolidatorEnum;
 async fn process_compressed_payload(
     compressed_data: &[u8],
 ) -> Result<Vec<BaseDataEnum>, FundForgeError> {
+    // Pre-allocate decompressed data with estimated size (3:1 ratio)
+    let mut decompressed = Vec::new();
+    decompressed.try_reserve(compressed_data.len() * 98)
+        .map_err(|e| FundForgeError::ClientSideErrorDebug(
+            format!("Failed to allocate memory for decompression: {}", e)
+        ))?;
+
     const MB: usize = 1024 * 1024;
     const BUFFER_SIZE: usize = 13 * MB;
     let mut buffer = vec![0; BUFFER_SIZE];
 
     let cursor = std::io::Cursor::new(compressed_data);
     let mut decoder = GzDecoder::new(cursor);
-
-    // Pre-allocate decompressed data with estimated size (3:1 ratio)
-    let mut decompressed = Vec::new();
-    decompressed.try_reserve(compressed_data.len() * 3)
-        .map_err(|e| FundForgeError::ClientSideErrorDebug(
-            format!("Failed to allocate memory for decompression: {}", e)
-        ))?;
-
     // Read in chunks
     loop {
         match decoder.read(&mut buffer[..]) {
