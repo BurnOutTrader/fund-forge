@@ -21,177 +21,161 @@ use crate::strategies::client_features::request_handler::{send_request, Strategy
 use crate::strategies::client_features::server_connections::SETTINGS_MAP;
 use crate::strategies::consolidators::consolidator_enum::ConsolidatorEnum;
 
-pub async fn get_compressed_historical_data (
+
+// Helper function to process a single compressed payload
+async fn process_compressed_payload(
+    compressed_data: &[u8],
+) -> Result<Vec<BaseDataEnum>, FundForgeError> {
+    const MB: usize = 1024 * 1024;
+    const BUFFER_SIZE: usize = 13 * MB;
+    let mut buffer = vec![0; BUFFER_SIZE];
+
+    let cursor = std::io::Cursor::new(compressed_data);
+    let mut decoder = GzDecoder::new(cursor);
+
+    // Pre-allocate decompressed data with estimated size (3:1 ratio)
+    let mut decompressed = Vec::new();
+    decompressed.try_reserve(compressed_data.len() * 3)
+        .map_err(|e| FundForgeError::ClientSideErrorDebug(
+            format!("Failed to allocate memory for decompression: {}", e)
+        ))?;
+
+    // Read in chunks
+    loop {
+        match decoder.read(&mut buffer[..]) {
+            Ok(0) => break,
+            Ok(n) => {
+                decompressed.try_reserve(n)
+                    .map_err(|e| FundForgeError::ClientSideErrorDebug(
+                        format!("Failed to allocate during decompression: {}", e)
+                    ))?;
+                decompressed.extend_from_slice(&buffer[..n]);
+            }
+            Err(e) => return Err(FundForgeError::ClientSideErrorDebug(
+                format!("Failed to read decompressed data: {}", e)
+            )),
+        }
+    }
+
+    BaseDataEnum::from_array_bytes(&decompressed)
+        .map_err(|e| FundForgeError::ClientSideErrorDebug(format!("Failed to parse data: {}", e)))
+}
+
+pub async fn get_compressed_historical_data(
     subscriptions: Vec<DataSubscription>,
     from_time: DateTime<Utc>,
     to_time: DateTime<Utc>,
 ) -> Result<BTreeMap<i64, TimeSlice>, FundForgeError> {
     let connections = SETTINGS_MAP.clone();
+
+    async fn process_payload(
+        payload: Vec<Vec<u8>>,
+        from_time: DateTime<Utc>,
+        to_time: DateTime<Utc>,
+    ) -> Result<BTreeMap<i64, TimeSlice>, FundForgeError> {
+        let mut combined_data: BTreeMap<i64, TimeSlice> = BTreeMap::new();
+
+        for compressed_data in payload {
+            if let Ok(base_data_vec) = process_compressed_payload(&compressed_data).await {
+                for data in base_data_vec {
+                    if data.time_closed_utc() >= from_time && data.time_closed_utc() <= to_time {
+                        let timestamp = data.time_closed_utc().timestamp_nanos_opt()
+                            .ok_or_else(|| FundForgeError::ClientSideErrorDebug(
+                                "Failed to convert timestamp to nanos".to_string()
+                            ))?;
+
+                        combined_data
+                            .entry(timestamp)
+                            .or_insert_with(TimeSlice::new)
+                            .add(data);
+                    }
+                }
+            }
+        }
+
+        Ok(combined_data)
+    }
+
     if connections.len() <= 2 {
-        let req = DataServerRequest::GetCompressedHistoricalData {
-            callback_id: 0,
-            subscriptions: subscriptions.clone(),
-            from_time: from_time.to_string(),
-            to_time: to_time.to_string(),
-        };
+        // Single connection case
         let (tx, rx) = oneshot::channel();
         let request = StrategyRequest::CallBack(
             ConnectionType::Default,
-            req,
+            DataServerRequest::GetCompressedHistoricalData {
+                callback_id: 0,
+                subscriptions,
+                from_time: from_time.to_string(),
+                to_time: to_time.to_string(),
+            },
             tx
         );
 
-        // Send request sequentially
         send_request(request).await;
         let response = tokio::time::timeout(std::time::Duration::from_secs(15), rx)
             .await
             .expect("Timed out waiting for response after 15 seconds!");
 
         match response {
-            Ok(payload) => {
-                match payload {
-                    DataServerResponse::CompressedHistoricalData { payload, .. } => {
-                        let mut combined_data: BTreeMap<i64, TimeSlice> = BTreeMap::new();
-                        //eprintln!("Payload: {:?}", payload.len());
-                        // Process each compressed file's data
-                        for compressed_data in payload {
-                            // Create a cursor for the compressed data and wrap it in a BufReader
-                            let cursor = std::io::Cursor::new(&compressed_data);
-                            let buf_reader = std::io::BufReader::new(cursor);
-                            let mut decoder = GzDecoder::new(buf_reader);
-
-                            // Use a BufReader for efficient reading of decompressed data
-                            let mut buf_decompressed = std::io::BufReader::new(&mut decoder);
-                            let mut decompressed = Vec::new();
-                            match buf_decompressed.read_to_end(&mut decompressed) {
-                                Ok(_) => {},
-                                Err(e) => return Err(FundForgeError::ClientSideErrorDebug(format!("Failed to read decompressed data: {}", e)))
-                            }
-
-                            // Parse the decompressed data into BaseDataEnum vec
-                            if let Ok(base_data_vec) = BaseDataEnum::from_array_bytes(&decompressed) {
-                                // Filter data within the requested time range and add to combined_data
-                                for data in base_data_vec {
-                                    if data.time_closed_utc() >= from_time && data.time_closed_utc() <= to_time {
-                                        let timestamp = data.time_closed_utc().timestamp_nanos_opt()
-                                            .ok_or_else(|| FundForgeError::ClientSideErrorDebug(
-                                                "Failed to convert timestamp to nanos".to_string()
-                                            ))?;
-
-                                        combined_data
-                                            .entry(timestamp)
-                                            .or_insert_with(TimeSlice::new)
-                                            .add(data);
-                                    }
-                                }
-                            }
-                        }
-                        Ok(combined_data)
-                    },
-                    DataServerResponse::Error { error, .. } => {
-                        Err(error)
-                    },
-                    _ => Err(FundForgeError::UnknownBlameError("Incorrect callback data received".to_string()))
-                }
-            }
+            Ok(DataServerResponse::CompressedHistoricalData { payload, .. }) => {
+                process_payload(payload, from_time, to_time).await
+            },
+            Ok(DataServerResponse::Error { error, .. }) => Err(error),
+            Ok(_) => Err(FundForgeError::UnknownBlameError("Incorrect callback data received".to_string())),
             Err(e) => Err(FundForgeError::ClientSideErrorDebug(format!("Failed to receive payload: {}", e)))
         }
     } else {
-        // For len > 2, handle potential vendor-specific connections
+        // Multi-connection case
         let mut requests_map: AHashMap<ConnectionType, Vec<DataSubscription>> = AHashMap::new();
 
-        // Sort subscriptions into appropriate connections
         for sub in subscriptions {
             let vendor_connection = ConnectionType::Vendor(sub.symbol.data_vendor.clone());
-
-            // If vendor connection exists in settings, use it; otherwise use default
-            if connections.contains_key(&vendor_connection) {
-                requests_map.entry(vendor_connection)
-                    .or_insert_with(Vec::new)
-                    .push(sub);
+            let entry = if connections.contains_key(&vendor_connection) {
+                vendor_connection
             } else {
-                requests_map.entry(ConnectionType::Default)
-                    .or_insert_with(Vec::new)
-                    .push(sub);
-            }
+                ConnectionType::Default
+            };
+            requests_map.entry(entry).or_default().push(sub);
         }
 
-        // Create and execute concurrent requests
-        let mut futures = Vec::new();
-        for (connection_type, subs) in requests_map {
-            let (tx, rx) = oneshot::channel();
-            let req = DataServerRequest::GetCompressedHistoricalData {
-                callback_id: 0,
-                subscriptions: subs,
-                from_time: from_time.to_string(),
-                to_time: to_time.to_string(),
-            };
-            let request = StrategyRequest::CallBack(
-                connection_type,
-                req,
-                tx
-            );
-
-            // Create future for this request
-            let future = async move {
-                send_request(request).await;
-                let response = tokio::time::timeout(std::time::Duration::from_secs(15), rx)
-                    .await
-                    .expect("Timed out waiting for response after 15 seconds!");
-                match response{
-                    Ok(response) => match response {
-                        DataServerResponse::CompressedHistoricalData { payload, .. } => Ok(payload),
-                        DataServerResponse::Error { error, .. } => Err(error),
-                        _ => Err(FundForgeError::UnknownBlameError("Incorrect response received at callback".to_string()))
+        let futures: Vec<_> = requests_map
+            .into_iter()
+            .map(|(connection_type, subs)| {
+                let (tx, rx) = oneshot::channel();
+                let request = StrategyRequest::CallBack(
+                    connection_type,
+                    DataServerRequest::GetCompressedHistoricalData {
+                        callback_id: 0,
+                        subscriptions: subs,
+                        from_time: from_time.to_string(),
+                        to_time: to_time.to_string(),
                     },
-                    Err(e) => Err(FundForgeError::ClientSideErrorDebug(format!("Failed to receive payload: {}", e)))
+                    tx
+                );
+
+                async move {
+                    send_request(request).await;
+                    let response = tokio::time::timeout(std::time::Duration::from_secs(15), rx)
+                        .await
+                        .expect("Timed out waiting for response after 15 seconds!");
+
+                    match response {
+                        Ok(DataServerResponse::CompressedHistoricalData { payload, .. }) => Ok(payload),
+                        Ok(DataServerResponse::Error { error, .. }) => Err(error),
+                        Ok(_) => Err(FundForgeError::UnknownBlameError("Incorrect response received at callback".to_string())),
+                        Err(e) => Err(FundForgeError::ClientSideErrorDebug(format!("Failed to receive payload: {}", e)))
+                    }
                 }
-            };
+            })
+            .collect();
 
-            futures.push(future);
-        }
-
-        // Wait for all requests to complete
         let results = join_all(futures).await;
+        let mut combined_data = BTreeMap::new();
 
-        // Combine results from all connections
-        let mut combined_data: BTreeMap<i64, TimeSlice> = BTreeMap::new();
         for result in results {
             match result {
                 Ok(payload) => {
-                    // Process each connection's compressed files
-                    for compressed_data in payload {
-                        // Create a cursor for the compressed data and wrap it in a BufReader
-                        let cursor = std::io::Cursor::new(&compressed_data);
-                        let buf_reader = std::io::BufReader::new(cursor);
-                        let mut decoder = GzDecoder::new(buf_reader);
-
-                        // Use a BufReader for efficient reading of decompressed data
-                        let mut buf_decompressed = std::io::BufReader::new(&mut decoder);
-                        let mut decompressed = Vec::new();
-                        match buf_decompressed.read_to_end(&mut decompressed) {
-                            Ok(_) => {},
-                            Err(e) => return Err(FundForgeError::ClientSideErrorDebug(format!("Failed to read decompressed data: {}", e)))
-                        }
-
-                        // Parse the decompressed data
-                        if let Ok(base_data_vec) = BaseDataEnum::from_array_bytes(&decompressed) {
-                            // Filter and add data within the time range
-                            for data in base_data_vec {
-                                if data.time_closed_utc() >= from_time && data.time_closed_utc() <= to_time {
-                                    let timestamp = data.time_closed_utc().timestamp_nanos_opt()
-                                        .ok_or_else(|| FundForgeError::ClientSideErrorDebug(
-                                            "Failed to convert timestamp to nanos".to_string()
-                                        ))?;
-
-                                    combined_data
-                                        .entry(timestamp)
-                                        .or_insert_with(TimeSlice::new)
-                                        .add(data);
-                                }
-                            }
-                        }
-                    }
+                    let partial_data = process_payload(payload, from_time, to_time).await?;
+                    combined_data.extend(partial_data);
                 },
                 Err(e) => return Err(e),
             }
