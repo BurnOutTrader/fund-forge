@@ -517,10 +517,24 @@ impl Ledger {
         let mut win_pnl = dec!(0.0);
         let mut loss_pnl = dec!(0.0);
         let mut pnl = dec!(0.0);
+        let mut max_drawdown = dec!(0.0);
+        let mut peak = dec!(0.0);
+        let mut running_pnl = dec!(0.0);
 
+        // Track running PNL and maximum drawdown
         for trades in self.positions_closed.iter() {
             total_trades += trades.value().len();
             for position in trades.value() {
+                running_pnl += position.booked_pnl;
+                if running_pnl > peak {
+                    peak = running_pnl;
+                }
+
+                let drawdown = peak - running_pnl;
+                if drawdown > max_drawdown {
+                    max_drawdown = drawdown;
+                }
+
                 if position.booked_pnl > dec!(0.0) {
                     wins += 1;
                     win_pnl += position.booked_pnl;
@@ -534,38 +548,53 @@ impl Ledger {
 
         // Calculate average win and average loss
         let avg_win_pnl = if wins > 0 {
-            win_pnl / Decimal::from(wins) // Convert to Decimal type
+            win_pnl / Decimal::from(wins)
         } else {
             dec!(0.0)
         };
 
         let avg_loss_pnl = if losses > 0 {
-            loss_pnl / Decimal::from(losses) // Convert to Decimal type
+            loss_pnl / Decimal::from(losses)
+        } else {
+            dec!(0.0)
+        };
+
+        // Calculate win rate
+        let win_rate = if total_trades > 0 {
+            (Decimal::from_usize(wins).unwrap() / Decimal::from_usize(total_trades).unwrap()) * dec!(100.0)
         } else {
             dec!(0.0)
         };
 
         // Calculate risk-reward ratio
         let risk_reward = if losses == 0 && wins > 0 {
-            Decimal::from(avg_win_pnl) // No losses, so risk/reward is considered infinite
+            avg_win_pnl
         } else if wins == 0 && losses > 0 {
-            dec!(0.0) // No wins, risk/reward is zero
+            dec!(0.0)
         } else if avg_loss_pnl < dec!(0.0) && avg_win_pnl > dec!(0.0) {
-            avg_win_pnl / -avg_loss_pnl // Negate loss_pnl for correct calculation
+            avg_win_pnl / -avg_loss_pnl
         } else {
             dec!(0.0)
         };
 
+        // Calculate profit factor
         let profit_factor = if loss_pnl != dec!(0.0) {
             win_pnl / -loss_pnl
         } else if win_pnl > dec!(0.0) {
-            dec!(1000.0) // or use a defined constant for infinity
+            dec!(1000.0)
         } else {
-            dec!(0.0) // when both win_pnl and loss_pnl are zero
+            dec!(0.0)
         };
 
-        let win_rate = if total_trades > 0 {
-            (Decimal::from_usize(wins).unwrap() / Decimal::from_usize(total_trades).unwrap()) * dec!(100.0)
+        // Calculate Quality Ratio (win rate as decimal × profit factor)
+        // Provides a combined measure of consistency and profitability
+        let quality_ratio = (win_rate / dec!(100.0)) * profit_factor;
+
+        // Calculate Reward to Drawdown Ratio (total profit / maximum drawdown)
+        let pain_2_gain = if max_drawdown > dec!(0.0) {
+            pnl / max_drawdown
+        } else if pnl > dec!(0.0) {
+            dec!(1000.0) // When profitable with no drawdown
         } else {
             dec!(0.0)
         };
@@ -576,8 +605,32 @@ impl Ledger {
         let cash_available = self.cash_available.clone();
         let commission_paid = self.commissions_paid.clone();
         let pnl = self.total_booked_pnl.clone();
-        format!("Account: {}, Balance: {} {}, Win Rate: {}%, Average Risk Reward: {}, Profit Factor {}, Total profit: {}, Total Wins: {}, Total Losses: {}, Break Even: {}, Total Positions: {}, Open Positions: {}, Cash Used: {}, Cash Available: {}, Commission Paid: {}",
-                self.account, cash_value.round_dp(2), self.currency, win_rate.round_dp(2), risk_reward.round_dp(2), profit_factor.round_dp(2), pnl.round_dp(2), wins, losses, break_even, total_trades, self.positions.len(), cash_used.round_dp(2), cash_available.round_dp(2), commission_paid)
+
+        format!(
+            "Account: {}, Balance: {} {}, Win Rate: {}%, Average Risk Reward: {}, \
+         Profit Factor: {}, Quality Ratio: {},  Pain to Gain Ratio: {}, \
+         Max Drawdown: {}, Total profit: {}, Total Wins: {}, Total Losses: {}, \
+         Break Even: {}, Total Positions: {}, Open Positions: {}, \
+         Cash Used: {}, Cash Available: {}, Commission Paid: {}",
+            self.account,
+            cash_value.round_dp(2),
+            self.currency,
+            win_rate.round_dp(2),
+            risk_reward.round_dp(2),
+            profit_factor.round_dp(2),
+            quality_ratio.round_dp(2),
+            pain_2_gain.round_dp(2),
+            max_drawdown.round_dp(2),
+            pnl.round_dp(2),
+            wins,
+            losses,
+            break_even,
+            total_trades,
+            self.positions.len(),
+            cash_used.round_dp(2),
+            cash_available.round_dp(2),
+            commission_paid
+        )
     }
 
     pub fn generate_id(
