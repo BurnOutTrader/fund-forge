@@ -599,7 +599,7 @@ mod tests {
             .collect::<Vec<_>>();
 
         // Save bulk data
-        storage.save_data_bulk(test_data.clone(), true).await.unwrap();
+        storage.save_data_bulk(test_data.clone(), true, None).await.unwrap();
 
         // Get earliest and latest directly from the data
         let expected_earliest = test_data.first().unwrap().time_closed_utc();
@@ -631,7 +631,7 @@ mod tests {
             .map(|c| BaseDataEnum::Candle(c.clone()))
             .collect::<Vec<_>>();
 
-        storage.save_data_bulk(test_data.clone(), true).await.unwrap();
+        storage.save_data_bulk(test_data.clone(), true, None).await.unwrap();
 
         // Get actual timestamps from the data
         let day1_start = test_data[0].time_closed_utc();
@@ -683,7 +683,7 @@ mod tests {
             .collect::<Vec<_>>();
 
         // Save bulk data to storage
-        storage.save_data_bulk(test_data.clone(), true).await.unwrap();
+        storage.save_data_bulk(test_data.clone(), true, None).await.unwrap();
 
         // Expected latest timestamp from test data
         let expected_latest = test_data.last().unwrap().time_closed_utc();
@@ -691,7 +691,7 @@ mod tests {
         // Call `get_latest_data_time` and verify the result
         let latest_time = storage.get_latest_data_time(
             test_data[0].symbol(),
-            None
+            None,
             &Resolution::Hours(1),
             &BaseDataType::Candles
         ).await.unwrap();
@@ -713,7 +713,7 @@ mod tests {
             .collect::<Vec<_>>();
 
         // Save bulk data to storage
-        storage.save_data_bulk(test_data.clone(), true).await.unwrap();
+        storage.save_data_bulk(test_data.clone(), true, None).await.unwrap();
 
         // Expected earliest timestamp from test data
         let expected_earliest = test_data.first().unwrap().time_closed_utc();
@@ -743,7 +743,7 @@ mod tests {
             .collect::<Vec<_>>();
 
         // Save bulk data to storage
-        storage.save_data_bulk(test_data.clone(), true).await.unwrap();
+        storage.save_data_bulk(test_data.clone(), true, None).await.unwrap();
 
         // Define test ranges
         let day1_start = test_data.first().unwrap().time_closed_utc();
@@ -796,7 +796,7 @@ mod tests {
             .collect::<Vec<_>>();
 
         // Save bulk data to storage
-        storage.save_data_bulk(test_data.clone(), true).await.unwrap();
+        storage.save_data_bulk(test_data.clone(), true, None).await.unwrap();
 
         // Define test cases
         let target_times = vec![
