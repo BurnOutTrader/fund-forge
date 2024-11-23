@@ -239,20 +239,20 @@ impl FundForgeStrategy {
         strategy
     }
 
-    pub fn calculate_stop_price(&self, entry_price: Decimal, position_side: PositionSide, max_loss: Decimal, value_per_tick: Decimal, tick_size: Decimal) -> Decimal {
-        let ticks_to_loss = (max_loss.abs() / value_per_tick).floor();
+    pub fn calculate_stop_price(&self, entry_price: Decimal, position_side: PositionSide, max_loss: Decimal, value_per_tick: Decimal, tick_size: Decimal, quantity: Decimal) -> Decimal {
+        // Calculate loss per contract
+        let loss_per_contract = max_loss.abs() / quantity;
+
+        // Calculate ticks per contract to reach max loss
+        let ticks_to_loss = (loss_per_contract / value_per_tick).floor();
         let price_distance = ticks_to_loss * tick_size;
 
-        // For a long position, the stop loss (sell stop) must be BELOW entry
-        // For a short position, the stop loss (buy stop) must be ABOVE entry
         match position_side {
             PositionSide::Long => {
-                // Long position uses sell stop, must be below entry
                 let stop = entry_price - price_distance;
                 round_to_tick_size(stop, tick_size)
             },
             PositionSide::Short => {
-                // Short position uses buy stop, must be above entry
                 let stop = entry_price + price_distance;
                 round_to_tick_size(stop, tick_size)
             },
