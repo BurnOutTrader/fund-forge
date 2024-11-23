@@ -57,3 +57,5 @@ socket2 = "0.5.7"
 tempfile = "3.13.0"
 time = "0.3.36"
 log = "0.4.22"
+fred-rs = "0.1.1"
+
