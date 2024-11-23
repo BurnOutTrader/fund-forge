@@ -146,9 +146,31 @@ pub async fn manage_async_requests(
                     ).await,
 
                     DataServerRequest::GetCompressedHistoricalData { callback_id, subscriptions, from_time, to_time } => {
-                        handle_callback_no_timeouts (
-                            || compressed_file_response(subscriptions, from_time, to_time, callback_id),
-                            sender.clone()).await
+                        let time = match DateTime::<Utc>::from_str(&to_time) {
+                            Ok(t) => t,
+                            Err(_) => {
+                                let msg = DataServerResponse::Error {
+                                    callback_id,
+                                    error: FundForgeError::ServerErrorDebug("Invalid time format".to_string())
+                                };
+                                if let Err(e) = sender.send(msg).await {
+                                    eprintln!("Failed to send response to stream handler: {:?}", e);
+                                }
+                                return;
+                            }
+                        };
+                        match time.naive_utc().date() >= Utc::now().date_naive() {
+                            true => {
+                                handle_callback_no_timeouts (
+                                    || compressed_file_response(subscriptions, from_time, to_time, callback_id),
+                                    sender.clone()).await
+                            }
+                            false => {
+                                handle_callback (
+                                    || compressed_file_response(subscriptions, from_time, to_time, callback_id),
+                                    sender.clone(), callback_id).await
+                            }
+                        }
                     }
 
                     DataServerRequest::SymbolsVendor {
