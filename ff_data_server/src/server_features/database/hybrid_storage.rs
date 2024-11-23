@@ -533,6 +533,9 @@ impl HybridStorage {
             }
 
             for file_path in file_paths {
+                if !file_path.exists() {
+                    continue;
+                }
                 let path_str = file_path.to_string_lossy().to_string();
                 let semaphore = self.file_locks
                     .entry(path_str.clone())
