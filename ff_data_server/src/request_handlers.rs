@@ -360,10 +360,7 @@ pub async fn manage_async_requests(
         // Deregister when disconnected
         //deregister_streamer(&stream_name).await;
         RESPONSE_SENDERS.remove(&stream_name);
-        let prefix = format!("Disconnected: {}", stream_name);
-        message_bar.set_prefix(prefix);
-        let msg = "Strategy disconnected".to_string();
-        message_bar.finish_with_message(msg);
+        message_bar.finish_and_clear();
     });
 
     // Response handler for outgoing messages
