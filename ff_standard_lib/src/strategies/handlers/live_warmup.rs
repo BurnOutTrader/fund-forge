@@ -79,7 +79,7 @@ pub(crate) async fn live_warm_up(
                 break 'main_loop;
             }
 
-            let mut time_slices = match get_compressed_historical_data(primary_subscriptions.clone(), last_time, to_time, 900).await {
+            let mut time_slices = match get_compressed_historical_data(primary_subscriptions.clone(), last_time, to_time).await {
                 Ok(time_slices) => {
                     if time_slices.is_empty() {
                         println!("Live Warmup: No data period, weekend or holiday: skipping to next day");

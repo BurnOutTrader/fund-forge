@@ -1,9 +1,8 @@
 use tokio::sync::oneshot;
-use tokio::time::timeout;
+
 use crate::messages::data_server_messaging::{DataServerRequest, DataServerResponse, FundForgeError};
 use crate::standardized_types::new_types::Price;
 use crate::standardized_types::subscriptions::{Symbol, SymbolName};
-use crate::strategies::client_features::client_side_brokerage::TIME_OUT;
 use crate::strategies::client_features::connection_types::ConnectionType;
 use crate::strategies::client_features::request_handler::{send_request, StrategyRequest};
 impl Symbol {
@@ -16,18 +15,19 @@ impl Symbol {
         let (sender, receiver) = oneshot::channel();
         let msg = StrategyRequest::CallBack(ConnectionType::Vendor(self.data_vendor.clone()), request, sender);
         send_request(msg).await;
-        match timeout(TIME_OUT, receiver).await {
-            Ok(receiver_result) => match receiver_result {
-                Ok(response) => {
-                    match response {
-                        DataServerResponse::TickSize { tick_size, .. } => Ok(tick_size),
-                        DataServerResponse::Error { error, .. } => Err(error),
-                        _ => Err(FundForgeError::ClientSideErrorDebug("Incorrect response received at callback".to_string()))
-                    }
-                },
-                Err(e) => Err(FundForgeError::ClientSideErrorDebug(format!("Receiver error at callback recv: {}", e)))
+
+        match receiver.await {
+            Ok(response) => match response {
+                DataServerResponse::TickSize { tick_size, .. } => Ok(tick_size),
+                DataServerResponse::Error { error, .. } => Err(error),
+                _ => Err(FundForgeError::ClientSideErrorDebug(
+                    "Incorrect response received at callback".to_string(),
+                )),
             },
-            Err(e) => Err(FundForgeError::ClientSideErrorDebug(format!("Operation timed out after {} seconds", e)))
+            Err(e) => Err(FundForgeError::ClientSideErrorDebug(format!(
+                "Receiver error at callback recv: {}",
+                e
+            ))),
         }
     }
 
@@ -38,20 +38,21 @@ impl Symbol {
             symbol_name,
         };
         let (sender, receiver) = oneshot::channel();
-        let msg = StrategyRequest::CallBack(ConnectionType::Vendor(self.data_vendor.clone()), request,sender);
+        let msg = StrategyRequest::CallBack(ConnectionType::Vendor(self.data_vendor.clone()), request, sender);
         send_request(msg).await;
-        match timeout(TIME_OUT, receiver).await {
-            Ok(receiver_result) => match receiver_result {
-                Ok(response) => {
-                    match response {
-                        DataServerResponse::DecimalAccuracy { accuracy, .. } => Ok(accuracy),
-                        DataServerResponse::Error {error,..} => Err(error),
-                        _ => Err(FundForgeError::ClientSideErrorDebug("Incorrect response received at callback".to_string()))
-                    }
-                },
-                Err(e) => Err(FundForgeError::ClientSideErrorDebug(format!("Receiver error at callback recv: {}", e)))
+
+        match receiver.await {
+            Ok(response) => match response {
+                DataServerResponse::DecimalAccuracy { accuracy, .. } => Ok(accuracy),
+                DataServerResponse::Error { error, .. } => Err(error),
+                _ => Err(FundForgeError::ClientSideErrorDebug(
+                    "Incorrect response received at callback".to_string(),
+                )),
             },
-            Err(e) => Err(FundForgeError::ClientSideErrorDebug(format!("Operation timed out after {} seconds", e)))
+            Err(e) => Err(FundForgeError::ClientSideErrorDebug(format!(
+                "Receiver error at callback recv: {}",
+                e
+            ))),
         }
     }
 }

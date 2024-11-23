@@ -663,7 +663,7 @@ impl SymbolSubscriptionHandler {
                                 warm_up_to_time - subtract_duration - Duration::days(5)
                             }
                         };
-                        let data = get_compressed_historical_data(vec![new_primary.clone()], from_time, warm_up_to_time, 15).await.unwrap_or_else(|_e| BTreeMap::new());
+                        let data = get_compressed_historical_data(vec![new_primary.clone()], from_time, warm_up_to_time).await.unwrap_or_else(|_e| BTreeMap::new());
                         let mut history = RollingWindow::new(history_to_retain);
                         for (_, slice) in data {
                             for data in slice.iter() {
@@ -706,7 +706,7 @@ impl SymbolSubscriptionHandler {
                             warm_up_to_time - subtract_duration - Duration::days(5)
                         }
                     };
-                    let data = get_compressed_historical_data(vec![new_subscription.clone()], from_time, warm_up_to_time, 450).await.unwrap_or_else(|_e| BTreeMap::new());
+                    let data = get_compressed_historical_data(vec![new_subscription.clone()], from_time, warm_up_to_time).await.unwrap_or_else(|_e| BTreeMap::new());
                     let mut history = RollingWindow::new(history_to_retain);
                     for (_, slice) in data {
                         for data in slice.iter() {

@@ -155,7 +155,7 @@ impl HistoricalEngine {
             let to_time = Utc.from_utc_datetime(&end_of_day);
             //eprintln!("Historical Engine: Processing data from {} to {}", last_time, to_time);
 
-            let mut time_slices = match get_compressed_historical_data(primary_subscriptions.clone(), last_time.clone(), to_time, 60).await {
+            let mut time_slices = match get_compressed_historical_data(primary_subscriptions.clone(), last_time.clone(), to_time).await {
                 Ok(time_slices) => {
                     if time_slices.is_empty() && self.tick_over_no_data {
                         println!("Historical Engine: No data period, weekend or holiday: ticking through at buffering resolution, data will resume shortly");

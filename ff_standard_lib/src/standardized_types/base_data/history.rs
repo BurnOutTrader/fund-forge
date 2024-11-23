@@ -92,10 +92,8 @@ pub async fn get_compressed_historical_data(
     subscriptions: Vec<DataSubscription>,
     from_time: DateTime<Utc>,
     to_time: DateTime<Utc>,
-    time_out_seconds: u64
 ) -> Result<BTreeMap<i64, TimeSlice>, FundForgeError> {
     let connections = SETTINGS_MAP.clone();
-
     if connections.len() <= 2 {
         // Single connection case
         let (tx, rx) = oneshot::channel();
@@ -111,18 +109,14 @@ pub async fn get_compressed_historical_data(
         );
         //println!("{:?}", request);
         send_request(request).await;
-        let fail_msg = format!("Timed out waiting for response after {} seconds!", time_out_seconds);
-        let response = tokio::time::timeout(std::time::Duration::from_secs(time_out_seconds), rx)
-            .await
-            .expect(fail_msg.as_str());
+        let response = rx.await.expect(&"Failed to receive callback data");
 
         match response {
-            Ok(DataServerResponse::CompressedHistoricalData { payload, .. }) => {
+            DataServerResponse::CompressedHistoricalData { payload, .. } => {
                 process_payload(payload, from_time, to_time).await
             },
-            Ok(DataServerResponse::Error { error, .. }) => Err(error),
-            Ok(_) => Err(FundForgeError::UnknownBlameError("Incorrect callback data received".to_string())),
-            Err(e) => Err(FundForgeError::ClientSideErrorDebug(format!("Failed to receive payload: {}", e)))
+            DataServerResponse::Error { error, .. } => Err(error),
+            _ => Err(FundForgeError::UnknownBlameError("Incorrect response received at callback".to_string()))
         }
     } else {
         // Multi-connection case
@@ -155,15 +149,12 @@ pub async fn get_compressed_historical_data(
 
                 async move {
                     send_request(request).await;
-                    let response = tokio::time::timeout(std::time::Duration::from_secs(15), rx)
-                        .await
-                        .expect("Timed out waiting for response after 15 seconds!");
+                    let response = rx.await.expect(&"Failed to receive callback data");
 
                     match response {
-                        Ok(DataServerResponse::CompressedHistoricalData { payload, .. }) => Ok(payload),
-                        Ok(DataServerResponse::Error { error, .. }) => Err(error),
-                        Ok(_) => Err(FundForgeError::UnknownBlameError("Incorrect response received at callback".to_string())),
-                        Err(e) => Err(FundForgeError::ClientSideErrorDebug(format!("Failed to receive payload: {}", e)))
+                        DataServerResponse::CompressedHistoricalData { payload, .. } => Ok(payload),
+                        DataServerResponse::Error { error, .. } => Err(error),
+                        _ => Err(FundForgeError::UnknownBlameError("Incorrect response received at callback".to_string()))
                     }
                 }
             })
@@ -219,11 +210,7 @@ pub async fn range_history_data(
     let sub_res_type = PrimarySubscription::new(subscription.resolution, subscription.base_data_type);
     let resolutions = subscription.symbol.data_vendor.warm_up_resolutions(subscription.symbol.market_type).await.unwrap();
     if resolutions.contains(&sub_res_type) {
-        let seconds = match mode {
-            StrategyMode::Backtest => 15,
-            StrategyMode::Live | StrategyMode::LivePaperTrading => 900,
-        };
-        let data = match get_compressed_historical_data(vec![subscription.clone()], from_time, to_time, seconds).await {
+        let data = match get_compressed_historical_data(vec![subscription.clone()], from_time, to_time).await {
             Ok(data) => {
                 data
             }

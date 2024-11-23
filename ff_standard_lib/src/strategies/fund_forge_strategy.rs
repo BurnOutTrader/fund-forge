@@ -21,7 +21,6 @@ use dashmap::DashMap;
 use rust_decimal::Decimal;
 use tokio::sync::{mpsc, oneshot, Notify};
 use tokio::sync::mpsc::Sender;
-use tokio::time::timeout;
 use uuid::Uuid;
 use crate::helpers::converters::{naive_date_time_to_tz, naive_date_time_to_utc, resolve_market_datetime_in_timezone};
 use crate::helpers::decimal_calculators::round_to_tick_size;
@@ -39,7 +38,6 @@ use crate::standardized_types::market_hours::TradingHours;
 use crate::standardized_types::new_types::{Price, Volume};
 use crate::standardized_types::orders::{Order, OrderId, OrderRequest, OrderType, OrderUpdateType, TimeInForce};
 use crate::standardized_types::position::Position;
-use crate::strategies::client_features::client_side_brokerage::TIME_OUT;
 use crate::strategies::client_features::connection_types::ConnectionType;
 use crate::strategies::client_features::live_subscriptions::live_subscription_handler;
 use crate::strategies::client_features::request_handler::{send_request, StrategyRequest};
@@ -284,21 +282,15 @@ impl FundForgeStrategy {
                 let (sender, receiver) = oneshot::channel();
                 let msg = StrategyRequest::CallBack(ConnectionType::Broker(brokerage), request, sender);
                 send_request(msg).await;
-                match timeout(TIME_OUT, receiver).await {
-                    Ok(receiver_result) => match receiver_result {
-                        Ok(response) => {
-                            match response {
-                                DataServerResponse::FrontMonthInfo { info, .. } => Some(info.symbol_code),
-                                DataServerResponse::Error { error, .. } => {
-                                    eprintln!("Error getting front month: {:?}", error);
-                                    None
-                                },
-                                _ => None
-                            }
-                        },
-                        Err(e) => {
-                            eprintln!("Error getting front month: {:?}", e);
-                            None
+                match receiver.await {
+                    Ok(response) => {
+                        match response {
+                            DataServerResponse::FrontMonthInfo { info, .. } => Some(info.symbol_code),
+                            DataServerResponse::Error { error, .. } => {
+                                eprintln!("Error getting front month: {:?}", error);
+                                None
+                            },
+                            _ => None
                         }
                     },
                     Err(e) => {
