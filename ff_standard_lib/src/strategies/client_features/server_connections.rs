@@ -1,5 +1,4 @@
 use std::collections::HashMap;
-use crate::communicators::communications_async::ExternalSender;
 use crate::strategies::client_features::init_clients::create_async_api_client;
 use crate::strategies::client_features::connection_settings::client_settings::{initialise_settings, ConnectionSettings};
 use crate::messages::data_server_messaging::DataServerResponse;
@@ -10,7 +9,7 @@ use chrono::{DateTime, Utc};
 use dashmap::DashMap;
 use lazy_static::lazy_static;
 use tokio::io;
-use tokio::io::ReadHalf;
+use tokio::io::{ReadHalf, WriteHalf};
 use tokio::net::TcpStream;
 use tokio::sync::{mpsc, oneshot};
 use tokio::sync::mpsc::Sender;
@@ -51,7 +50,7 @@ pub async fn init_connections(
     subscription_handler: Arc<SubscriptionHandler>
 ) {
     let server_receivers: DashMap<ConnectionType, ReadHalf<TlsStream<TcpStream>>> = DashMap::with_capacity(SETTINGS_MAP.len());
-    let server_senders: DashMap<ConnectionType, ExternalSender> = DashMap::with_capacity(SETTINGS_MAP.len());
+    let server_senders: DashMap<ConnectionType, WriteHalf<TlsStream<TcpStream>>> = DashMap::with_capacity(SETTINGS_MAP.len());
 
     // for each connection type specified in our server_settings.toml we will establish a connection
     for (connection_type, settings) in SETTINGS_MAP.iter() {
@@ -66,8 +65,7 @@ pub async fn init_connections(
             }
         };
         let (read_half, write_half) = io::split(async_client);
-        let async_sender = ExternalSender::new(write_half);
-        server_senders.insert(connection_type.clone(), async_sender);
+        server_senders.insert(connection_type.clone(), write_half);
         server_receivers.insert(connection_type.clone(), read_half);
     }
     let (tx, rx) = mpsc::channel(1000);

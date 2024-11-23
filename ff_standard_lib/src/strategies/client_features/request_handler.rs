@@ -2,12 +2,13 @@ use tokio::sync::{mpsc, oneshot};
 use dashmap::DashMap;
 use std::sync::Arc;
 use once_cell::sync::OnceCell;
+use tokio::net::TcpStream;
 use tokio::sync::mpsc::Sender;
-use crate::communicators::communications_async::ExternalSender;
+use tokio_rustls::TlsStream;
 use crate::messages::data_server_messaging::{DataServerRequest, DataServerResponse};
 use crate::strategies::client_features::connection_types::ConnectionType;
 use crate::strategies::client_features::server_connections::SETTINGS_MAP;
-
+use tokio::io::{AsyncWriteExt, WriteHalf};
 pub(crate) enum StrategyRequest {
     CallBack(ConnectionType, DataServerRequest, oneshot::Sender<DataServerResponse>),
     OneWay(ConnectionType, DataServerRequest),
@@ -23,8 +24,7 @@ pub(crate) async fn send_request(req: StrategyRequest) {
 /// This response handler is also acting as a live engine.
 pub async fn request_handler(
     receiver: mpsc::Receiver<StrategyRequest>,
-
-    server_senders: DashMap<ConnectionType, ExternalSender>,
+    server_senders: DashMap<ConnectionType, WriteHalf<TlsStream<TcpStream>>>,
     callbacks: Arc<DashMap<u64, oneshot::Sender<DataServerResponse>>>,
 ) {
     let mut receiver = receiver;
@@ -46,16 +46,36 @@ pub async fn request_handler(
                         true => connection_type,
                         false => ConnectionType::Default
                     };
-                    let sender = server_senders.get(&connection_type).unwrap();
-                    sender.send(&request.to_bytes()).await;
+                    if let Some(mut sender) = server_senders.get_mut(&connection_type) {
+                        // Prepare the message with a 8-byte length header in big-endian format
+                        let data = request.to_bytes();
+                        let length = (data.len() as u64).to_be_bytes();
+                        let mut prefixed_msg = Vec::new();
+                        prefixed_msg.extend_from_slice(&length);
+                        prefixed_msg.extend_from_slice(&data);
+                        // Lock the mutex to get_requests mutable access
+                        if let Err(e) =  sender.value_mut().write_all(&prefixed_msg).await {
+                            panic!("Error sending message: {:?}", e);
+                        }
+                    }
                 }
                 StrategyRequest::OneWay(connection_type, request) => {
                     let connection_type = match settings_map.contains_key(&connection_type) {
                         true => connection_type,
                         false => ConnectionType::Default
                     };
-                    let sender = server_senders.get(&connection_type).unwrap();
-                    sender.send(&request.to_bytes()).await;
+                    if let Some(mut sender) = server_senders.get_mut(&connection_type) {
+                        // Prepare the message with a 8-byte length header in big-endian format
+                        let data = request.to_bytes();
+                        let length = (data.len() as u64).to_be_bytes();
+                        let mut prefixed_msg = Vec::new();
+                        prefixed_msg.extend_from_slice(&length);
+                        prefixed_msg.extend_from_slice(&data);
+                        // Lock the mutex to get_requests mutable access
+                        if let Err(e) =  sender.value_mut().write_all(&prefixed_msg).await {
+                            panic!("Error sending message: {:?}", e);
+                        }
+                    }
                 }
             }
         }
