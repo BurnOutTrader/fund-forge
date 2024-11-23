@@ -43,7 +43,9 @@ pub async fn get_compressed_historical_data (
 
         // Send request sequentially
         send_request(request).await;
-        let response = rx.await;
+        let response = tokio::time::timeout(std::time::Duration::from_secs(15), rx)
+            .await
+            .expect("Timed out waiting for response after 15 seconds!");
 
         match response {
             Ok(payload) => {
@@ -133,7 +135,10 @@ pub async fn get_compressed_historical_data (
             // Create future for this request
             let future = async move {
                 send_request(request).await;
-                match rx.await {
+                let response = tokio::time::timeout(std::time::Duration::from_secs(15), rx)
+                    .await
+                    .expect("Timed out waiting for response after 15 seconds!");
+                match response{
                     Ok(response) => match response {
                         DataServerResponse::CompressedHistoricalData { payload, .. } => Ok(payload),
                         DataServerResponse::Error { error, .. } => Err(error),
