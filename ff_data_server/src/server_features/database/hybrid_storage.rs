@@ -541,21 +541,8 @@ impl HybridStorage {
                     .map_err(|e| FundForgeError::ServerErrorDebug(format!("Error getting file size {:?}: {}", file_path, e)))?
                     .len() as usize;
 
-                let mut compressed_data: Vec<u8> = Vec::new();
-                compressed_data.try_reserve(file_size)
-                    .map_err(|e| FundForgeError::ServerErrorDebug(format!("Failed to allocate memory for file {:?}: {}", file_path, e)))?;
-
-                // Since we already know the file size
-                let file_size = match file.metadata() {
-                    Ok(meta) => meta.len() as usize,
-                    Err(e) => {
-                        drop(permit);
-                        return Err(FundForgeError::ServerErrorDebug(
-                            format!("Error getting file size {:?}: {}", file_path, e)
-                        ));
-                    }
-                };
                 let mut compressed_data = Vec::with_capacity(file_size);
+
                 // Single read operation
                 file.read_to_end(&mut compressed_data)
                     .map_err(|e| FundForgeError::ServerErrorDebug(
