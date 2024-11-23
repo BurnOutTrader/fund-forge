@@ -121,7 +121,8 @@ pub async fn manage_async_requests(
                     } => {
                         handle_callback(
                             ||  exchange_rate_response(mode, from_currency, to_currency, date_time_string, data_vendor, side, callback_id),
-                            sender.clone()
+                            sender.clone(),
+                            callback_id
                         ).await
                     }
                     DataServerRequest::DecimalAccuracy {
@@ -130,7 +131,8 @@ pub async fn manage_async_requests(
                         symbol_name
                     } => handle_callback(
                         || decimal_accuracy_response(data_vendor, mode, stream_name, symbol_name, callback_id),
-                        sender.clone()
+                        sender.clone(),
+                        callback_id
                     ).await,
 
                     DataServerRequest::SymbolInfo {
@@ -139,11 +141,12 @@ pub async fn manage_async_requests(
                         callback_id
                     } => handle_callback(
                         || symbol_info_response(brokerage, mode, stream_name, symbol_name, callback_id),
-                        sender.clone()
+                        sender.clone(),
+                        callback_id
                     ).await,
 
                     DataServerRequest::GetCompressedHistoricalData { callback_id, subscriptions, from_time, to_time } => {
-                        handle_callback_no_timeouts(
+                        handle_callback_no_timeouts (
                             || compressed_file_response(subscriptions, from_time, to_time, callback_id),
                             sender.clone()).await
                     }
@@ -163,7 +166,8 @@ pub async fn manage_async_requests(
                         };
                         handle_callback(
                             || symbols_response(data_vendor, mode, stream_name, market_type, time, callback_id),
-                            sender.clone()
+                            sender.clone(),
+                            callback_id
                         ).await
                     },
 
@@ -173,7 +177,8 @@ pub async fn manage_async_requests(
                         market_type,
                     } => handle_callback(
                         || resolutions_response(data_vendor, mode, stream_name, market_type, callback_id),
-                        sender.clone()
+                        sender.clone(),
+                        callback_id
                     ).await,
 
                     DataServerRequest::WarmUpResolutions {
@@ -183,7 +188,8 @@ pub async fn manage_async_requests(
                     } => handle_callback(
                         // we always use backtest mode for warmup so that way we return the resolutions we have serialized data for
                         || resolutions_response(data_vendor, StrategyMode::Backtest, stream_name, market_type, callback_id),
-                        sender.clone()
+                        sender.clone(),
+                        callback_id
                     ).await,
 
                     DataServerRequest::AccountInfo {
@@ -192,7 +198,8 @@ pub async fn manage_async_requests(
                         account_id,
                     } => handle_callback(
                         || account_info_response(brokerage, mode, stream_name, account_id, callback_id),
-                        sender.clone()
+                        sender.clone(),
+                        callback_id
                     ).await,
 
                     DataServerRequest::Markets {
@@ -200,7 +207,8 @@ pub async fn manage_async_requests(
                         data_vendor,
                     } => handle_callback(
                         || markets_response(data_vendor, mode, stream_name, callback_id),
-                        sender.clone()
+                        sender.clone(),
+                        callback_id
                     ).await,
 
                     DataServerRequest::TickSize {
@@ -209,21 +217,21 @@ pub async fn manage_async_requests(
                         symbol_name,
                     } => handle_callback(
                         || tick_size_response(data_vendor, mode, stream_name, symbol_name, callback_id),
-                        sender.clone()).await,
+                        sender.clone(),callback_id).await,
 
                     DataServerRequest::Accounts {
                         callback_id,
                         brokerage
                     } => handle_callback(
                         || accounts_response(brokerage, mode, stream_name, callback_id),
-                        sender.clone()).await,
+                        sender.clone(),callback_id).await,
 
                     DataServerRequest::BaseDataTypes {
                         callback_id,
                         data_vendor
                     } => handle_callback(
                         || base_data_types_response(data_vendor, mode, stream_name, callback_id),
-                        sender.clone()).await,
+                        sender.clone(),callback_id).await,
 
                     DataServerRequest::SymbolNames { callback_id, brokerage, time } => {
                         let time = match time {
@@ -235,19 +243,19 @@ pub async fn manage_async_requests(
                         };
                         handle_callback(
                             || symbol_names_response(brokerage, mode, stream_name, time, callback_id),
-                            sender.clone()).await
+                            sender.clone(),callback_id).await
                     }
 
                     DataServerRequest::CommissionInfo { callback_id, brokerage, symbol_name } => {
                         handle_callback(
                             || commission_info_response(mode, brokerage, symbol_name, stream_name, callback_id),
-                            sender.clone()).await
+                            sender.clone(),callback_id).await
                     }
 
                     DataServerRequest::FrontMonthInfo { callback_id, symbol_name, exchange, brokerage } => {
                         handle_callback(
                             || front_month_info_response(brokerage, symbol_name, exchange, stream_name, callback_id),
-                            sender.clone()).await
+                            sender.clone(),callback_id).await
                     }
 
                     DataServerRequest::StreamRequest {
@@ -345,6 +353,7 @@ async fn response_handler(receiver: Receiver<DataServerResponse>, writer: WriteH
 async fn handle_callback<F, Fut>(
     callback: F,
     sender: tokio::sync::mpsc::Sender<DataServerResponse>,
+    callback_id: u64
 )
 where
     F: FnOnce() -> Fut,
@@ -360,8 +369,14 @@ where
             }
         }
         Err(_) => {
-            // Handle timeout (e.g., log it or take recovery action)
-            println!("Operation timed out after {:?}", TIMEOUT_DURATION);
+            let response = DataServerResponse::Error {
+                callback_id,
+                error: FundForgeError::ServerErrorDebug("Operation timed out".to_string()),
+            };
+            if let Err(e) = sender.send(response).await {
+                // Handle send error (e.g., log it)
+                println!("Failed to send response to stream handler: {:?}", e);
+            }
         }
     }
 }
