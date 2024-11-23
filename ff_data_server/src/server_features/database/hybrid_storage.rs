@@ -189,7 +189,7 @@ impl HybridStorage {
         Ok(())
     }
 
-    pub(crate) async fn get_or_create_mmap(&self, file_path: &Path) -> io::Result<Arc<Mmap>> {
+    pub(crate) async fn get_or_create_mmap(&self, file_path: &Path, resolution: Resolution) -> io::Result<Arc<Mmap>> {
         let path_str = file_path.to_string_lossy().to_string();
 
         if let Some(mmap) = self.mmap_cache.get(&path_str) {
@@ -237,9 +237,16 @@ impl HybridStorage {
             ))?;
 
         const MB: usize = 1024 * 1024;
-        const BUFFER_SIZE: usize = 20 * MB;
+        let buffer_size = match resolution {
+            Resolution::Minutes(_) => 1 * MB,
+            Resolution::Hours(_) => 1 * MB,
+            Resolution::Instant => 20 * MB,
+            Resolution::Ticks(_) => 20 * MB,
+            Resolution::Seconds(_) => 5 * MB,
+            _ => 1 * MB
+        };
         // Create buffer on heap instead of stack
-        let mut buffer = vec![0; BUFFER_SIZE];
+        let mut buffer = vec![0; buffer_size];
         loop {
             match file.read(&mut buffer) {
                 Ok(0) => break,
@@ -309,6 +316,10 @@ impl HybridStorage {
 
     /// This first updates the file on disk, then the file in memory is replaced with the new file, therefore we do not have saftey issues.
     async fn save_data_to_file(&self, file_path: &Path, new_data: &[BaseDataEnum], is_bulk_download: bool) -> io::Result<()> {
+        if new_data.is_empty() {
+            return Ok(())
+        }
+
         let semaphore = self.file_locks.entry(file_path.to_str().unwrap().to_string()).or_insert(Arc::new(Semaphore::new(1)));
         let _permit = match semaphore.acquire().await {
             Ok(p) => p,
@@ -329,8 +340,15 @@ impl HybridStorage {
 
         let existing_data = if !compressed_data.is_empty() {
             const MB: usize = 1024 * 1024;
-            const BUFFER_SIZE: usize = 20 * MB;
-            let mut buffer = vec![0; BUFFER_SIZE];
+            let buffer_size = match new_data.get(0).unwrap().resolution() {
+                Resolution::Minutes(_) => 1 * MB,
+                Resolution::Hours(_) => 1 * MB,
+                Resolution::Instant => 20 * MB,
+                Resolution::Ticks(_) => 20 * MB,
+                Resolution::Seconds(_) => 5 * MB,
+                _ => 1 * MB
+            };
+            let mut buffer = vec![0; buffer_size];
 
             let data_len = compressed_data.len();
             let cursor = std::io::Cursor::new(compressed_data);
@@ -491,10 +509,20 @@ impl HybridStorage {
         start: DateTime<Utc>,
         end: DateTime<Utc>,
     ) -> Result<Vec<Vec<u8>>, FundForgeError> {
+        if subscription.is_empty() {
+            return Err(FundForgeError::ClientSideErrorDebug("No subscriptions provided for file range".to_string()));
+        }
         const MB: usize = 1024 * 1024;
-        const BUFFER_SIZE: usize = 20 * MB;
+        let buffer_size = match subscription.get(0).unwrap().resolution {
+            Resolution::Minutes(_) => 1 * MB,
+            Resolution::Hours(_) => 1 * MB,
+            Resolution::Instant => 20 * MB,
+            Resolution::Ticks(_) => 20 * MB,
+            Resolution::Seconds(_) => 5 * MB,
+            _ => 1 * MB
+        };
         // Create a single large buffer to be reused for all files
-        let mut buffer = vec![0; BUFFER_SIZE];
+        let mut buffer = vec![0; buffer_size];
         let mut files_data = Vec::new();
 
         for subscription in subscription {

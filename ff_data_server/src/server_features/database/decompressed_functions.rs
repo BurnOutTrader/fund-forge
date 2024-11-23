@@ -48,7 +48,7 @@ impl HybridStorage {
                 days.sort_by_key(|e| e.file_name().to_str().unwrap_or("").to_string());
 
                 if let Some(earliest_file) = days.first() {
-                    if let Ok(mmap) = self.get_or_create_mmap(&earliest_file.path()).await {
+                    if let Ok(mmap) = self.get_or_create_mmap(&earliest_file.path(), resolution.clone()).await {
                         // Create a properly aligned copy
                         let aligned_data = mmap.as_ref().to_vec();
                         if let Ok(day_data) = BaseDataEnum::from_array_bytes(&aligned_data) {
@@ -104,7 +104,7 @@ impl HybridStorage {
                 days.reverse();
 
                 if let Some(latest_file) = days.first() {
-                    if let Ok(mmap) = self.get_or_create_mmap(&latest_file.path()).await {
+                    if let Ok(mmap) = self.get_or_create_mmap(&latest_file.path(), resolution.clone()).await {
                         // Create a properly aligned copy
                         let aligned_data = mmap.as_ref().to_vec();
                         if let Ok(day_data) = BaseDataEnum::from_array_bytes(&aligned_data) {
@@ -131,7 +131,7 @@ impl HybridStorage {
 
         // If the file exists for the target date, check it first
         if file_path.exists() {
-            if let Ok(mmap) = self.get_or_create_mmap(&file_path).await {
+            if let Ok(mmap) = self.get_or_create_mmap(&file_path, resolution.clone()).await {
                 // Create a properly aligned copy of the memory-mapped data
                 let aligned_data = mmap.as_ref().to_vec();
                 if let Ok(day_data) = BaseDataEnum::from_array_bytes(&aligned_data) {
@@ -182,7 +182,7 @@ impl HybridStorage {
                 continue;
             }
 
-            if let Ok(mmap) = self.get_or_create_mmap(&file_path).await {
+            if let Ok(mmap) = self.get_or_create_mmap(&file_path, resolution.clone()).await {
                 // Create a properly aligned copy of the memory-mapped data
                 let aligned_data = mmap.as_ref().to_vec();
                 if let Ok(day_data) = BaseDataEnum::from_array_bytes(&aligned_data) {
@@ -254,7 +254,7 @@ impl HybridStorage {
                     ));
 
                     if file_path.exists() {
-                        if let Ok(mmap) = self.get_or_create_mmap(&file_path).await {
+                        if let Ok(mmap) = self.get_or_create_mmap(&file_path, resolution.clone()).await {
                             // Create a properly aligned copy of the memory-mapped data
                             let aligned_data = mmap.as_ref().to_vec();
                             if let Ok(mut day_data) = BaseDataEnum::from_array_bytes(&aligned_data) {
