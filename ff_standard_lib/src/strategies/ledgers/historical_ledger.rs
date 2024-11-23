@@ -324,6 +324,7 @@ impl Ledger {
             }
 
             let event = PositionUpdateEvent::PositionOpened {
+                average_price: market_fill_price,
                 side: position_side,
                 symbol_name: symbol_name.clone(),
                 symbol_code: symbol_code.clone(),

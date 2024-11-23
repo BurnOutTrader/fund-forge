@@ -348,6 +348,7 @@ impl Ledger {
             self.update_or_create_live_position(symbol_name, symbol_code.clone(), quantity, order_side, Utc::now(), average_price, "Synchronizing Position: Position Opened".to_string()).await;
             if let Some(position) = self.positions.get(&symbol_code) {
                 let event = PositionUpdateEvent::PositionOpened {
+                    average_price,
                     position_id: position.position_id.clone(),
                     side,
                     account,
@@ -765,6 +766,7 @@ impl Ledger {
             }
 
             let event = PositionUpdateEvent::PositionOpened {
+                average_price: market_fill_price,
                 symbol_name: symbol_name.clone(),
                 symbol_code: symbol_code.clone(),
                 position_id: id,

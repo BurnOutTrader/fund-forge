@@ -47,6 +47,7 @@ pub enum PositionUpdateEvent {
         account: Account,
         symbol_name: SymbolName,
         symbol_code: SymbolCode,
+        average_price: Price,
         originating_order_tag: String,
         time: String
     },

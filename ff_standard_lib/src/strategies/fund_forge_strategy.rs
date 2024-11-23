@@ -7,7 +7,7 @@ use crate::strategies::handlers::indicator_handler::IndicatorHandler;
 use crate::strategies::indicators::indicators_trait::{IndicatorName, Indicators};
 use crate::strategies::indicators::indicator_values::IndicatorValues;
 use crate::standardized_types::base_data::history::range_history_data;
-use crate::standardized_types::enums::{OrderSide, StrategyMode, PrimarySubscription, FuturesExchange};
+use crate::standardized_types::enums::{OrderSide, StrategyMode, PrimarySubscription, FuturesExchange, PositionSide};
 use crate::standardized_types::rolling_window::RollingWindow;
 use crate::strategies::strategy_events::StrategyEvent;
 use crate::strategies::handlers::subscription_handler::SubscriptionHandler;
@@ -24,6 +24,7 @@ use tokio::sync::mpsc::Sender;
 use tokio::time::timeout;
 use uuid::Uuid;
 use crate::helpers::converters::{naive_date_time_to_tz, naive_date_time_to_utc, resolve_market_datetime_in_timezone};
+use crate::helpers::decimal_calculators::round_to_tick_size;
 use crate::strategies::client_features::server_connections::{init_connections, is_warmup_complete};
 use crate::standardized_types::base_data::candle::Candle;
 use crate::standardized_types::base_data::quote::Quote;
@@ -236,6 +237,17 @@ impl FundForgeStrategy {
             live_warm_up(Utc::now() - warmup_duration, buffering_duration, subscription_handler, strategy_event_sender, timed_event_handler, ledger_service, indicator_handler).await;
         }
         strategy
+    }
+
+    pub fn calculate_stop_price(&self, entry_price: Decimal, position_side: PositionSide, max_loss: Decimal, value_per_tick: Decimal, tick_size: Decimal) -> Decimal {
+        let ticks_to_loss = (max_loss / value_per_tick).floor();
+        let price_distance = ticks_to_loss * tick_size;
+
+        match position_side {
+            PositionSide::Long => round_to_tick_size(entry_price - price_distance, tick_size),
+            PositionSide::Short => round_to_tick_size(entry_price + price_distance, tick_size),
+            _ => panic!("Invalid PositionSide")
+        }
     }
 
     /// In backtesting this will return the front month using:
