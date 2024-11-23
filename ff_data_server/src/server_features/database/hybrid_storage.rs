@@ -12,8 +12,6 @@ use dashmap::DashMap;
 use flate2::Compression;
 use flate2::read::GzDecoder;
 use flate2::write::GzEncoder;
-use futures_util::stream::FuturesUnordered;
-use futures_util::StreamExt;
 use indicatif::{MultiProgress};
 use lazy_static::lazy_static;
 use memmap2::{Mmap};
@@ -199,66 +197,83 @@ impl HybridStorage {
             return Ok(Arc::clone(mmap.value()));
         }
 
-        // Get oldest file outside of any locks
-        let oldest_path = if self.mmap_cache.len() >= 200 {
-            self.cache_last_accessed
-                .iter()
-                .min_by_key(|entry| entry.value().clone())
-                .map(|entry| entry.key().clone())
-        } else {
-            None
-        };
-
-        // Remove oldest file if needed
-        if let Some(oldest_path) = oldest_path {
-            // Get (don't remove) the semaphore first
-            if let Some(semaphore) = self.file_locks.get(&oldest_path) {
-                let permit = semaphore.value().acquire().await.map_err(|e| {
-                    io::Error::new(
-                        io::ErrorKind::Other,
-                        format!("Error acquiring lock for cache cleanup: {}", e)
-                    )
-                })?;
-
-                // Now safely remove from caches
-                if let Some((_, mmap)) = self.mmap_cache.remove(&file_path.to_string_lossy().to_string()) {
-                    drop(mmap); // Explicitly drop the mmap
-                }
-                self.cache_last_accessed.remove(&oldest_path);
-                drop(permit);
-            }
-            // Finally remove the semaphore
-            self.file_locks.remove(&oldest_path);
-        }
+        // ... cache eviction code ...
 
         let mut file = File::open(file_path)?;
+        let file_size = file.metadata()?.len() as usize;
 
-        // Read compressed data
+        // Pre-allocate for compressed data
         let mut compressed_data = Vec::new();
-        file.read_to_end(&mut compressed_data)?;
+        compressed_data.try_reserve(file_size)
+            .map_err(|e| io::Error::new(
+                io::ErrorKind::OutOfMemory,
+                format!("Failed to allocate memory for compressed data: {}", e)
+            ))?;
 
-        // Decompress
+        const MB: usize = 1024 * 1024;
+        const BUFFER_SIZE: usize = 20 * MB;
+        // Create buffer on heap instead of stack
+        let mut buffer = vec![0; BUFFER_SIZE];
+        loop {
+            match file.read(&mut buffer) {
+                Ok(0) => break,
+                Ok(n) => {
+                    compressed_data.try_reserve(n)
+                        .map_err(|e| io::Error::new(
+                            io::ErrorKind::OutOfMemory,
+                            format!("Failed to allocate during read: {}", e)
+                        ))?;
+                    compressed_data.extend_from_slice(&buffer[..n]);
+                }
+                Err(e) => return Err(e),
+            }
+        }
+
+        // Pre-allocate decompressed data - estimate size based on compression ratio
+        let mut decompressed = Vec::new();
+        let estimated_size = compressed_data.len() * 3; // Assuming ~3:1 compression ratio
+        decompressed.try_reserve(estimated_size)
+            .map_err(|e| io::Error::new(
+                io::ErrorKind::OutOfMemory,
+                format!("Failed to allocate memory for decompressed data: {}", e)
+            ))?;
+
+        // Decompress in chunks
         let cursor = std::io::Cursor::new(&compressed_data);
         let buf_reader = std::io::BufReader::new(cursor);
         let mut decoder = GzDecoder::new(buf_reader);
-        let mut decompressed = Vec::new();
-        decoder.read_to_end(&mut decompressed)?;
+        loop {
+            match decoder.read(&mut buffer) {
+                Ok(0) => break,
+                Ok(n) => {
+                    decompressed.try_reserve(n)
+                        .map_err(|e| io::Error::new(
+                            io::ErrorKind::OutOfMemory,
+                            format!("Failed to allocate during decompression: {}", e)
+                        ))?;
+                    decompressed.extend_from_slice(&buffer[..n]);
+                }
+                Err(e) => return Err(e),
+            }
+        }
 
-        // Create temporary file for mmap
+        // Create temporary file
         let temp_path = file_path.with_extension("tmp");
         {
             let mut temp_file = File::create(&temp_path)?;
-            temp_file.write_all(&decompressed)?;
+            // Write in chunks to avoid large buffer allocations
+            for chunk in decompressed.chunks(8192) {
+                temp_file.write_all(chunk)?;
+            }
             temp_file.sync_all()?;
-        } // temp_file is dropped here
+        }
 
-        // Now open the temp file for mmap
+        // Create mmap
         let temp_file = File::open(&temp_path)?;
         let mmap = Arc::new(unsafe { Mmap::map(&temp_file)? });
         self.mmap_cache.insert(path_str.clone(), Arc::clone(&mmap));
         self.cache_last_accessed.insert(path_str.clone(), Utc::now());
 
-        // Keep the temp_file handle alive until after the mmap is created
         drop(temp_file);
         std::fs::remove_file(&temp_path)?;
 
@@ -287,10 +302,37 @@ impl HybridStorage {
         file.read_to_end(&mut compressed_data)?;
 
         let existing_data = if !compressed_data.is_empty() {
+            const MB: usize = 1024 * 1024;
+            const BUFFER_SIZE: usize = 20 * MB;
+            let mut buffer = vec![0; BUFFER_SIZE];
+
+            let data_len = compressed_data.len();
             let cursor = std::io::Cursor::new(compressed_data);
             let mut decoder = GzDecoder::new(cursor);
             let mut decompressed = Vec::new();
-            decoder.read_to_end(&mut decompressed)?;
+
+            // Assuming ~3:1 compression ratio for initial allocation
+            decompressed.try_reserve(data_len * 98)
+                .map_err(|e| io::Error::new(
+                    io::ErrorKind::OutOfMemory,
+                    format!("Failed to allocate memory for decompression: {}", e)
+                ))?;
+
+            loop {
+                match decoder.read(&mut buffer[..]) {
+                    Ok(0) => break,
+                    Ok(n) => {
+                        decompressed.try_reserve(n)
+                            .map_err(|e| io::Error::new(
+                                io::ErrorKind::OutOfMemory,
+                                format!("Failed to allocate during decompression: {}", e)
+                            ))?;
+                        decompressed.extend_from_slice(&buffer[..n]);
+                    }
+                    Err(e) => return Err(e),
+                }
+            }
+
             BaseDataEnum::from_array_bytes(&decompressed)
                 .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?
         } else {
@@ -423,6 +465,10 @@ impl HybridStorage {
         start: DateTime<Utc>,
         end: DateTime<Utc>,
     ) -> Result<Vec<Vec<u8>>, FundForgeError> {
+        const MB: usize = 1024 * 1024;
+        const BUFFER_SIZE: usize = 20 * MB;
+        // Create a single large buffer to be reused for all files
+        let mut buffer = vec![0; BUFFER_SIZE];
         let mut files_data = Vec::new();
 
         for subscription in subscription {
@@ -430,28 +476,40 @@ impl HybridStorage {
 
             for file_path in file_paths {
                 let path_str = file_path.to_string_lossy().to_string();
-
-                // Get or create a semaphore for this file
                 let semaphore = self.file_locks
                     .entry(path_str.clone())
                     .or_insert_with(|| Arc::new(Semaphore::new(1)));
 
-                // Acquire the lock before accessing the file
                 let permit = semaphore.acquire().await.map_err(|e| {
                     FundForgeError::ServerErrorDebug(format!("Failed to acquire lock: {}", e))
                 })?;
 
-                let mut file = match File::open(&file_path) {
-                    Ok(file) => file,
-                    Err(e) => {
-                        return Err(FundForgeError::ServerErrorDebug(format!("Error opening file {:?}: {}", file_path, e)));
-                    }
-                };
+                let mut file = File::open(&file_path)
+                    .map_err(|e| FundForgeError::ServerErrorDebug(format!("Error opening file {:?}: {}", file_path, e)))?;
+
+                let file_size = file.metadata()
+                    .map_err(|e| FundForgeError::ServerErrorDebug(format!("Error getting file size {:?}: {}", file_path, e)))?
+                    .len() as usize;
+
                 let mut compressed_data = Vec::new();
-                match file.read_to_end(&mut compressed_data) {
-                    Ok(_) => {},
-                    Err(e) => {
-                        return Err(FundForgeError::ServerErrorDebug(format!("Error reading file {:?}: {}", file_path, e)));
+                compressed_data.try_reserve(file_size)
+                    .map_err(|e| FundForgeError::ServerErrorDebug(format!("Failed to allocate memory for file {:?}: {}", file_path, e)))?;
+
+                loop {
+                    match file.read(&mut buffer[..]) {
+                        Ok(0) => break,
+                        Ok(n) => {
+                            compressed_data.try_reserve(n)
+                                .map_err(|e| FundForgeError::ServerErrorDebug(
+                                    format!("Failed to allocate memory during read {:?}: {}", file_path, e)
+                                ))?;
+                            compressed_data.extend_from_slice(&buffer[..n]);
+                        }
+                        Err(e) => {
+                            return Err(FundForgeError::ServerErrorDebug(
+                                format!("Error reading file {:?}: {}", file_path, e)
+                            ));
+                        }
                     }
                 }
 
@@ -459,71 +517,6 @@ impl HybridStorage {
                 drop(permit);
             }
         }
-        Ok(files_data)
-    }
-
-    pub async fn get_compressed_files_in_range_parallel(
-        &self,
-        subscription: Vec<DataSubscription>,
-        start: DateTime<Utc>,
-        end: DateTime<Utc>,
-    ) -> Result<Vec<Vec<u8>>, FundForgeError> {
-        let mut all_paths = Vec::new();
-
-        // Gather all paths first
-        for subscription in subscription {
-            let paths = self.get_files_in_range(&subscription.symbol, &subscription.resolution, &subscription.base_data_type, start, end).await?;
-            all_paths.extend(paths);
-        }
-
-        // Process files concurrently but with proper locking
-        let mut read_futures = FuturesUnordered::new();
-        let mut files_data = Vec::with_capacity(all_paths.len());
-
-        // Limit concurrent operations
-        let parallel_limit = Arc::new(Semaphore::new(50));
-
-        for file_path in all_paths {
-            let parallel_limit = Arc::clone(&parallel_limit);
-            let path_str = file_path.to_string_lossy().to_string();
-            let file_lock = self.file_locks
-                .entry(path_str.clone())
-                .or_insert_with(|| Arc::new(Semaphore::new(1)))
-                .clone();
-
-            read_futures.push(async move {
-                let parallel_limit = parallel_limit.clone();
-                let permit = parallel_limit.acquire().await.map_err(|e| {
-                    FundForgeError::ServerErrorDebug(format!("Failed to acquire parallel limit: {}", e))
-                })?;
-                let _file_permit = file_lock.acquire().await.map_err(|e| {
-                    FundForgeError::ServerErrorDebug(format!("Failed to acquire file lock: {}", e))
-                })?;
-
-                let mut file = File::open(&file_path)
-                    .map_err(|e| FundForgeError::ServerErrorDebug(format!("Error opening file {:?}: {}", file_path, e)))?;
-
-                let mut compressed_data = Vec::new();
-                file.read_to_end(&mut compressed_data)
-                    .map_err(|e| FundForgeError::ServerErrorDebug(format!("Error reading file {:?}: {}", file_path, e)))?;
-
-                drop(permit); // Release the parallel limit
-                Ok(compressed_data)
-            });
-
-            // Process completed futures
-            while read_futures.len() >= 50 {
-                if let Some(result) = read_futures.next().await {
-                    files_data.push(result?);
-                }
-            }
-        }
-
-        // Process remaining futures
-        while let Some(result) = read_futures.next().await {
-            files_data.push(result?);
-        }
-
         Ok(files_data)
     }
 }
