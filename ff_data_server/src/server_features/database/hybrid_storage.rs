@@ -12,6 +12,8 @@ use dashmap::DashMap;
 use flate2::Compression;
 use flate2::read::GzDecoder;
 use flate2::write::GzEncoder;
+use futures_util::stream::FuturesUnordered;
+use futures_util::StreamExt;
 use indicatif::{MultiProgress};
 use lazy_static::lazy_static;
 use memmap2::{Mmap};
@@ -38,7 +40,7 @@ pub struct HybridStorage {
     mmap_cache: Arc<DashMap<String, Arc<Mmap>>>,
     cache_last_accessed: Arc<DashMap<String, DateTime<Utc>>>,
     clear_cache_duration: Duration,
-    file_locks: Arc<DashMap<String, Semaphore>>,
+    file_locks: Arc<DashMap<String, Arc<Semaphore>>>,
     pub(crate) download_tasks: Arc<DashMap<(SymbolName, BaseDataType, Resolution), JoinHandle<()>>>,
     pub(crate) options: ServerLaunchOptions,
     pub(crate) download_semaphore: Arc<Semaphore>,
@@ -266,7 +268,7 @@ impl HybridStorage {
 
     /// This first updates the file on disk, then the file in memory is replaced with the new file, therefore we do not have saftey issues.
     async fn save_data_to_file(&self, file_path: &Path, new_data: &[BaseDataEnum], is_bulk_download: bool) -> io::Result<()> {
-        let semaphore = self.file_locks.entry(file_path.to_str().unwrap().to_string()).or_insert(Semaphore::new(1));
+        let semaphore = self.file_locks.entry(file_path.to_str().unwrap().to_string()).or_insert(Arc::new(Semaphore::new(1)));
         let _permit = match semaphore.acquire().await {
             Ok(p) => p,
             Err(e) => {
@@ -414,6 +416,7 @@ impl HybridStorage {
         Ok(file_paths)
     }
 
+    // Optionally, we could also make this more efficient by using parallel reads with a bounded semaphore:
     pub async fn get_compressed_files_in_range(
         &self,
         subscription: Vec<DataSubscription>,
@@ -426,6 +429,18 @@ impl HybridStorage {
             let file_paths = self.get_files_in_range(&subscription.symbol, &subscription.resolution, &subscription.base_data_type, start, end).await?;
 
             for file_path in file_paths {
+                let path_str = file_path.to_string_lossy().to_string();
+
+                // Get or create a semaphore for this file
+                let semaphore = self.file_locks
+                    .entry(path_str.clone())
+                    .or_insert_with(|| Arc::new(Semaphore::new(1)));
+
+                // Acquire the lock before accessing the file
+                let permit = semaphore.acquire().await.map_err(|e| {
+                    FundForgeError::ServerErrorDebug(format!("Failed to acquire lock: {}", e))
+                })?;
+
                 let mut file = match File::open(&file_path) {
                     Ok(file) => file,
                     Err(e) => {
@@ -441,7 +456,72 @@ impl HybridStorage {
                 }
 
                 files_data.push(compressed_data);
+                drop(permit);
             }
+        }
+        Ok(files_data)
+    }
+
+    pub async fn get_compressed_files_in_range_parallel(
+        &self,
+        subscription: Vec<DataSubscription>,
+        start: DateTime<Utc>,
+        end: DateTime<Utc>,
+    ) -> Result<Vec<Vec<u8>>, FundForgeError> {
+        let mut all_paths = Vec::new();
+
+        // Gather all paths first
+        for subscription in subscription {
+            let paths = self.get_files_in_range(&subscription.symbol, &subscription.resolution, &subscription.base_data_type, start, end).await?;
+            all_paths.extend(paths);
+        }
+
+        // Process files concurrently but with proper locking
+        let mut read_futures = FuturesUnordered::new();
+        let mut files_data = Vec::with_capacity(all_paths.len());
+
+        // Limit concurrent operations
+        let parallel_limit = Arc::new(Semaphore::new(50));
+
+        for file_path in all_paths {
+            let parallel_limit = Arc::clone(&parallel_limit);
+            let path_str = file_path.to_string_lossy().to_string();
+            let file_lock = self.file_locks
+                .entry(path_str.clone())
+                .or_insert_with(|| Arc::new(Semaphore::new(1)))
+                .clone();
+
+            read_futures.push(async move {
+                let parallel_limit = parallel_limit.clone();
+                let permit = parallel_limit.acquire().await.map_err(|e| {
+                    FundForgeError::ServerErrorDebug(format!("Failed to acquire parallel limit: {}", e))
+                })?;
+                let _file_permit = file_lock.acquire().await.map_err(|e| {
+                    FundForgeError::ServerErrorDebug(format!("Failed to acquire file lock: {}", e))
+                })?;
+
+                let mut file = File::open(&file_path)
+                    .map_err(|e| FundForgeError::ServerErrorDebug(format!("Error opening file {:?}: {}", file_path, e)))?;
+
+                let mut compressed_data = Vec::new();
+                file.read_to_end(&mut compressed_data)
+                    .map_err(|e| FundForgeError::ServerErrorDebug(format!("Error reading file {:?}: {}", file_path, e)))?;
+
+                drop(permit); // Release the parallel limit
+                Ok(compressed_data)
+            });
+
+            // Process completed futures
+            while read_futures.len() >= 50 {
+                if let Some(result) = read_futures.next().await {
+                    files_data.push(result?);
+                }
+            }
+        }
+
+        // Process remaining futures
+        while let Some(result) = read_futures.next().await {
+            files_data.push(result?);
         }
 
         Ok(files_data)
