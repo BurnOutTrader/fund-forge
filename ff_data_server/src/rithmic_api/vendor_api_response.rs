@@ -426,6 +426,11 @@ impl VendorApiResponse for RithmicBrokerageClient {
                             }
                         } else {
                             empty_windows = 0;
+                            let to = match response.last_key_value() {
+                                Some((time, _)) => *time,
+                                None => window_end,
+                            };
+                            progress_bar.set_message(format!("Downloaded: {} Data Points for ({}: {}) from: {}, to {}", response.len(), resolution, base_data_type, window_start, to));
                         }
                         response
                     },
