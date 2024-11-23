@@ -47,7 +47,7 @@ pub struct HybridStorage {
 
 impl HybridStorage {
     pub fn new(clear_cache_duration: Duration, options: ServerLaunchOptions, max_concurrent_downloads: usize, update_seconds: u64) -> Self {
-        let max_concurrent_downloads= min(max_concurrent_downloads, 40);
+        let max_concurrent_downloads= min(max_concurrent_downloads, 35);
         let storage = Self {
             base_path: options.data_folder.clone().join("historical"),
             mmap_cache: Arc::new(DashMap::new()),
