@@ -63,7 +63,7 @@ async fn process_compressed_payload(
 async fn process_payload(
     payload: Vec<Vec<u8>>,
     from_time: DateTime<Utc>,
-    to_time: DateTime<Utc>,
+    to_time: DateTime<Utc>
 ) -> Result<BTreeMap<i64, TimeSlice>, FundForgeError> {
     let mut combined_data: BTreeMap<i64, TimeSlice> = BTreeMap::new();
 
@@ -92,6 +92,7 @@ pub async fn get_compressed_historical_data(
     subscriptions: Vec<DataSubscription>,
     from_time: DateTime<Utc>,
     to_time: DateTime<Utc>,
+    time_out_seconds: u64
 ) -> Result<BTreeMap<i64, TimeSlice>, FundForgeError> {
     let connections = SETTINGS_MAP.clone();
 
@@ -111,7 +112,7 @@ pub async fn get_compressed_historical_data(
 
         send_request(request).await;
         //todo make the time out increased for live mode.
-        let response = tokio::time::timeout(std::time::Duration::from_secs(15), rx)
+        let response = tokio::time::timeout(std::time::Duration::from_secs(time_out_seconds), rx)
             .await
             .expect("Timed out waiting for response after 15 seconds!");
 
@@ -218,7 +219,11 @@ pub async fn range_history_data(
     let sub_res_type = PrimarySubscription::new(subscription.resolution, subscription.base_data_type);
     let resolutions = subscription.symbol.data_vendor.warm_up_resolutions(subscription.symbol.market_type).await.unwrap();
     if resolutions.contains(&sub_res_type) {
-        let data = match get_compressed_historical_data(vec![subscription.clone()], from_time, to_time).await {
+        let seconds = match mode {
+            StrategyMode::Backtest => 15,
+            StrategyMode::Live | StrategyMode::LivePaperTrading => 900,
+        };
+        let data = match get_compressed_historical_data(vec![subscription.clone()], from_time, to_time, seconds).await {
             Ok(data) => {
                 data
             }

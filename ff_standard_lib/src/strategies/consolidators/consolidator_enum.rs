@@ -254,7 +254,7 @@ impl ConsolidatorEnum {
 
         let mut history = RollingWindow::new(history_to_retain as usize);
         //eprintln!("Warmup from: {} to: {}", from_time, to_time);
-        let data = match get_compressed_historical_data(vec![base_subscription.clone()], from_time, to_time).await {
+        let data = match get_compressed_historical_data(vec![base_subscription.clone()], from_time, to_time, 450).await {
             Ok(data) => data,
             Err(_) => {
                 //eprintln!("No data available or error: {}", e);
