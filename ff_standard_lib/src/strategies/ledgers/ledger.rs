@@ -1170,6 +1170,7 @@ mod tests {
         // Final exit
         println!("\nFinal exit...");
         ledger.paper_exit_position(
+            "Test".to_string(),
             &symbol_code,
             time + Duration::minutes(15),
             dec!(17575.0),         // exit price
@@ -1374,6 +1375,7 @@ mod tests {
         println!("\nFinal exit for Symbol2...");
         ledger
             .paper_exit_position(
+                "Test".to_string(),
                 &symbol2_code,
                 time + Duration::minutes(15),
                 dec!(4550.0),         // exit price
@@ -1390,6 +1392,7 @@ mod tests {
         println!("\nFinal exit for Symbol1...");
         ledger
             .paper_exit_position(
+                "Test".to_string(),
                 &symbol1_code,
                 time + Duration::minutes(20),
                 dec!(17575.0),        // exit price

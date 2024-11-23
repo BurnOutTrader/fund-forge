@@ -732,6 +732,7 @@ mod tests {
         Position::new(
             "NQ".to_string(),
             "NQ2403".to_string(), // Example futures contract
+            "Test".to_string(),
             Account::new(Brokerage::Test, "test-account".to_string()),
             PositionSide::Long,
             dec!(1.0),
@@ -753,6 +754,7 @@ mod tests {
         position.add_to_position(
             StrategyMode::Backtest,
             true,
+            "Test".to_string(),
             Currency::USD,
             dec!(17525.0),
             dec!(0.5),
@@ -763,6 +765,7 @@ mod tests {
         position.add_to_position(
             StrategyMode::Backtest,
             true,
+            "Test".to_string(),
             Currency::USD,
             dec!(17550.0),
             dec!(0.5),
@@ -780,6 +783,7 @@ mod tests {
         let event = position.reduce_position_size(
             dec!(17575.0),
             dec!(1.0),
+            "Test".to_string(),
             Currency::USD,
             dec!(1.0),
             Utc::now(),
@@ -805,6 +809,7 @@ mod tests {
         let mut position = Position::new(
             "NQ".to_string(),
             "NQ2403".to_string(),
+            "Test".to_string(),
             Account::new(Brokerage::Test, "test-account".to_string()),
             PositionSide::Long,
             dec!(1.0),
@@ -821,6 +826,7 @@ mod tests {
         position.add_to_position(
             StrategyMode::Backtest,
             true,
+            "Test".to_string(),
             Currency::USD,
             dec!(17525.0),
             dec!(1.0),
@@ -831,6 +837,7 @@ mod tests {
         position.add_to_position(
             StrategyMode::Backtest,
             true,
+            "Test".to_string(),
             Currency::USD,
             dec!(17550.0),
             dec!(1.0),
@@ -842,6 +849,7 @@ mod tests {
         let event = position.reduce_position_size(
             dec!(17575.0),
             dec!(1.0),
+            "Test".to_string(),
             Currency::USD,
             dec!(1.0),
             Utc::now(),
@@ -869,6 +877,7 @@ mod tests {
         position.add_to_position(
             StrategyMode::Backtest,
             true,
+            "Test".to_string(),
             Currency::USD,
             dec!(17525.0),
             dec!(2.0),
@@ -880,6 +889,7 @@ mod tests {
         position.reduce_position_size(
             dec!(17550.0),
             dec!(1.5),
+            "Test".to_string(),
             Currency::USD,
             dec!(1.0),
             Utc::now(),
@@ -906,6 +916,7 @@ mod tests {
         let event = position.reduce_position_size(
             dec!(17525.0),
             dec!(1.0),
+            "Test".to_string(),
             Currency::USD,
             dec!(1.0),
             Utc::now(),
@@ -936,6 +947,7 @@ mod tests {
         position.add_to_position(
             StrategyMode::Backtest,
             true,
+            "Test".to_string(),
             Currency::USD,
             dec!(17600.0),
             dec!(1.0),
@@ -950,6 +962,7 @@ mod tests {
         position.reduce_position_size(
             dec!(17650.0),
             dec!(1.0),
+            "Test".to_string(),
             Currency::USD,
             dec!(1.0),
             Utc::now(),
@@ -968,6 +981,7 @@ mod tests {
         position.add_to_position(
             StrategyMode::Backtest,
             true,
+            "Test".to_string(),
             Currency::USD,
             dec!(17525.0),
             dec!(1.0),
@@ -992,6 +1006,7 @@ mod tests {
         let event = position.reduce_position_size(
             dec!(17550.0),
             dec!(1.0),
+            "Test".to_string(),
             Currency::USD,
             dec!(1.0),
             Utc::now(),
@@ -1016,6 +1031,7 @@ mod tests {
         position.reduce_position_size(
             dec!(17525.0),
             dec!(2.0), // More than position size
+            "Test".to_string(),
             Currency::USD,
             dec!(1.0),
             Utc::now(),
@@ -1038,6 +1054,7 @@ mod tests {
         position.add_to_position(
             StrategyMode::Backtest,
             true,
+            "Test".to_string(),
             Currency::USD,
             second_price,
             second_quantity,
@@ -1068,6 +1085,7 @@ mod tests {
         position.add_to_position(
             StrategyMode::Backtest,
             true,
+            "Test".to_string(),
             Currency::USD,
             dec!(17525.0),
             dec!(2.0),
@@ -1079,6 +1097,7 @@ mod tests {
         position.reduce_position_size(
             dec!(17550.0),
             dec!(1.5),
+            "Test".to_string(),
             Currency::USD,
             dec!(1.0),
             initial_time + Duration::hours(1),
@@ -1088,6 +1107,7 @@ mod tests {
         position.reduce_position_size(
             dec!(17575.0),
             dec!(1.5),
+            "Test".to_string(),
             Currency::USD,
             dec!(1.0),
             initial_time + Duration::hours(2),
@@ -1111,6 +1131,7 @@ mod tests {
         position.add_to_position(
             StrategyMode::Backtest,
             true,
+            "Test".to_string(),
             Currency::USD,
             dec!(17525.0),
             dec!(2.0),
@@ -1122,6 +1143,7 @@ mod tests {
         position.reduce_position_size(
             dec!(17550.0),
             dec!(1.5),
+            "Test".to_string(),
             Currency::USD,
             dec!(1.0),
             initial_time + Duration::hours(1),
@@ -1131,6 +1153,7 @@ mod tests {
         position.reduce_position_size(
             dec!(17575.0),
             dec!(1.5),
+            "Test".to_string(),
             Currency::USD,
             dec!(1.0),
             initial_time + Duration::hours(2),
