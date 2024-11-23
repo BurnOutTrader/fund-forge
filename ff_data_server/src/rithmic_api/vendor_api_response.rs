@@ -397,7 +397,7 @@ impl VendorApiResponse for RithmicBrokerageClient {
         let mut combined_data = BTreeMap::new();
 
         let max_bars = match resolution {
-            Resolution::Ticks(_) => 5000,
+            Resolution::Ticks(_) => 50000,
             _ => 10000,
         };
         let mut last_save_day = from.day();
