@@ -7,7 +7,8 @@ use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
 use dashmap::DashMap;
-use futures_util::future::join_all;
+use futures_util::stream::FuturesUnordered;
+use futures_util::StreamExt;
 use indicatif::{ProgressBar, ProgressStyle};
 use lazy_static::lazy_static;
 use tokio::io;
@@ -30,31 +31,75 @@ lazy_static!(
     //todo, we should have a disconnect broadcaster so that we broadcast on disconnect of a streamer, this needs to be done for base data response, where we await updates for before live streams
 );
 
-pub async fn compressed_file_response (
+pub async fn compressed_file_response(
     subscriptions: Vec<DataSubscription>,
     from_time: String,
     to_time: String,
     callback_id: u64,
 ) -> DataServerResponse {
-    let from_time: DateTime<Utc> = from_time.parse().unwrap();
-    let to_time: DateTime<Utc> = to_time.parse().unwrap();
-
-    if to_time.date_naive() >= Utc::now().date_naive() {
-        let mut tasks = vec![];
-        for subscription in &subscriptions {
-            tasks.push(DATA_STORAGE.get().unwrap().pre_subscribe_updates(subscription.symbol.clone(), subscription.resolution, subscription.base_data_type))
+    let from_time = match from_time.parse::<DateTime<Utc>>() {
+        Ok(t) => t,
+        Err(e) => return DataServerResponse::Error {
+            callback_id,
+            error: FundForgeError::ServerErrorDebug(format!("Invalid from_time: {}", e))
         }
-        join_all(tasks).await;
-    }
-
-    let data = match DATA_STORAGE.get().expect("data folder not initialized").get_compressed_files_in_range(subscriptions, from_time, to_time).await {
-        Err(e) => return  DataServerResponse::Error { callback_id, error: FundForgeError::ServerErrorDebug(e.to_string())},
-        Ok(data) => data
+    };
+    let to_time = match to_time.parse::<DateTime<Utc>>() {
+        Ok(t) => t,
+        Err(e) => return DataServerResponse::Error {
+            callback_id,
+            error: FundForgeError::ServerErrorDebug(format!("Invalid to_time: {}", e))
+        }
     };
 
-    //eprintln!("Data: {:?}", data.len());
+    // Limit the date range to prevent huge requests
+    if (to_time - from_time).num_days() > 365 {
+        return DataServerResponse::Error {
+            callback_id,
+            error: FundForgeError::ServerErrorDebug("Date range exceeds maximum of 365 days".to_string())
+        }
+    }
 
-    DataServerResponse::CompressedHistoricalData {callback_id, payload: data}
+    let data_storage = match DATA_STORAGE.get() {
+        Some(storage) => storage,
+        None => return DataServerResponse::Error {
+            callback_id,
+            error: FundForgeError::ServerErrorDebug("Data storage not initialized".to_string())
+        }
+    };
+
+    if to_time.date_naive() >= Utc::now().date_naive() {
+        // Use a bounded stream for pre-subscribe tasks
+        let mut tasks = FuturesUnordered::new();
+        for subscription in &subscriptions {
+            tasks.push(data_storage.pre_subscribe_updates(
+                subscription.symbol.clone(),
+                subscription.resolution,
+                subscription.base_data_type
+            ));
+        }
+
+        // Process with timeout
+        if let Err(_) = timeout(Duration::from_secs(900), async {
+            while let Some(_) = tasks.next().await {}
+        }).await {
+            return DataServerResponse::Error {
+                callback_id,
+                error: FundForgeError::ServerErrorDebug("Pre-subscribe operations timed out".to_string())
+            };
+        }
+    }
+
+    match data_storage.get_compressed_files_in_range(subscriptions, from_time, to_time).await {
+        Ok(data) => DataServerResponse::CompressedHistoricalData {
+            callback_id,
+            payload: data
+        },
+        Err(e) => DataServerResponse::Error {
+            callback_id,
+            error: FundForgeError::ServerErrorDebug(e.to_string())
+        }
+    }
 }
 
 pub async fn manage_async_requests(
