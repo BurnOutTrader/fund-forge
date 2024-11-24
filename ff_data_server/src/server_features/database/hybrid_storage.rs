@@ -120,6 +120,7 @@ impl HybridStorage {
             None => symbol.market_type.to_string(),
             Some(name) => name
         };
+
         let base_path = self.base_path
             .join(symbol.data_vendor.to_string())
             .join(path_3)
