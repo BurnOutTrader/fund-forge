@@ -1,6 +1,6 @@
 use std::path::{Path, PathBuf};
 use fred_rs::client::FredClient;
-use fred_rs::series::{Builder, Response};
+use fred_rs::series::observation::{Builder, Units, Frequency, Response};
 use tokio::sync::OnceCell;
 
 static FRED_CLIENT: OnceCell<FredClient> = OnceCell::const_new();
@@ -37,15 +37,22 @@ pub fn parse_fred_api_key(data_folder: PathBuf) -> Option<String> {
 
 #[tokio::test]
 async fn test_fred_client() {
-    let data_folder = std::path::PathBuf::from("./data");
+    let data_folder = std::path::PathBuf::from("/Volumes/KINGSTON/data");
     let api_key = parse_fred_api_key(data_folder).unwrap();
     let mut client = FredClient::new().unwrap();
     client.with_key(&api_key);
+    // Create the argument builder
     let mut builder = Builder::new();
 
-    builder.realtime_start("2000-01-01");
+    // Set the arguments for the builder
+    builder
+        .observation_start("2000-01-01")
+        .units(Units::PCH)
+        .frequency(Frequency::A);
 
-    let resp: Response = match client.series("UNRATE", Some(builder)) {
+
+    // Make the request and pass in the builder to apply the arguments
+    let resp: Response = match client.series_observation("GNPCA", Some(builder)) {
         Ok(resp) => resp,
         Err(msg) => {
             println!("{}", msg);
@@ -53,13 +60,9 @@ async fn test_fred_client() {
         },
     };
 
-    for item in resp.seriess {
-        println!(
-            "{}: {} {} {}",
-            item.id,
-            item.title,
-            item.realtime_start,
-            item.realtime_end
-        );
+
+    // Print the response
+    for data in resp.observations {
+        println!("Date: {}, Value: {}", data.date, data.value);
     }
 }
