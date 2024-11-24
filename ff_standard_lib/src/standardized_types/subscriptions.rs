@@ -11,13 +11,19 @@ use crate::standardized_types::resolution::Resolution;
 
 pub type SymbolName = String;
 pub type SymbolCode = String;
-#[derive(Clone, Serialize_rkyv, Deserialize_rkyv, Archive, PartialEq, Eq, PartialOrd, Ord, Debug, Hash, )]
+#[derive(Clone, Serialize_rkyv, Deserialize_rkyv, Archive, PartialEq, Eq, PartialOrd, Ord, Debug, Hash)]
 #[archive(compare(PartialEq), check_bytes)]
 #[archive_attr(derive(Debug))]
 pub struct Symbol {
     pub name: SymbolName,
     pub market_type: MarketType,
     pub data_vendor: DataVendor,
+}
+
+impl Display for Symbol {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "{} {} {}", self.name, self.data_vendor, self.market_type)
+    }
 }
 
 impl Symbol {
