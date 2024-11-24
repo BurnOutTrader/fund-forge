@@ -39,6 +39,7 @@ pub struct Fundamental {
     pub value_bytes: Option<Vec<u8>>,
     pub name: String,
     pub bias: Bias,
+    pub resolution: Resolution
 }
 
 
@@ -83,7 +84,7 @@ impl BaseData for Fundamental {
 
     fn subscription(&self) -> DataSubscription {
         let symbol = self.symbol.clone();
-        let resolution = self.resolution();
+        let resolution = self.resolution;
         let candle_type = None;
         DataSubscription::from_base_data(
             symbol.name.clone(),
@@ -111,6 +112,7 @@ impl Fundamental {
     pub fn new(
         symbol: Symbol,
         time: TimeString,
+        resolution: Resolution,
         value: Option<f64>,
         value_string: Option<String>,
         value_bytes: Option<Vec<u8>>,
@@ -120,6 +122,7 @@ impl Fundamental {
         Self {
             symbol,
             time,
+            resolution,
             value,
             value_string,
             value_bytes,
@@ -155,12 +158,12 @@ impl Fundamental {
 
 impl Debug for Fundamental {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Fundamental {{ symbol: {:?}, time: {}, value: {:?}, value_string: {:?}, name: {}, bias: {}}}", self.symbol, self.time, self.value, self.value_string, self.name, self.bias)
+        write!(f, "Fundamental {{ symbol: {:?}, resolution: {}, time: {}, value: {:?}, value_string: {:?}, name: {}, bias: {}}}", self.symbol, self.resolution, self.time, self.value, self.value_string, self.name, self.bias)
     }
 }
 
 impl Display for Fundamental {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Fundamental {{ symbol: {:?}, time: {}, value: {:?}, value_string: {:?}, name: {}, bias: {}}}", self.symbol, self.time, self.value, self.value_string, self.name, self.bias)
+        write!(f, "Fundamental {{ symbol: {}, resolution: {}, time: {}, value: {:?}, value_string: {:?}, name: {}, bias: {}}}", self.symbol, self.resolution, self.time, self.value, self.value_string, self.name, self.bias)
     }
 }
