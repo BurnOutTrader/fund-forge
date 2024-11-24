@@ -296,7 +296,7 @@ impl BaseData for BaseDataEnum {
     }
 
     fn time_closed_local(&self, time_zone: &Tz) -> DateTime<Tz> {
-        time_zone.from_utc_datetime(&self.time_utc().naive_utc()) + self.resolution().as_duration()
+        time_zone.from_utc_datetime(&self.time_closed_utc().naive_utc())
     }
 
     /// Returns the `DataVendor` enum variant of the `BaseDataEnum` variant object
@@ -326,6 +326,7 @@ impl BaseData for BaseDataEnum {
             BaseDataEnum::QuoteBar(bar) => bar.resolution,
             // this works because tick candles will be candles not ticks so number is always 1
             BaseDataEnum::Tick(_) => Resolution::Ticks(1),
+            BaseDataEnum::Fundamental(data) => data.resolution ,
             _ => Resolution::Instant,
         }
     }
