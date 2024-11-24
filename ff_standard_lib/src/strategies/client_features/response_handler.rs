@@ -123,7 +123,7 @@ pub async fn response_handler(
                             }
                         }
                         Some(id) => {
-                            eprintln!("Response with callback id: {}", id); //todo: remove this after debugging historical data deadlock
+                            //eprintln!("Response with callback id: {}", id); //todo: remove this after debugging historical data deadlock
                             if let Some((_, callback_sender)) = callbacks.remove(&id) {
                                 match callback_sender.send(response) {
                                     Ok(_) => {}
