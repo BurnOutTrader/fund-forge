@@ -609,11 +609,11 @@ pub async fn match_order_plant_id(
                         5 => {
                             if let (Some(fill_price), Some(fill_size), Some(total_unfilled_size)) =
                                 (msg.fill_price, msg.fill_size, msg.total_unfilled_size) {
-                                let price = match Price::from_f64_retain(fill_price) {
+                                let price = match Price::from_f64(fill_price) {
                                     Some(p) => p,
                                     None => return,
                                 };
-                                let fill_quantity = match Volume::from_f64_retain(fill_size as f64) {
+                                let fill_quantity = match Volume::from_f64(fill_size as f64) {
                                     Some(q) => q,
                                     None => return,
                                 };
