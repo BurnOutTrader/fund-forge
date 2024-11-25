@@ -9,6 +9,7 @@ use crate::bitget_api::api_client::BITGET_CLIENT;
 use crate::rithmic_api::api_client::{get_rithmic_market_data_system, RITHMIC_CLIENTS};
 use tokio::time::{timeout, Duration};
 use crate::data_bento_api::api_client::get_data_bento_client;
+use crate::fred::vender_response::get_fred_client;
 use crate::oanda_api::api_client::OANDA_CLIENT;
 use crate::server_features::server_side_datavendor::VendorApiResponse;
 
@@ -45,6 +46,11 @@ pub async fn session_market_hours_response(mode: StrategyMode, data_vendor: Data
             }
             DataVendor::Oanda => {
                 if let Some(client) = OANDA_CLIENT.get() {
+                    return client.session_market_hours_response(mode, stream_name, symbol_name, time, callback_id).await
+                }
+            }
+            DataVendor::Fred => {
+                if let Some(client) = get_fred_client() {
                     return client.session_market_hours_response(mode, stream_name, symbol_name, time, callback_id).await
                 }
             }
@@ -90,6 +96,11 @@ pub async fn symbols_response(
             }
             DataVendor::Oanda => {
                 if let Some(client) = OANDA_CLIENT.get() {
+                    return client.symbols_response(mode, stream_name, market_type, time, callback_id).await;
+                }
+            }
+            DataVendor::Fred => {
+                if let Some(client) = get_fred_client() {
                     return client.symbols_response(mode, stream_name, market_type, time, callback_id).await;
                 }
             }
@@ -140,6 +151,11 @@ pub async fn resolutions_response(
                     return client.resolutions_response(mode, stream_name, market_type, callback_id).await;
                 }
             }
+            DataVendor::Fred => {
+                if let Some(client) = get_fred_client() {
+                    return client.resolutions_response(mode, stream_name, market_type, callback_id).await;
+                }
+            }
         }
         DataServerResponse::Error{ callback_id, error: FundForgeError::ServerErrorDebug(format!("Unable to find api client instance for: {}", data_vendor))}
     };
@@ -179,6 +195,11 @@ pub async fn markets_response(
             }
             DataVendor::Oanda => {
                 if let Some(client) = OANDA_CLIENT.get() {
+                    return client.markets_response(mode, stream_name, callback_id).await;
+                }
+            }
+            DataVendor::Fred => {
+                if let Some(client) = get_fred_client() {
                     return client.markets_response(mode, stream_name, callback_id).await;
                 }
             }
@@ -226,6 +247,11 @@ pub async fn decimal_accuracy_response(
                     return client.decimal_accuracy_response(mode, stream_name, symbol_name, callback_id).await;
                 }
             }
+            DataVendor::Fred => {
+                if let Some(client) = get_fred_client() {
+                    return client.decimal_accuracy_response(mode, stream_name, symbol_name, callback_id).await;
+                }
+            }
         }
         DataServerResponse::Error{ callback_id, error: FundForgeError::ServerErrorDebug(format!("Unable to find api client instance for: {}", data_vendor))}
     };
@@ -269,6 +295,11 @@ pub async fn tick_size_response(
                     return client.tick_size_response(mode, stream_name, symbol_name, callback_id).await;
                 }
             }
+            DataVendor::Fred => {
+                if let Some(client) = get_fred_client() {
+                    return client.tick_size_response(mode, stream_name, symbol_name, callback_id).await;
+                }
+            }
         }
         DataServerResponse::Error{ callback_id, error: FundForgeError::ServerErrorDebug(format!("Unable to find api client instance for: {}", data_vendor))}
     };
@@ -307,6 +338,11 @@ pub async fn data_feed_subscribe(
             }
             DataVendor::Oanda => {
                 if let Some(client) = OANDA_CLIENT.get() {
+                    return client.data_feed_subscribe(stream_name, subscription.clone()).await;
+                }
+            }
+            DataVendor::Fred => {
+                if let Some(client) = get_fred_client() {
                     return client.data_feed_subscribe(stream_name, subscription.clone()).await;
                 }
             }
@@ -356,6 +392,11 @@ pub async fn data_feed_unsubscribe(
                     return client.data_feed_unsubscribe(stream_name, subscription.clone()).await;
                 }
             }
+            DataVendor::Fred => {
+                if let Some(client) = get_fred_client() {
+                    return client.data_feed_unsubscribe(stream_name, subscription.clone()).await;
+                }
+            }
         }
         DataServerResponse::UnSubscribeResponse{ success: false, subscription: subscription.clone(), reason: Some(format!("Unable to find api client instance for: {}", data_vendor))}
     };
@@ -402,6 +443,11 @@ pub async fn base_data_types_response(
                     return client.base_data_types_response(mode, stream_name, callback_id).await;
                 }
             }
+            DataVendor::Fred => {
+                if let Some(client) = get_fred_client() {
+                    return client.base_data_types_response(mode, stream_name, callback_id).await;
+                }
+            }
         }
         DataServerResponse::Error{ callback_id, error: FundForgeError::ServerErrorDebug(format!("Unable to find api client instance for: {}", data_vendor))}
     };
@@ -436,6 +482,11 @@ pub async fn logout_command_vendors(data_vendor: DataVendor, stream_name: Stream
             }
             DataVendor::Oanda => {
                 if let Some(client) = OANDA_CLIENT.get() {
+                    client.logout_command_vendors(stream_name).await;
+                }
+            }
+            DataVendor::Fred => {
+                if let Some(client) = get_fred_client() {
                     client.logout_command_vendors(stream_name).await;
                 }
             }

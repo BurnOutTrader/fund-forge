@@ -218,16 +218,16 @@ impl Ledger {
         //sleep(std::time::Duration::from_millis(100)).await;
         let mut to_remove = false;
         let mut to_create = true;
-        let pnl = match Decimal::from_f64_retain(open_pnl) {
+        let pnl = match Decimal::from_f64(open_pnl) {
             Some(pnl) => pnl,
             None => return
         };
-        let quantity = match Decimal::from_f64_retain(open_quantity) {
+        let quantity = match Decimal::from_f64(open_quantity) {
             Some(quantity) => quantity,
             None => return
         };
 
-        let average_price = match Decimal::from_f64_retain(average_price) {
+        let average_price = match Decimal::from_f64(average_price) {
             Some(price) => price,
             None => return
         };

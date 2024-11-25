@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 use crate::standardized_types::base_data::base_data_type::BaseDataType;
 use crate::standardized_types::enums::{Bias, MarketType};
 use crate::standardized_types::subscriptions::{DataSubscription, Symbol};
@@ -7,6 +8,7 @@ use chrono_tz::Tz;
 use rkyv::{Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv};
 use std::fmt::{Debug, Display};
 use std::str::FromStr;
+use rust_decimal::Decimal;
 use crate::standardized_types::datavendor_enum::DataVendor;
 use crate::standardized_types::base_data::traits::BaseData;
 use crate::standardized_types::resolution::Resolution;
@@ -26,20 +28,21 @@ use crate::standardized_types::resolution::Resolution;
 /// # Parameters
 /// 1. `symbol` - `String` The symbol of the asset.
 /// 2. `time` - `i64` The time stamp the price was recorded.
-/// 3. `value` - The value of the fundamental data.
-/// 4. `value_string` - `Option<f64>` The value of the fundamental data as a string, this can be used to pass in json objects etc to the `fn on_data_updates`.
-/// 5. `value_bytes` - `Option<Vec<u8>>` The value of the fundamental data as a byte array.
-/// 6. `name` - `String` The name of the fundamental data: This can be used in the `ff_data_server` to specify how the server is to pull the data from the specified broker, this allows max versatility with minimum hard coding, or re-coding of the engine.
-/// 7. `bias` - `Bias` enum The bias of the fundamental data `Bias` enum variant.
+/// 3. `resolution` - `Resolution` The resolution of the data.
+/// 4. `values` - BTreeMap<String, Decimal> The values of the fundamental data.
+/// 5. `value_string` - `Option<f64>` The value of the fundamental data as a string, this can be used to pass in json objects etc to the `fn on_data_updates`.
+/// 6. `value_bytes` - `Option<Vec<u8>>` The value of the fundamental data as a byte array.
+/// 7. `name` - `String` The name of the fundamental data: This can be used in the `ff_data_server` to specify how the server is to pull the data from the specified broker, this allows max versatility with minimum hard coding, or re-coding of the engine.
+/// 8. `bias` - `Bias` enum The bias of the fundamental data `Bias` enum variant. variants: Bullish, Bearish, Neutral.
 pub struct Fundamental {
     pub symbol: Symbol,
     pub time: TimeString,
-    pub value: Option<f64>,
+    pub resolution: Resolution,
+    pub values: BTreeMap<String, Decimal>,
     pub value_string: Option<String>,
     pub value_bytes: Option<Vec<u8>>,
     pub name: String,
     pub bias: Bias,
-    pub resolution: Resolution
 }
 
 
@@ -113,7 +116,7 @@ impl Fundamental {
         symbol: Symbol,
         time: TimeString,
         resolution: Resolution,
-        value: Option<f64>,
+        values: BTreeMap<String, Decimal>,
         value_string: Option<String>,
         value_bytes: Option<Vec<u8>>,
         name: String,
@@ -123,7 +126,7 @@ impl Fundamental {
             symbol,
             time,
             resolution,
-            value,
+            values,
             value_string,
             value_bytes,
             name,
@@ -158,12 +161,12 @@ impl Fundamental {
 
 impl Debug for Fundamental {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Fundamental {{ symbol: {:?}, resolution: {}, time: {}, value: {:?}, value_string: {:?}, name: {}, bias: {}}}", self.symbol, self.resolution, self.time, self.value, self.value_string, self.name, self.bias)
+        write!(f, "Fundamental {{ symbol: {:?}, resolution: {}, time: {}, values: {:?}, value_string: {:?}, name: {}, bias: {}}}", self.symbol, self.resolution, self.time, self.values, self.value_string, self.name, self.bias)
     }
 }
 
 impl Display for Fundamental {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Fundamental {{ symbol: {}, resolution: {}, time: {}, value: {:?}, value_string: {:?}, name: {}, bias: {}}}", self.symbol, self.resolution, self.time, self.value, self.value_string, self.name, self.bias)
+        write!(f, "Fundamental {{ symbol: {}, resolution: {}, time: {}, values: {:?}, value_string: {:?}, name: {}, bias: {}}}", self.symbol, self.resolution, self.time, self.values, self.value_string, self.name, self.bias)
     }
 }
