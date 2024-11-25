@@ -100,7 +100,7 @@ pub async fn match_order_plant_id(
         },
         305 => {
             if let Ok(msg) = ResponseAccountRmsInfo::decode(&message_buf[..]) {
-                //println!("Response Account Rms Info (Template ID: 305) from Server: {:?}", msg);
+                println!("Response Account Rms Info (Template ID: 305) from Server: {:?}", msg);
                 if let Some(id) = msg.account_id {
                     client.open_orders.insert(id.clone(), DashMap::new());
                     let mut account_info = AccountInfo {

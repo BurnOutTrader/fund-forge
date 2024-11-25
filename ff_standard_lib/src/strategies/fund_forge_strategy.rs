@@ -870,6 +870,22 @@ impl FundForgeStrategy {
         self.indicator_handler.current(name)
     }
 
+    /// Returns the account balance
+    /// In live rithmic doesn't update the balance until after a position is opened, to avoid a balance of 0 before placing orders we can do this in live trading
+    /// ```rust
+    /// let balance = strategy.balance(&account);
+    ///  if balance != dec!(0) {
+    ///     println!("Balance: {}", balance);
+    ///     if balance >= MAX_BALANCE {
+    ///         println!("Balance is too high or too low, flattening all positions: {}", balance);
+    ///         if strategy.is_long(&account, &symbol_code) {
+    ///             let open_quantity = strategy.position_size(&account, &symbol_code);
+    ///             exit_order_id = Some(strategy.exit_long(&candle.symbol.name, Some(symbol_code.clone()), &account, None, open_quantity, "Exit Long Target Reached".to_string()).await);
+    ///         }
+    ///     break 'strategy_loop;
+    ///    }
+    ///  }
+    /// ```
     pub fn balance(&self, account: &Account) -> Decimal {
         self.ledger_service.balance(account)
     }

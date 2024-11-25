@@ -173,6 +173,7 @@ impl LedgerService {
                             panic!("LEDGER_SERVICE: Error initializing account: {}", e);
                         }
                     };
+                   // println!("{:?}", account_info);
                     // Convert the Ledger to a static reference using Box::leak
                     let ledger = Box::new(Ledger::new(
                         account_info,

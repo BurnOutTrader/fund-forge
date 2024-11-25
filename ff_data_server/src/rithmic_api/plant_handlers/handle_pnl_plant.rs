@@ -103,7 +103,7 @@ pub async fn match_pnl_plant_id(
             if let Ok(msg) = ResponsePnLPositionSnapshot::decode(&message_buf[..]) {
                 // PnL Position Snapshot Response
                 // From Server
-                println!("PnL Position Snapshot Response (Template ID: 403) from Server: {:?}", msg);
+                //println!("PnL Position Snapshot Response (Template ID: 403) from Server: {:?}", msg);
 
             }
         },
@@ -284,17 +284,21 @@ pub async fn match_pnl_plant_id(
 
                 //match msg.
 
-                match msg.account_balance {
-                    None => {},
+                let balance = match msg.account_balance {
+                    None => return ,
                     Some(account_balance) => {
                         match Decimal::from_str(&account_balance) {
                             Ok(account_balance) =>{
                                 client.account_balance.insert(id.clone(), account_balance);
+                                account_balance
                             },
-                            Err(_) => {}
+                            Err(_) => return
                         }
                     }
                 };
+                if let Some(mut account_info) = client.account_info.get_mut(&id) {
+                    account_info.value_mut().cash_value = balance;
+                }
 
                 match msg.cash_on_hand {
                     None => {},

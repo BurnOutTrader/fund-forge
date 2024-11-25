@@ -53,9 +53,9 @@ impl BrokerApiResponse for RithmicBrokerageClient {
                     self.send_message(&SysInfraType::OrderPlant, rms_req.clone()).await;
 
                     // Wrap the while loop in a timeout
-                    match timeout(Duration::from_secs(10), async {
+                    match timeout(Duration::from_secs(30), async {
                         while !self.account_info.contains_key(&account_id) {
-                            tokio::time::sleep(Duration::from_secs(2)).await;
+                            tokio::time::sleep(Duration::from_millis(20)).await;
                         }
                     }).await {
                         Ok(_) => (), // Loop completed successfully
