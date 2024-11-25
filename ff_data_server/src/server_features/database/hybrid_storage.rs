@@ -96,17 +96,17 @@ impl HybridStorage {
 
                 // Remove expired entries from all caches
                 for path in keys_to_remove {
-                    mmap_cache.remove(&path);
-                    if let Some((_, mmap)) = mmap_cache.remove(&path) {
-                        drop(mmap); // Explicitly drop the mmap
-                    }
-                    cache_last_accessed.remove(&path);
                     let mut remove_semaphore = false;
                     if let Some(file_semaphore) = file_locks.get(&path) {
                         if file_semaphore.available_permits() == 1 {
                             remove_semaphore = true;
                         }
                     }
+                    mmap_cache.remove(&path);
+                    if let Some((_, mmap)) = mmap_cache.remove(&path) {
+                        drop(mmap); // Explicitly drop the mmap
+                    }
+                    cache_last_accessed.remove(&path);
                     if remove_semaphore {
                         file_locks.remove(&path);
                     }
@@ -155,10 +155,10 @@ impl HybridStorage {
             &data.time_closed_utc(),
             true
         );
-        self.save_data_to_file(&file_path, &[data.clone()], false).await
+        self.save_data_to_file(&file_path, &[data.clone()]).await
     }
 
-    pub async fn save_data_bulk(&self, data: Vec<BaseDataEnum>, is_bulk_download: bool) -> io::Result<()> {
+    pub async fn save_data_bulk(&self, data: Vec<BaseDataEnum>) -> io::Result<()> {
         if data.is_empty() {
             return Ok(());
         }
@@ -183,7 +183,7 @@ impl HybridStorage {
         for ((symbol, resolution, data_type, date), group) in grouped_data {
             let file_path = self.get_file_path(&symbol, &resolution, &data_type, &date, true);
             //println!("Saving {} data points to file: {:?}", group.len(), file_path);
-            self.save_data_to_file(&file_path, &group, is_bulk_download).await?;
+            self.save_data_to_file(&file_path, &group).await?;
         }
 
         Ok(())
@@ -224,6 +224,14 @@ impl HybridStorage {
             }
             self.file_locks.remove(&oldest_path);
         }
+
+        let semaphore = self.file_locks.entry(file_path.to_str().unwrap().to_string()).or_insert(Arc::new(Semaphore::new(1)));
+        let _permit = match semaphore.acquire().await {
+            Ok(p) => p,
+            Err(e) => {
+                panic!("Thread Tripwire, Error acquiring save permit: {}", e)
+            }
+        };
 
         let mut file = File::open(file_path)?;
         let file_size = file.metadata()?.len() as usize;
@@ -315,7 +323,7 @@ impl HybridStorage {
 
 
     /// This first updates the file on disk, then the file in memory is replaced with the new file, therefore we do not have saftey issues.
-    async fn save_data_to_file(&self, file_path: &Path, new_data: &[BaseDataEnum], is_bulk_download: bool) -> io::Result<()> {
+    async fn save_data_to_file(&self, file_path: &Path, new_data: &[BaseDataEnum]) -> io::Result<()> {
         if new_data.is_empty() {
             return Ok(())
         }
@@ -327,6 +335,11 @@ impl HybridStorage {
                 panic!("Thread Tripwire, Error acquiring save permit: {}", e)
             }
         };
+
+        if let Some((_, mmap)) = self.mmap_cache.remove(&file_path.to_string_lossy().to_string()) {
+            drop(mmap);
+            self.cache_last_accessed.remove(&file_path.to_string_lossy().to_string());
+        }
 
         let mut file = OpenOptions::new()
             .create(true)
@@ -424,14 +437,7 @@ impl HybridStorage {
             }
         }
 
-        if !is_bulk_download {
-            let mmap = unsafe { Mmap::map(&file)? };
-            self.mmap_cache.insert(file_path.to_string_lossy().to_string(), Arc::new(mmap));
-        } else {
-            if let Some((_, mmap)) = self.mmap_cache.remove(&file_path.to_string_lossy().to_string()) {
-                drop(mmap);
-            }
-        }
+
 
         Ok(())
     }
@@ -592,7 +598,7 @@ mod test {
             .collect::<Vec<_>>();
 
         // Save bulk data
-        storage.save_data_bulk(test_data.clone(), true).await.unwrap();
+        storage.save_data_bulk(test_data.clone()).await.unwrap();
 
         // Get earliest and latest directly from the data
         let expected_earliest = test_data.first().unwrap().time_closed_utc();
@@ -622,7 +628,7 @@ mod test {
             .map(|c| BaseDataEnum::Candle(c.clone()))
             .collect::<Vec<_>>();
 
-        storage.save_data_bulk(test_data.clone(), true).await.unwrap();
+        storage.save_data_bulk(test_data.clone()).await.unwrap();
 
         // Get actual timestamps from the data
         let day1_start = test_data[0].time_closed_utc();
@@ -673,7 +679,7 @@ mod test {
             .collect::<Vec<_>>();
 
         // Save bulk data to storage
-        storage.save_data_bulk(test_data.clone(), true).await.unwrap();
+        storage.save_data_bulk(test_data.clone()).await.unwrap();
 
         // Expected latest timestamp from test data
         let expected_latest = test_data.last().unwrap().time_closed_utc();
@@ -702,7 +708,7 @@ mod test {
             .collect::<Vec<_>>();
 
         // Save bulk data to storage
-        storage.save_data_bulk(test_data.clone(), true).await.unwrap();
+        storage.save_data_bulk(test_data.clone()).await.unwrap();
 
         // Expected earliest timestamp from test data
         let expected_earliest = test_data.first().unwrap().time_closed_utc();
@@ -731,7 +737,7 @@ mod test {
             .collect::<Vec<_>>();
 
         // Save bulk data to storage
-        storage.save_data_bulk(test_data.clone(), true).await.unwrap();
+        storage.save_data_bulk(test_data.clone()).await.unwrap();
 
         // Define test ranges
         let day1_start = test_data.first().unwrap().time_closed_utc();
@@ -783,7 +789,7 @@ mod test {
             .collect::<Vec<_>>();
 
         // Save bulk data to storage
-        storage.save_data_bulk(test_data.clone(), true).await.unwrap();
+        storage.save_data_bulk(test_data.clone()).await.unwrap();
 
         // Define test cases
         let target_times = vec![
@@ -820,6 +826,122 @@ mod test {
                 expected_point,
                 result
             );
+        }
+    }
+    #[tokio::test]
+    async fn test_multiple_strategy_connections() {
+        let (storage, _temp) = setup_test_storage();
+
+        // Generate initial test data and ensure proper serialization
+        let test_data = generate_5_day_candle_data().iter()
+            .map(|c| BaseDataEnum::Candle(c.clone()))
+            .collect::<Vec<_>>();
+
+        // Save each day's data separately to ensure proper file structure
+        for day_data in test_data.chunks(24) {
+            if day_data.is_empty() {
+                continue;
+            }
+
+            println!("Saving chunk starting at {}", day_data[0].time_closed_utc());
+
+            // Verify the data before saving
+            let bytes = BaseDataEnum::vec_to_bytes(day_data.to_vec());
+            // Verify we can deserialize what we're about to save
+            let _verify = BaseDataEnum::from_array_bytes(&bytes)
+                .expect("Data should be deserializable before saving");
+
+            // Save with verification
+            let save_result = storage.save_data_bulk(day_data.to_vec()).await;
+            assert!(save_result.is_ok(), "Failed to save data: {:?}", save_result);
+
+            // Immediately verify the saved data
+            let file_path = storage.get_file_path(
+                day_data[0].symbol(),
+                &day_data[0].resolution(),
+                &day_data[0].base_data_type(),
+                &day_data[0].time_closed_utc(),
+                false
+            );
+            println!("Saved to file: {:?}", file_path);
+            assert!(file_path.exists(), "File was not created");
+        }
+
+        let symbol = test_data[0].symbol();
+        let resolution = Resolution::Hours(1);
+        let data_type = BaseDataType::Candles;
+
+        // Verify we can read the data back
+        let initial_latest = storage.get_latest_data_time(
+            symbol,
+            &resolution,
+            &data_type
+        ).await.unwrap();
+
+        println!("Initial latest time: {:?}", initial_latest);
+        assert!(initial_latest.is_some(), "Failed to get latest time");
+
+        // First strategy connection simulation
+        let start_time = test_data[0].time_closed_utc();
+        let end_time = test_data.last().unwrap().time_closed_utc();
+        println!("Fetching data range: {} to {}", start_time, end_time);
+
+        let data1 = storage.get_data_range(
+            symbol,
+            &resolution,
+            &data_type,
+            start_time,
+            end_time
+        ).await.unwrap();
+
+        println!("First fetch returned {} data points", data1.len());
+        assert!(!data1.is_empty(), "First data fetch returned empty set");
+
+        // Verify data content
+        if let Some(first) = data1.first() {
+            println!("First data point: {}", first.time_closed_utc());
+        }
+        if let Some(last) = data1.last() {
+            println!("Last data point: {}", last.time_closed_utc());
+        }
+
+        // Simulate second strategy connection with earlier start
+        let early_start = start_time - chrono::Duration::days(5);
+        println!("Second fetch range: {} to {}", early_start, end_time);
+
+        let data2 = storage.get_data_range(
+            symbol,
+            &resolution,
+            &data_type,
+            early_start,
+            end_time
+        ).await.unwrap();
+
+        println!("Second fetch returned {} data points", data2.len());
+        assert!(!data2.is_empty(), "Second data fetch returned empty set");
+
+        // Compare results
+        assert_eq!(
+            data1.last().unwrap().time_closed_utc(),
+            data2.last().unwrap().time_closed_utc(),
+            "Latest times don't match between fetches"
+        );
+
+        // Verify file contents directly
+        let files = storage.get_files_in_range(
+            symbol,
+            &resolution,
+            &data_type,
+            start_time,
+            end_time
+        ).await.unwrap();
+
+        println!("Found {} files in range", files.len());
+        for file in files {
+            println!("Verifying file: {:?}", file);
+            assert!(file.exists(), "File doesn't exist: {:?}", file);
+            let file_size = std::fs::metadata(&file).unwrap().len();
+            assert!(file_size > 0, "File is empty: {:?}", file);
         }
     }
 }

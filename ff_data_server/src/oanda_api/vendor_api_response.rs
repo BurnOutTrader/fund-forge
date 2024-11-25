@@ -217,7 +217,6 @@ impl VendorApiResponse for OandaClient {
         to: DateTime<Utc>,
         from_back: bool,
         progress_bar: ProgressBar,
-        is_bulk_download: bool
     ) -> Result<(), FundForgeError> {
         let data_storage = DATA_STORAGE.get().unwrap();
         let interval = match resolution_to_oanda_interval(&resolution) {
@@ -334,7 +333,7 @@ impl VendorApiResponse for OandaClient {
                     let new_bar_time = bar.time_utc();
                     if last_bar_time.day() != new_bar_time.day() && !new_data.is_empty() {
                         let data_vec: Vec<BaseDataEnum> = new_data.values().cloned().collect();
-                        match data_storage.save_data_bulk(data_vec.clone(), is_bulk_download).await {
+                        match data_storage.save_data_bulk(data_vec.clone()).await {
                             Ok(_) => {
                                 progress_bar.inc(1);
                             },
@@ -366,7 +365,7 @@ impl VendorApiResponse for OandaClient {
         // Save any remaining data
         if !new_data.is_empty() {
             let data_vec: Vec<BaseDataEnum> = new_data.values().cloned().collect();
-            if let Err(e) = data_storage.save_data_bulk(data_vec, is_bulk_download).await {
+            if let Err(e) = data_storage.save_data_bulk(data_vec).await {
                 eprintln!("Error saving final data batch: {}", e);
                 progress_bar.set_message(format!("Error saving final data batch: {}", e));
             }
@@ -377,7 +376,7 @@ impl VendorApiResponse for OandaClient {
             let units = duration_since_last_bar.num_seconds() / resolution.as_seconds();
             if let Some(account) = self.accounts.get(0) {
                 let bars = self.get_latest_bars(&symbol, base_data_type, resolution, &account.account_id, (units + 3) as i32).await?;
-                if let Err(e) = data_storage.save_data_bulk(bars, is_bulk_download).await {
+                if let Err(e) = data_storage.save_data_bulk(bars).await {
                     progress_bar.set_message(format!("Error saving final data batch: {}", e));
                 }
             }

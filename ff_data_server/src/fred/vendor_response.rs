@@ -160,7 +160,7 @@ impl VendorApiResponse for FredApiClient {
     }
 
 
-    async fn update_historical_data(&self, symbol: Symbol, base_data_type: BaseDataType, resolution: Resolution, from: DateTime<Utc>, to: DateTime<Utc>, from_back: bool, progress_bar: ProgressBar, is_bulk_download: bool) -> Result<(), FundForgeError> {
+    async fn update_historical_data(&self, symbol: Symbol, base_data_type: BaseDataType, resolution: Resolution, from: DateTime<Utc>, to: DateTime<Utc>, from_back: bool, progress_bar: ProgressBar) -> Result<(), FundForgeError> {
         const UNITS_ARR: [Units; 9] = [
             Units::LIN,
             Units::CHG,
@@ -294,7 +294,7 @@ impl VendorApiResponse for FredApiClient {
         }
         if !data_map.is_empty() {
             let data_points: Vec<BaseDataEnum> = data_map.into_iter().map(|(_, v)| BaseDataEnum::Fundamental(v)).collect();
-            match database.save_data_bulk(data_points, true).await {
+            match database.save_data_bulk(data_points).await {
                 Ok(_) => {},
                 Err(e) => {
                     return Err(FundForgeError::ServerErrorDebug(e.to_string()));

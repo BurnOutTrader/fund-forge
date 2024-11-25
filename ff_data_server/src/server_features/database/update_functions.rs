@@ -188,7 +188,7 @@ impl HybridStorage {
         let key_clone = key.clone();
         {
             self.download_tasks.insert(key.clone(), task::spawn(async move {
-                match client.update_historical_data(symbol.clone(), base_data_type, resolution, start_time, Utc::now() + Duration::from_secs(15), false, symbol_pb, false).await {
+                match client.update_historical_data(symbol.clone(), base_data_type, resolution, start_time, Utc::now() + Duration::from_secs(15), false, symbol_pb).await {
                     Ok(_) => {
                         download_tasks.remove(&key_clone);
                     },
@@ -345,8 +345,7 @@ impl HybridStorage {
                             symbol_config.base_data_type.clone(),
                             start_time,
                             end_time,
-                            from_back,
-                            true
+                            from_back
                         ).await;
                     }
                 }
@@ -365,7 +364,6 @@ impl HybridStorage {
         from: DateTime<Utc>,
         to: DateTime<Utc>,
         from_back: bool,
-        is_bulk_download: bool
     ) {
         let key = (symbol.name.clone(), base_data_type.clone(), resolution.clone());
 
@@ -415,7 +413,7 @@ impl HybridStorage {
             };
             symbol_pb.set_prefix(format!("{}: {}", prefix, symbol.name));
 
-            match client.update_historical_data(symbol.clone(), base_data_type, resolution, from, to, from_back, symbol_pb, is_bulk_download).await {
+            match client.update_historical_data(symbol.clone(), base_data_type, resolution, from, to, from_back, symbol_pb).await {
                 Ok(_) => {},
                 Err(_) => {}
             }

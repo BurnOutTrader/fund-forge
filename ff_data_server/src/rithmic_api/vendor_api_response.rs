@@ -350,7 +350,7 @@ impl VendorApiResponse for RithmicBrokerageClient {
         todo!()
     }
 
-    async fn update_historical_data(&self, symbol: Symbol, base_data_type: BaseDataType, resolution: Resolution, from: DateTime<Utc>, to: DateTime<Utc>, from_back: bool, progress_bar: ProgressBar, is_bulk_download: bool) -> Result<(), FundForgeError> {
+    async fn update_historical_data(&self, symbol: Symbol, base_data_type: BaseDataType, resolution: Resolution, from: DateTime<Utc>, to: DateTime<Utc>, from_back: bool, progress_bar: ProgressBar) -> Result<(), FundForgeError> {
         const SYSTEM: SysInfraType = SysInfraType::HistoryPlant;
         let earliest_date = DateTime::parse_from_rfc3339("2019-06-03T00:00:00Z").unwrap().with_timezone(&Utc);
         const TIME_NEGATIVE: std::time::Duration = std::time::Duration::from_secs(1);
@@ -468,7 +468,7 @@ impl VendorApiResponse for RithmicBrokerageClient {
 
             if window_start.day() != last_save_day || is_end {
                 let save_data: Vec<BaseDataEnum> = combined_data.clone().into_values().collect();
-                if let Err(e) = data_storage.save_data_bulk(save_data, is_bulk_download).await {
+                if let Err(e) = data_storage.save_data_bulk(save_data).await {
                     progress_bar.set_message(format!("Failed to save data for: {} - {}, {}", window_start, window_end, e));
                     break 'main_loop;
                 }
@@ -484,7 +484,7 @@ impl VendorApiResponse for RithmicBrokerageClient {
         }
         if !combined_data.is_empty() {
             let save_data: Vec<BaseDataEnum> = combined_data.clone().into_values().collect();
-            if let Err(e) = data_storage.save_data_bulk(save_data, is_bulk_download).await {
+            if let Err(e) = data_storage.save_data_bulk(save_data).await {
                 progress_bar.set_message(format!("Failed to save data for: {} - {}, {}", window_start, window_start + resolution_multiplier, e));
             }
         }

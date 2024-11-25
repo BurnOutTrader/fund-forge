@@ -173,7 +173,7 @@ impl VendorApiResponse for DataBentoClient {
     Batch provides a means of submitting and querying for details of batch download requests.
     */
     #[allow(unused)]
-    async fn update_historical_data(&self, symbol: Symbol, base_data_type: BaseDataType, resolution: Resolution, from: DateTime<Utc>, to: DateTime<Utc>, from_back: bool ,progress_bar: ProgressBar, is_bulk_download: bool) -> Result<(), FundForgeError> {
+    async fn update_historical_data(&self, symbol: Symbol, base_data_type: BaseDataType, resolution: Resolution, from: DateTime<Utc>, to: DateTime<Utc>, from_back: bool ,progress_bar: ProgressBar) -> Result<(), FundForgeError> {
 
         let schema = match base_data_type {
             BaseDataType::Quotes => {}
