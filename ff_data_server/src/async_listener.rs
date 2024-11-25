@@ -38,6 +38,9 @@ pub(crate) async fn create_listener(addr: SocketAddr) -> io::Result<TcpListener>
     TcpListener::from_std(socket.into())
 }
 
+use std::collections::HashSet;
+use std::sync::Mutex;
+
 pub(crate) async fn async_server(config: ServerConfig, addr: SocketAddr) {
     let acceptor = TlsAcceptor::from(Arc::new(config));
 
@@ -56,27 +59,50 @@ pub(crate) async fn async_server(config: ServerConfig, addr: SocketAddr) {
     let listener = Arc::new(listener);
     let shutdown_complete_tx = Arc::new(Notify::new());
     let shutdown_complete_rx = shutdown_complete_tx.clone();
-    let connection_count = AtomicU16::new(0); // Use AtomicU16
+
+    // Track active connection IDs to ensure uniqueness
+    let active_ids = Arc::new(Mutex::new(HashSet::new()));
+    let next_id = Arc::new(AtomicU16::new(0));
+
     loop {
         tokio::select! {
             result = listener.accept() => {
                 match result {
                     Ok((stream, _peer_addr)) => {
-                        //println!("Server: {}, peer_addr: {:?}", Utc::now(), peer_addr);
                         let acceptor = acceptor.clone();
                         let active_connections = active_connections.clone();
                         let shutdown_complete = shutdown_complete_tx.clone();
+                        let active_ids = active_ids.clone();
+                        let next_id = next_id.clone();
 
                         active_connections.fetch_add(1, Ordering::SeqCst);
-                        let count = connection_count.fetch_add(1, Ordering::SeqCst);
+
+                        // Find next available ID
+                        let conn_id = {
+                            let mut ids = active_ids.lock().unwrap();
+                            let mut candidate = next_id.load(Ordering::SeqCst);
+                            // Keep trying until we find an unused ID
+                            while ids.contains(&candidate) {
+                                candidate = candidate.wrapping_add(1);
+                            }
+                            ids.insert(candidate);
+                            next_id.store(candidate.wrapping_add(1), Ordering::SeqCst);
+                            candidate
+                        };
+
                         tokio::spawn(async move {
                             match acceptor.accept(stream).await {
                                 Ok(tls_stream) => {
-                                    handle_async_connection(tls_stream, count).await;
+                                    handle_async_connection(tls_stream, conn_id).await;
                                 }
                                 Err(_e) => {
                                     //eprintln!("Server: Failed to accept TLS connection: {:?}", e);
                                 }
+                            }
+                            // Remove ID from active set when connection closes
+                            {
+                                let mut ids = active_ids.lock().unwrap();
+                                ids.remove(&conn_id);
                             }
                             if active_connections.fetch_sub(1, Ordering::SeqCst) == 1 {
                                 shutdown_complete.notify_one();
@@ -111,6 +137,7 @@ pub(crate) async fn async_server(config: ServerConfig, addr: SocketAddr) {
 
     drop(listener);
 }
+
 async fn handle_async_connection(mut tls_stream: TlsStream<TcpStream>, stream_name: u16) {
     const LENGTH: usize = 4;
     let mut length_bytes = [0u8; LENGTH];
