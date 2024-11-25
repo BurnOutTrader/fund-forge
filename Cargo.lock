@@ -1177,7 +1177,7 @@ dependencies = [
 [[package]]
 name = "fred-rs"
 version = "0.1.1"
-source = "git+https://github.com/BurnOutTrader/fred-rs?branch=master#19f2c74eb5d2c55c1468549eb3cab185f08f38c1"
+source = "git+https://github.com/BurnOutTrader/fred-rs?branch=master#1fb30760fc906f96abeab656885a631e4121c6b1"
 dependencies = [
  "reqwest 0.10.10",
  "serde",
