@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 use crate::standardized_types::base_data::base_data_type::BaseDataType;
-use crate::standardized_types::enums::{Bias, MarketType};
+use crate::standardized_types::enums::{MarketType};
 use crate::standardized_types::subscriptions::{DataSubscription, Symbol};
 use crate::standardized_types::new_types::TimeString;
 use chrono::{DateTime, TimeZone, Utc};
@@ -42,7 +42,6 @@ pub struct Fundamental {
     pub value_string: Option<String>,
     pub value_bytes: Option<Vec<u8>>,
     pub name: String,
-    pub bias: Bias,
 }
 
 
@@ -120,7 +119,6 @@ impl Fundamental {
         value_string: Option<String>,
         value_bytes: Option<Vec<u8>>,
         name: String,
-        bias: Bias,
     ) -> Self {
         Self {
             symbol,
@@ -130,7 +128,6 @@ impl Fundamental {
             value_string,
             value_bytes,
             name,
-            bias,
         }
     }
 
@@ -161,12 +158,12 @@ impl Fundamental {
 
 impl Debug for Fundamental {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Fundamental {{ symbol: {:?}, resolution: {}, time: {}, values: {:?}, value_string: {:?}, name: {}, bias: {}}}", self.symbol, self.resolution, self.time, self.values, self.value_string, self.name, self.bias)
+        write!(f, "Fundamental {{ symbol: {:?}, resolution: {}, time: {}, values: {:?}, value_string: {:?}, name: {} }}", self.symbol, self.resolution, self.time, self.values, self.value_string, self.name)
     }
 }
 
 impl Display for Fundamental {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Fundamental {{ symbol: {}, resolution: {}, time: {}, values: {:?}, value_string: {:?}, name: {}, bias: {}}}", self.symbol, self.resolution, self.time, self.values, self.value_string, self.name, self.bias)
+        write!(f, "Fundamental {{ symbol: {}, resolution: {}, time: {}, values: {:?}, value_string: {:?}, name: {} }}", self.symbol, self.resolution, self.time, self.values, self.value_string, self.name)
     }
 }
