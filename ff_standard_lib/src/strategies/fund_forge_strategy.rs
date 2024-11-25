@@ -47,7 +47,7 @@ use crate::strategies::handlers::market_handler::backtest_matching_engine::BackT
 use crate::strategies::handlers::market_handler::live_order_matching::live_order_handler;
 use crate::strategies::handlers::market_handler::price_service::{price_service_request_market_fill_price, price_service_request_market_price};
 use crate::strategies::historical_engine::HistoricalEngine;
-use crate::strategies::historical_time::get_backtest_time;
+use crate::strategies::historical_time::{get_backtest_time, update_backtest_time};
 use crate::strategies::indicators::indicator_events::IndicatorEvents;
 use crate::strategies::ledgers::ledger_service::LedgerService;
 
@@ -156,6 +156,7 @@ impl FundForgeStrategy {
         let end_time = resolve_market_datetime_in_timezone(time_zone, end_date).to_utc();
 
         let warm_up_start_time = start_time - warmup_duration;
+        update_backtest_time(warm_up_start_time);
 
         let open_order_cache: Arc<DashMap<OrderId, Order>> = Arc::new(DashMap::new());
         let closed_order_cache: Arc<DashMap<OrderId, Order>> = Arc::new(DashMap::new());
