@@ -88,7 +88,10 @@ pub(crate) async fn live_warm_up(
                     }
                     time_slices
                 },
-                Err(_) => continue 'main_loop
+                Err(_) => {
+                    last_time = to_time + buffer_duration;
+                    continue 'main_loop
+                }
             };
 
             let mut time = last_time;
