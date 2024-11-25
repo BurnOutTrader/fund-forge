@@ -144,7 +144,7 @@ pub async fn match_ticker_plant_id(
             if let Ok(msg) = ResponseFrontMonthContract::decode(&message_buf[..]) {
                 // Front Month Contract Response
                 // From Server
-                //println!("Front Month Contract Response (Template ID: 114) from Server: {:?}", msg);
+                println!("Front Month Contract Response (Template ID: 114) from Server: {:?}", msg);
                 if let Some(symbol) =  msg.symbol {
                     if let Some(exchange) = msg.exchange {
                         let exchange = match FuturesExchange::from_string(&exchange) {

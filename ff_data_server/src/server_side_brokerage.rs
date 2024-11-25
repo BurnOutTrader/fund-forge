@@ -10,7 +10,7 @@ use ff_standard_lib::standardized_types::subscriptions::SymbolName;
 use ff_standard_lib::standardized_types::accounts::{Account, AccountId, Currency};
 use ff_standard_lib::StreamName;
 use crate::bitget_api::api_client::BITGET_CLIENT;
-use crate::rithmic_api::api_client::{get_rithmic_client, RITHMIC_CLIENTS};
+use crate::rithmic_api::api_client::{get_rithmic_client, get_rithmic_market_data_system, RITHMIC_CLIENTS};
 use tokio::time::{timeout, Duration};
 use ff_standard_lib::standardized_types::datavendor_enum::DataVendor;
 use ff_standard_lib::standardized_types::orders::OrderUpdateEvent::OrderUpdateRejected;
@@ -71,8 +71,15 @@ pub async fn commission_info_response(mode: StrategyMode, brokerage: Brokerage, 
 pub async fn front_month_info_response(brokerage: Brokerage, symbol_name: SymbolName, exchange: FuturesExchange, stream_name: StreamName, callback_id: u64) -> DataServerResponse {
     let operation = async {
         match brokerage {
-            Brokerage::Rithmic(system) => {
-                if let Some(api_client) = RITHMIC_CLIENTS.get(&system) {
+            Brokerage::Rithmic(_) => {
+                let system = match get_rithmic_market_data_system() {
+                    Some(system) => system,
+                    None => return DataServerResponse::Error {
+                        callback_id,
+                        error: FundForgeError::ServerErrorDebug("Failed to get Rithmic market data system".to_string())
+                    }
+                };
+                if let Some(api_client) =  RITHMIC_CLIENTS.get(&system){
                     if let Ok(info) = api_client.get_front_month(stream_name, symbol_name, exchange).await {
                         return DataServerResponse::FrontMonthInfo {
                             callback_id,

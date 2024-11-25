@@ -272,6 +272,7 @@ pub async fn on_data_received(
                             PositionSide::Short => {
                                 last_short_result = result;
                             }
+                            _ => {}
                         }
                         let strategy = strategy.clone();
                         task::spawn(async move {

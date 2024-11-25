@@ -281,8 +281,8 @@ impl RithmicBrokerageClient {
             let mut map = AHashMap::new();
             map.insert(callback_id, sender);
             self.callbacks.insert(stream_name.clone(), map);
-            self.send_message(plant, request).await;
         }
+        self.send_message(plant, request).await;
     }
 
     pub async fn generate_callback_id(&self) -> u64 {
@@ -571,7 +571,7 @@ impl RithmicBrokerageClient {
             let (sender, receiver) = oneshot::channel();
             self.register_callback_and_send(&PLANT, stream_name, id, sender, request).await;
 
-            match timeout(Duration::from_secs(10), receiver).await {
+            match timeout(Duration::from_secs(30), receiver).await {
                 Ok(receiver_result) => match receiver_result {
                     Ok(response) => match response {
                         DataServerResponse::FrontMonthInfo { info, .. } => {

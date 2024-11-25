@@ -83,13 +83,13 @@ pub(crate) async fn live_warm_up(
                 Ok(time_slices) => {
                     if time_slices.is_empty() {
                         println!("Live Warmup: No data period, weekend or holiday: skipping to next day");
-                        last_time = to_time + buffer_duration;
+                        last_time = to_time + Duration::from_nanos(1);
                         continue 'main_loop
                     }
                     time_slices
                 },
                 Err(_) => {
-                    last_time = to_time + buffer_duration;
+                    last_time = to_time + Duration::from_nanos(1);
                     continue 'main_loop
                 }
             };
