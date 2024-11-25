@@ -51,7 +51,7 @@ pub async fn compressed_file_response(
     };
 
     // Limit the date range to prevent huge requests
-    if (to_time - from_time).num_days() > 365 {
+    if (to_time - from_time).num_days() > 365 { //we arent actually opening the files here so its not to bad if we have large limit.
         return DataServerResponse::Error {
             callback_id,
             error: FundForgeError::ServerErrorDebug("Date range exceeds maximum of 365 days".to_string())
