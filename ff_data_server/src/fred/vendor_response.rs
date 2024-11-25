@@ -162,12 +162,6 @@ impl VendorApiResponse for FredApiClient {
     }
 }
 
-pub enum BiasMode {
-    Standard,
-    Inverse,
-    NoBias
-}
-
 #[tokio::test]
 async fn test_fred_client() {
     let data_folder = std::path::PathBuf::from("/Volumes/KINGSTON/data");
@@ -177,7 +171,6 @@ async fn test_fred_client() {
     // Create the argument builder
 
     let resolution = Resolution::Year;
-    let bias_mode = BiasMode::Standard;
     let units_vec = vec![
         Units::LIN,
         Units::CHG,
@@ -230,28 +223,6 @@ async fn test_fred_client() {
 
             let value = f64::from_str(&data.value).unwrap();
 
-            let bias = match bias_mode {
-                BiasMode::Standard => {
-                    if value > 0.0 {
-                        Bias::Bullish
-                    } else if value < 0.0 {
-                        Bias::Bearish
-                    } else {
-                        Bias::Neutral
-                    }
-                },
-                BiasMode::Inverse => {
-                    if value > 0.0 {
-                        Bias::Bearish
-                    } else if value < 0.0 {
-                        Bias::Bullish
-                    } else {
-                        Bias::Neutral
-                    }
-                }
-                BiasMode::NoBias => Bias::Neutral
-            };
-
             let values = BTreeMap::new();
             if !data_map.contains_key(&utc_time) {
                 let fundamental = Fundamental::new(
@@ -262,7 +233,6 @@ async fn test_fred_client() {
                     None,
                     None,
                     fred_data.to_string(),
-                    bias,
                 );
                 data_map.insert(utc_time, fundamental);
             }
