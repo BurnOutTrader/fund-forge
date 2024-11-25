@@ -672,61 +672,137 @@ mod test {
     }
 
     #[tokio::test]
-    async fn test_get_latest_data_time() {
-        let (storage, _temp) = setup_test_storage();
-        let test_data = generate_5_day_candle_data().iter()
-            .map(|c| BaseDataEnum::Candle(c.clone()))
-            .collect::<Vec<_>>();
+    async fn test_get_latest_data_time_repeated() {
+        use std::time::Duration;
+        use rand::seq::SliceRandom;
+        use rand::thread_rng;
 
-        // Save bulk data to storage
-        storage.save_data_bulk(test_data.clone()).await.unwrap();
+        for iteration in 1..=3 {
+            println!("Running iteration {}", iteration);
 
-        // Expected latest timestamp from test data
-        let expected_latest = test_data.last().unwrap().time_closed_utc();
+            let (storage, _temp) = setup_test_storage();
 
-        // Call `get_latest_data_time` and verify the result
-        let latest_time = storage.get_latest_data_time(
-            test_data[0].symbol(),
-            &Resolution::Hours(1),
-            &BaseDataType::Candles
-        ).await.unwrap();
+            // Generate test data
+            let mut test_data = generate_5_day_candle_data().iter()
+                .map(|c| BaseDataEnum::Candle(c.clone()))
+                .collect::<Vec<_>>();
 
-        assert_eq!(
-            latest_time,
-            Some(expected_latest),
-            "Expected latest time: {}, but got: {:?}",
-            expected_latest,
-            latest_time
-        );
+            // Randomly shuffle the data to ensure order doesn't matter
+            let mut rng = thread_rng();
+            test_data.shuffle(&mut rng);
+
+            // Save bulk data to storage
+            storage.save_data_bulk(test_data.clone()).await.unwrap();
+
+            // Add a small delay to ensure data is fully saved
+            tokio::time::sleep(Duration::from_millis(100)).await;
+
+            // Expected latest timestamp from test data
+            let expected_latest = test_data.iter()
+                .map(|d| d.time_closed_utc())
+                .max()
+                .unwrap();
+
+            // Call `get_latest_data_time` multiple times to verify consistency
+            for _ in 0..3 {
+                let latest_time = storage.get_latest_data_time(
+                    test_data[0].symbol(),
+                    &Resolution::Hours(1),
+                    &BaseDataType::Candles
+                ).await.unwrap();
+
+                assert_eq!(
+                    latest_time,
+                    Some(expected_latest),
+                    "Iteration {}, Expected latest time: {}, but got: {:?}",
+                    iteration,
+                    expected_latest,
+                    latest_time
+                );
+
+                // Add a small delay between checks
+                tokio::time::sleep(Duration::from_millis(50)).await;
+            }
+
+            // Clean up between iterations
+            drop(storage);
+            tokio::time::sleep(Duration::from_millis(100)).await;
+        }
     }
 
     #[tokio::test]
-    async fn test_get_earliest_data_time() {
-        let (storage, _temp) = setup_test_storage();
-        let test_data = generate_5_day_candle_data().iter()
-            .map(|c| BaseDataEnum::Candle(c.clone()))
-            .collect::<Vec<_>>();
+    async fn test_get_earliest_data_time_repeated() {
+        use std::time::Duration;
+        use rand::seq::SliceRandom;
+        use rand::thread_rng;
 
-        // Save bulk data to storage
-        storage.save_data_bulk(test_data.clone()).await.unwrap();
+        for iteration in 1..=3 {
+            println!("Running iteration {}", iteration);
 
-        // Expected earliest timestamp from test data
-        let expected_earliest = test_data.first().unwrap().time_closed_utc();
+            let (storage, _temp) = setup_test_storage();
 
-        // Call `get_earliest_data_time` and verify the result
-        let earliest_time = storage.get_earliest_data_time(
-            test_data[0].symbol(),
-            &Resolution::Hours(1),
-            &BaseDataType::Candles
-        ).await.unwrap();
+            // Generate test data
+            let mut test_data = generate_5_day_candle_data().iter()
+                .map(|c| BaseDataEnum::Candle(c.clone()))
+                .collect::<Vec<_>>();
 
-        assert_eq!(
-            earliest_time,
-            Some(expected_earliest),
-            "Expected earliest time: {}, but got: {:?}",
-            expected_earliest,
-            earliest_time
-        );
+            // Randomly shuffle the data to ensure order doesn't matter
+            let mut rng = thread_rng();
+            test_data.shuffle(&mut rng);
+
+            // Save bulk data to storage
+            storage.save_data_bulk(test_data.clone()).await.unwrap();
+
+            // Add a small delay to ensure data is fully saved
+            tokio::time::sleep(Duration::from_millis(100)).await;
+
+            // Expected earliest timestamp from test data
+            let expected_earliest = test_data.iter()
+                .map(|d| d.time_closed_utc())
+                .min()
+                .unwrap();
+
+            // Call `get_earliest_data_time` multiple times to verify consistency
+            for check_num in 1..=3 {
+                let earliest_time = storage.get_earliest_data_time(
+                    test_data[0].symbol(),
+                    &Resolution::Hours(1),
+                    &BaseDataType::Candles
+                ).await.unwrap();
+
+                assert_eq!(
+                    earliest_time,
+                    Some(expected_earliest),
+                    "Iteration {}, Check {}: Expected earliest time: {}, but got: {:?}",
+                    iteration,
+                    check_num,
+                    expected_earliest,
+                    earliest_time
+                );
+
+                // Add a small delay between checks
+                tokio::time::sleep(Duration::from_millis(50)).await;
+            }
+
+            // Verify that earliest and latest times are correct relative to each other
+            let latest_time = storage.get_latest_data_time(
+                test_data[0].symbol(),
+                &Resolution::Hours(1),
+                &BaseDataType::Candles
+            ).await.unwrap();
+
+            assert!(
+                latest_time.unwrap() > expected_earliest,
+                "Iteration {}: Latest time should be after earliest time. Latest: {:?}, Earliest: {}",
+                iteration,
+                latest_time,
+                expected_earliest
+            );
+
+            // Clean up between iterations
+            drop(storage);
+            tokio::time::sleep(Duration::from_millis(100)).await;
+        }
     }
 
     #[tokio::test]
