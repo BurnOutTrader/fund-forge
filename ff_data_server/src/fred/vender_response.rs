@@ -12,6 +12,7 @@ use rust_decimal::Decimal;
 use rust_decimal::prelude::FromPrimitive;
 use tokio::sync::OnceCell;
 use ff_standard_lib::messages::data_server_messaging::{DataServerResponse, FundForgeError};
+use ff_standard_lib::product_maps::fred::models::FredDataSet;
 use ff_standard_lib::standardized_types::base_data::base_data_type::BaseDataType;
 use ff_standard_lib::standardized_types::base_data::fundamental::Fundamental;
 use ff_standard_lib::standardized_types::datavendor_enum::DataVendor;
