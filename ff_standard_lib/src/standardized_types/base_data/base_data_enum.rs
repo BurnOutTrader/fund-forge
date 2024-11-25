@@ -157,10 +157,10 @@ impl Display for BaseDataEnum {
             ),
             BaseDataEnum::Fundamental(fundamental) => write!(
                 f,
-                "{}: {}, {}: {}, {}",
+                "{}: {}, {:?}: {}, {}",
                 fundamental.symbol.name,
                 fundamental.symbol.data_vendor,
-                fundamental.value.unwrap_or_default(),
+                fundamental.values,
                 fundamental.time,
                 fundamental.name
             ),
