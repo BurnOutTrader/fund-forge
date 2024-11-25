@@ -1,2 +1,1 @@
-pub mod vender_response;
-pub mod models;
+pub mod vendor_response;

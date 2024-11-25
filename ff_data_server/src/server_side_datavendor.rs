@@ -9,7 +9,7 @@ use crate::bitget_api::api_client::BITGET_CLIENT;
 use crate::rithmic_api::api_client::{get_rithmic_market_data_system, RITHMIC_CLIENTS};
 use tokio::time::{timeout, Duration};
 use crate::data_bento_api::api_client::get_data_bento_client;
-use crate::fred::vender_response::get_fred_client;
+use crate::fred::vendor_response::get_fred_client;
 use crate::oanda_api::api_client::OANDA_CLIENT;
 use crate::server_features::server_side_datavendor::VendorApiResponse;
 

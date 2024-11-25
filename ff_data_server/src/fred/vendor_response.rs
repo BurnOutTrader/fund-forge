@@ -20,7 +20,6 @@ use ff_standard_lib::standardized_types::enums::{Bias, MarketType, StrategyMode}
 use ff_standard_lib::standardized_types::resolution::Resolution;
 use ff_standard_lib::standardized_types::subscriptions::{DataSubscription, Symbol, SymbolName};
 use ff_standard_lib::StreamName;
-use crate::fred::models::FredDataSet;
 use crate::server_features::server_side_datavendor::VendorApiResponse;
 
 static FRED_CLIENT: OnceCell<Arc<FredApiClient>> = OnceCell::const_new();
