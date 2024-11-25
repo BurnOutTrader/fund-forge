@@ -12,7 +12,7 @@ use rust_decimal::Decimal;
 use rust_decimal::prelude::FromPrimitive;
 use tokio::sync::OnceCell;
 use ff_standard_lib::messages::data_server_messaging::{DataServerResponse, FundForgeError};
-use ff_standard_lib::product_maps::fred::models::FredDataSet;
+use ff_standard_lib::product_maps::fred::models::{fred_data_resolutions, FredDataSet};
 use ff_standard_lib::standardized_types::base_data::base_data_type::BaseDataType;
 use ff_standard_lib::standardized_types::base_data::fundamental::Fundamental;
 use ff_standard_lib::standardized_types::datavendor_enum::DataVendor;
@@ -170,8 +170,8 @@ async fn test_fred_client() {
     client.with_key(&api_key);
     // Create the argument builder
 
-    let resolution = Resolution::Year;
-    let units_vec = vec![
+
+    const UNITS_ARR: [Units; 9] = [
         Units::LIN,
         Units::CHG,
         Units::CH1,
@@ -183,6 +183,7 @@ async fn test_fred_client() {
         Units::LOG,
     ];
     let fred_data = FredDataSet::GrossNationalProductPerCapita;
+    let resolutions = fred_data_resolutions(fred_data);
 
     let symbol = Symbol::new(
         fred_data.to_string(),
@@ -190,60 +191,62 @@ async fn test_fred_client() {
         MarketType::Fundamentals
     );
 
-    let mut data_map = BTreeMap::new();
+    for resolution in resolutions {
+        let mut data_map = BTreeMap::new();
 
-    for unit in units_vec {
-        let mut builder = Builder::new();
-        // Set the arguments for the builder
-        builder
-            .observation_start("1930-01-01")
-            .units(unit)
-            .frequency(resolution_to_frequency(resolution).unwrap());
+        for unit in UNITS_ARR.iter() {
+            let mut builder = Builder::new();
+            // Set the arguments for the builder
+            builder
+                .observation_start("1930-01-01")
+                .units(unit.clone())
+                .frequency(resolution_to_frequency(resolution).unwrap());
 
 
-        // Make the request and pass in the builder to apply the arguments
-        let resp: Response = match client.series_observation(&fred_data.to_string(), Some(builder)) {
-            Ok(resp) => resp,
-            Err(msg) => {
-                println!("{}", msg);
-                return
-            },
-        };
+            // Make the request and pass in the builder to apply the arguments
+            let resp: Response = match client.series_observation(&fred_data.to_string(), Some(builder)) {
+                Ok(resp) => resp,
+                Err(msg) => {
+                    println!("{}", msg);
+                    return
+                },
+            };
 
-        // Print the response
-        for data in resp.observations {
-            let time = NaiveDate::parse_from_str(&data.date, "%Y-%m-%d")
-                .expect("Invalid date format")
-                .and_hms_opt( 7, 30, 0).unwrap();
+            // Print the response
+            for data in resp.observations {
+                let time = NaiveDate::parse_from_str(&data.date, "%Y-%m-%d")
+                    .expect("Invalid date format")
+                    .and_hms_opt(7, 30, 0).unwrap();
 
-            let ct_time = Chicago.from_local_datetime(&time)
-                .earliest().unwrap();
+                let ct_time = Chicago.from_local_datetime(&time)
+                    .earliest().unwrap();
 
-            let utc_time = ct_time.to_utc();
+                let utc_time = ct_time.to_utc();
 
-            let value = f64::from_str(&data.value).unwrap();
+                let value = f64::from_str(&data.value).unwrap();
 
-            let values = BTreeMap::new();
-            if !data_map.contains_key(&utc_time) {
-                let fundamental = Fundamental::new(
-                    symbol.clone(),
-                    utc_time.to_string(),
-                    frequency_to_resolution(resolution_to_frequency(resolution).unwrap()).unwrap(),
-                    values,
-                    None,
-                    None,
-                    fred_data.to_string(),
-                );
-                data_map.insert(utc_time, fundamental);
-            }
-            if let Some(fundamental) = data_map.get_mut(&utc_time) {
-                let value = Decimal::from_f64(value).unwrap();
-                fundamental.values.insert(units_to_string(unit), value);
-                //println!("{:?}", fundamental);
+                let values = BTreeMap::new();
+                if !data_map.contains_key(&utc_time) {
+                    let fundamental = Fundamental::new(
+                        symbol.clone(),
+                        utc_time.to_string(),
+                        frequency_to_resolution(resolution_to_frequency(resolution).unwrap()).unwrap(),
+                        values,
+                        None,
+                        None,
+                        fred_data.to_string(),
+                    );
+                    data_map.insert(utc_time, fundamental);
+                }
+                if let Some(fundamental) = data_map.get_mut(&utc_time) {
+                    let value = Decimal::from_f64(value).unwrap();
+                    fundamental.values.insert(units_to_string(unit.clone()), value);
+                    //println!("{:?}", fundamental);
+                }
             }
         }
-    }
-    for data in data_map {
-        println!("{:?}", data);
+        for data in data_map {
+            println!("{:?}", data);
+        }
     }
 }
