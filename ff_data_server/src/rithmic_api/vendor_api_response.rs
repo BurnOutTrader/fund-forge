@@ -468,7 +468,7 @@ impl VendorApiResponse for RithmicBrokerageClient {
 
             if window_start.day() != last_save_day || is_end {
                 let save_data: Vec<BaseDataEnum> = combined_data.clone().into_values().collect();
-                if let Err(e) = data_storage.save_data_bulk(save_data, is_bulk_download, None).await {
+                if let Err(e) = data_storage.save_data_bulk(save_data, is_bulk_download).await {
                     progress_bar.set_message(format!("Failed to save data for: {} - {}, {}", window_start, window_end, e));
                     break 'main_loop;
                 }
@@ -484,7 +484,7 @@ impl VendorApiResponse for RithmicBrokerageClient {
         }
         if !combined_data.is_empty() {
             let save_data: Vec<BaseDataEnum> = combined_data.clone().into_values().collect();
-            if let Err(e) = data_storage.save_data_bulk(save_data, is_bulk_download, None).await {
+            if let Err(e) = data_storage.save_data_bulk(save_data, is_bulk_download).await {
                 progress_bar.set_message(format!("Failed to save data for: {} - {}, {}", window_start, window_start + resolution_multiplier, e));
             }
         }

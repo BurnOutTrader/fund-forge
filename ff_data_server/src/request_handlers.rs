@@ -80,7 +80,7 @@ pub async fn compressed_file_response(
     }
 
     //todo i need to debug this and determine cause of time outs
-    match data_storage.get_compressed_files_in_range(subscriptions, None, from_time, to_time).await {
+    match data_storage.get_compressed_files_in_range(subscriptions, from_time, to_time).await {
         Ok(data) => DataServerResponse::CompressedHistoricalData {
             callback_id,
             payload: data
