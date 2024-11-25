@@ -73,7 +73,6 @@ pub async fn compressed_file_response(
                 subscription.symbol.clone(),
                 subscription.resolution,
                 subscription.base_data_type,
-                None //fundamentals needs a special subscription fn for live plus historical
             )
         }).collect();
 

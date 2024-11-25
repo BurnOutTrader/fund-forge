@@ -38,8 +38,6 @@ pub struct DownloadConfig {
     pub start_date: NaiveDate,
     #[serde(deserialize_with = "deserialize_from_str")]
     pub resolution: Resolution,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub name: Option<String>
 }
 
 fn deserialize_from_str<'de, T, D>(deserializer: D) -> Result<T, D::Error>
@@ -119,7 +117,7 @@ impl HybridStorage {
         });
     }
 
-    pub async fn pre_subscribe_updates(&self, symbol: Symbol, resolution: Resolution, base_data_type: BaseDataType, data_name: Option<String>,) {
+    pub async fn pre_subscribe_updates(&self, symbol: Symbol, resolution: Resolution, base_data_type: BaseDataType) {
         let client: Arc<dyn VendorApiResponse> = match symbol.data_vendor {
             DataVendor::Rithmic if RITHMIC_DATA_IS_CONNECTED.load(Ordering::SeqCst) => {
                 match get_rithmic_market_data_system().and_then(|sys| RITHMIC_CLIENTS.get(&sys)) {
@@ -136,7 +134,7 @@ impl HybridStorage {
             _ => return,
         };
 
-        let start_time = match self.get_latest_data_time(&symbol, data_name, &resolution, &base_data_type).await {
+        let start_time = match self.get_latest_data_time(&symbol, &resolution, &base_data_type).await {
             Ok(Some(date)) => date,
             Err(_) | Ok(None) => {
                 let path = get_data_folder()
@@ -284,7 +282,7 @@ impl HybridStorage {
                                 )
                             },
                             false => {
-                                match self.get_latest_data_time(&symbol, symbol_config.name.clone(), &symbol_config.resolution, &symbol_config.base_data_type).await {
+                                match self.get_latest_data_time(&symbol, &symbol_config.resolution, &symbol_config.base_data_type).await {
                                     Ok(Some(date)) => date,
                                     Err(_) | Ok(None) => {
                                         DateTime::<Utc>::from_naive_utc_and_offset(
@@ -299,7 +297,7 @@ impl HybridStorage {
                         let end_time = if !from_back {
                             Utc::now()
                         } else {
-                            let earliest = match self.get_earliest_data_time(&symbol, symbol_config.name.clone(), &symbol_config.resolution, &symbol_config.base_data_type).await {
+                            let earliest = match self.get_earliest_data_time(&symbol, &symbol_config.resolution, &symbol_config.base_data_type).await {
                                 Ok(Some(date)) if date > start_time => Some(date), // If we have data and it's after our target start time
                                 _ => continue
                             };
@@ -318,7 +316,7 @@ impl HybridStorage {
 
 
                         if from_back == true {
-                            let latest_date = match self.get_latest_data_time(&symbol, symbol_config.name.clone(), &symbol_config.resolution, &symbol_config.base_data_type).await {
+                            let latest_date = match self.get_latest_data_time(&symbol, &symbol_config.resolution, &symbol_config.base_data_type).await {
                                 Ok(Some(date)) => date,
                                 Err(_) | Ok(None) => {
                                     continue //skip move start date back if we have no existing data
