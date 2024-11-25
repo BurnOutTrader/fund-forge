@@ -876,7 +876,7 @@ impl FundForgeStrategy {
     /// let balance = strategy.balance(&account);
     ///  if balance != dec!(0) {
     ///     println!("Balance: {}", balance);
-    ///     if balance >= MAX_BALANCE {
+    ///     if balance >= MAX_BALANCE || balance <= MIN_BALANCE {
     ///         println!("Balance is too high or too low, flattening all positions: {}", balance);
     ///         if strategy.is_long(&account, &symbol_code) {
     ///             let open_quantity = strategy.position_size(&account, &symbol_code);
