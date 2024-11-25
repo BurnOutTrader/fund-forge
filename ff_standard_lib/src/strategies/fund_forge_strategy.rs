@@ -258,12 +258,15 @@ impl FundForgeStrategy {
         }
     }
 
+
     /// In backtesting this will return the front month using:
     /// ```rust
     /// ff_standard_lib::product_maps::rithmic::rollover::get_front_month;
     /// ```
     /// In Live or LivePaper mode, this function will instead call the rithmic api via the ff_data_server to get the front month.
     /// The front month is automatically adjusted each trading day during rollover, there is no automatic position rollover, this must be handled by the strategy.
+    ///
+    /// This should not be called on every tick, as it will make a request to the data server.
     pub async fn get_front_month(&self, brokerage: Brokerage, symbol_name: SymbolName, exchange: FuturesExchange) -> Option<SymbolCode> {
         match self.mode {
             StrategyMode::Backtest => {
