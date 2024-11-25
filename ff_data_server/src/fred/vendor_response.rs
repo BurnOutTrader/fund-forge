@@ -215,7 +215,7 @@ async fn test_fred_client() {
         for data in resp.observations {
             let time = NaiveDate::parse_from_str(&data.date, "%Y-%m-%d")
                 .expect("Invalid date format")
-                .and_hms_opt(0, 0, 0).unwrap();
+                .and_hms_opt( 7, 30, 0).unwrap();
 
             let ct_time = Chicago.from_local_datetime(&time)
                 .earliest().unwrap();
@@ -253,6 +253,7 @@ async fn test_fred_client() {
             }
         }
     }
-    let (_, first_value) = data_map.iter().next().unwrap();
-    println!("{:?}", first_value);
+    for data in data_map {
+        println!("{:?}", data);
+    }
 }
