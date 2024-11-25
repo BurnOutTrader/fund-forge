@@ -24,6 +24,7 @@ See below for all the free historical data you will ever need.
 - 21-11-24: Added Trade statistics for high accuracy backtesting and statistics. [see](ff_standard_lib/src/strategies/STRATEGIES_README.md/#statistics)
 - 25-11-24: Fixed a Live trading bug related to live warm up that was created during weekend development.
 - 25-11-24: Add a strategy.get_front_month() function to allow getting front month `SymbolCode` automatically from rithmic. (in backtesting it is calculated from a map)
+- 25-11-24: Found bug from weekend development, pre live warm up data update sometimes starts from earliest data, this is a bug and will be fixed on 26th.
 
 ### Current State and Future Development
 The platform is currently in a semi-working state, think of it as a proof of concept, there is a lot of untested functionality, both in backtesting and live trading.
