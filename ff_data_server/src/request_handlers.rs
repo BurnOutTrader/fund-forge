@@ -35,6 +35,7 @@ pub async fn compressed_file_response(
     to_time: String,
     callback_id: u64,
 ) -> DataServerResponse {
+    //eprintln!("Getting compressed files in range: {:?}", subscriptions);
     let from_time = match from_time.parse::<DateTime<Utc>>() {
         Ok(t) => t,
         Err(e) => return DataServerResponse::Error {
@@ -57,6 +58,7 @@ pub async fn compressed_file_response(
             error: FundForgeError::ServerErrorDebug("Date range exceeds maximum of 365 days".to_string())
         }
     }
+
 
     let data_storage = match DATA_STORAGE.get() {
         Some(storage) => storage,
@@ -81,9 +83,12 @@ pub async fn compressed_file_response(
 
     //todo i need to debug this and determine cause of time outs
     match data_storage.get_compressed_files_in_range(subscriptions, from_time, to_time).await {
-        Ok(data) => DataServerResponse::CompressedHistoricalData {
-            callback_id,
-            payload: data
+        Ok(data) => {
+           // eprintln!("Got compressed files");
+            DataServerResponse::CompressedHistoricalData {
+                callback_id,
+                payload: data
+            }
         },
         Err(e) => DataServerResponse::Error {
             callback_id,

@@ -12,13 +12,14 @@ use dashmap::DashMap;
 use flate2::Compression;
 use flate2::read::GzDecoder;
 use flate2::write::GzEncoder;
+use futures_util::future::join_all;
 use indicatif::{MultiProgress};
 use lazy_static::lazy_static;
 use memmap2::{Mmap};
 use tokio::sync::{OnceCell, Semaphore};
 use tokio::task;
 use tokio::task::JoinHandle;
-use tokio::time::interval;
+use tokio::time::{interval, timeout};
 use ff_standard_lib::messages::data_server_messaging::{FundForgeError};
 use ff_standard_lib::standardized_types::base_data::base_data_type::BaseDataType;
 use ff_standard_lib::standardized_types::base_data::traits::BaseData;
@@ -194,6 +195,7 @@ impl HybridStorage {
 
         if let Some(mmap) = self.mmap_cache.get(&path_str) {
             self.cache_last_accessed.insert(path_str.clone(), Utc::now());
+            println!("Found mmap in cache for file: {:?}", file_path);
             return Ok(Arc::clone(mmap.value()));
         }
 
@@ -312,12 +314,12 @@ impl HybridStorage {
         // Create mmap
         let temp_file = File::open(&temp_path)?;
         let mmap = Arc::new(unsafe { Mmap::map(&temp_file)? });
-        //self.mmap_cache.insert(path_str.clone(), Arc::clone(&mmap));
+        self.mmap_cache.insert(path_str.clone(), Arc::clone(&mmap));
         self.cache_last_accessed.insert(path_str.clone(), Utc::now());
 
         drop(temp_file);
         std::fs::remove_file(&temp_path)?;
-
+        println!("Created mmap for file: {:?}", file_path);
         Ok(mmap)
     }
 
@@ -512,54 +514,124 @@ impl HybridStorage {
         start: DateTime<Utc>,
         end: DateTime<Utc>,
     ) -> Result<Vec<Vec<u8>>, FundForgeError> {
+        const TIMEOUT_DURATION: Duration = Duration::from_secs(60);
+        const MAX_CONCURRENT_FILES: usize = 10;
+
         if subscription.is_empty() {
             return Err(FundForgeError::ClientSideErrorDebug("No subscriptions provided for file range".to_string()));
         }
-        // Create a single large buffer to be reused for all files
-        let mut files_data = Vec::new();
-        for subscription in subscription {
-            let file_paths = self.get_files_in_range(&subscription.symbol, &subscription.resolution, &subscription.base_data_type, start, end).await?;
 
-            if file_paths.is_empty() {
-                continue;
-            }
+        // Create a bounded semaphore for concurrent file operations
+        let file_semaphore = Arc::new(Semaphore::new(MAX_CONCURRENT_FILES));
+        let mut file_tasks = Vec::new();
+
+        for subscription in subscription {
+            let file_paths = self.get_files_in_range(
+                &subscription.symbol,
+                &subscription.resolution,
+                &subscription.base_data_type,
+                start,
+                end
+            ).await?;
 
             for file_path in file_paths {
                 if !file_path.exists() {
                     continue;
                 }
+
                 let path_str = file_path.to_string_lossy().to_string();
-                let semaphore = self.file_locks
+                let file_lock = self.file_locks
                     .entry(path_str.clone())
-                    .or_insert_with(|| Arc::new(Semaphore::new(1)));
+                    .or_insert_with(|| Arc::new(Semaphore::new(1)))
+                    .clone();
 
-                let permit = semaphore.acquire().await.map_err(|e| {
-                    FundForgeError::ServerErrorDebug(format!("Failed to acquire lock: {}", e))
-                })?;
+                let file_sem = file_semaphore.clone();
 
-                let mut file = File::open(&file_path)
-                    .map_err(|e| FundForgeError::ServerErrorDebug(format!("Error opening file {:?}: {}", file_path, e)))?;
+                // Create an async task for each file read
+                let task = async move {
+                    // Acquire the global file semaphore
+                    let _file_permit = match file_sem.acquire().await {
+                        Ok(p) => p,
+                        Err(e) => return Err(FundForgeError::ServerErrorDebug(
+                            format!("Error acquiring global file semaphore: {}", e)
+                        )),
+                    };
 
-                let file_size = file.metadata()
-                    .map_err(|e| FundForgeError::ServerErrorDebug(format!("Error getting file size {:?}: {}", file_path, e)))?
-                    .len() as usize;
+                    // Acquire the file-specific lock with timeout
+                    let file_permit = match timeout(
+                        Duration::from_secs(5),
+                        file_lock.acquire()
+                    ).await {
+                        Ok(permit) => match permit {
+                            Ok(p) => p,
+                            Err(e) => return Err(FundForgeError::ServerErrorDebug(
+                                format!("Error acquiring file lock: {}", e)
+                            )),
+                        }
+                        Err(_) => return Err(FundForgeError::ServerErrorDebug(
+                            format!("Timeout waiting for file lock: {}", path_str)
+                        )),
+                    };
 
-                let mut compressed_data = Vec::with_capacity(file_size);
+                    // Open and read the file with timeout
+                    let result = timeout(
+                        Duration::from_secs(10),
+                        async {
+                            let mut file = File::open(&file_path)
+                                .map_err(|e| FundForgeError::ServerErrorDebug(
+                                    format!("Error opening file {:?}: {}", file_path, e)
+                                ))?;
 
-                // Single read operation
-                file.read_to_end(&mut compressed_data)
-                    .map_err(|e| FundForgeError::ServerErrorDebug(
-                        format!("Error reading file {:?}: {}", file_path, e)
-                    ))?;
+                            let file_size = file.metadata()
+                                .map_err(|e| FundForgeError::ServerErrorDebug(
+                                    format!("Error getting file size {:?}: {}", file_path, e)
+                                ))?.len() as usize;
 
-                files_data.push(compressed_data);
-                drop(permit);
+                            let mut compressed_data = Vec::with_capacity(file_size);
+                            file.read_to_end(&mut compressed_data)
+                                .map_err(|e| FundForgeError::ServerErrorDebug(
+                                    format!("Error reading file {:?}: {}", file_path, e)
+                                ))?;
+
+                            Ok::<Vec<u8>, FundForgeError>(compressed_data)
+                        }
+                    ).await;
+
+                    drop(file_permit);
+
+                    match result {
+                        Ok(data) => data,
+                        Err(_) => Err(FundForgeError::ServerErrorDebug(
+                            format!("Timeout reading file: {}", path_str)
+                        )),
+                    }
+                };
+
+                file_tasks.push(task);
+            }
+        }
+
+        // Execute all file tasks with an overall timeout
+        let results = match timeout(TIMEOUT_DURATION, join_all(file_tasks)).await {
+            Ok(results) => results,
+            Err(_) => return Err(FundForgeError::ServerErrorDebug(
+                "Overall operation timeout exceeded".to_string()
+            )),
+        };
+
+        // Collect successful results
+        let mut files_data = Vec::new();
+        for result in results {
+            match result {
+                Ok(data) => files_data.push(data),
+                Err(e) => eprintln!("Error processing file: {}", e),
             }
         }
 
         if files_data.is_empty() {
             return Err(FundForgeError::ServerErrorDebug("No files found in range".to_string()));
         }
+
         Ok(files_data)
     }
 }
