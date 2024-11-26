@@ -42,7 +42,7 @@ async fn main() {
         StrategyMode::Backtest,
         dec!(100000),
         Currency::USD,
-        NaiveDate::from_ymd_opt(2024, 11, 1).unwrap().and_hms_opt(0, 0, 0).unwrap(),
+        NaiveDate::from_ymd_opt(2024, 11, 5).unwrap().and_hms_opt(0, 0, 0).unwrap(),
         NaiveDate::from_ymd_opt(2024, 11, 26).unwrap().and_hms_opt(0, 0, 0).unwrap(),
         Australia::Sydney,
         Duration::hours(1),
@@ -73,13 +73,16 @@ async fn main() {
 // 5. The limit order expiry is on the exchange/rithmic side.
 // 6. It will cancel the take profit order if the position is closed.
 
-const RENKO_RANGE: Decimal = dec!(10);
+const RENKO_RANGE: Decimal = dec!(3);
 const MAX_SIZE: Decimal = dec!(20);
 const SIZE: Decimal = dec!(5);
 const INCREMENTAL_SCALP_PNL: Decimal = dec!(150);
 const LIMIT_ORDER_EXPIRE_IN_SECS: i64 = 60 * 5;
 const TRADING_LONG: bool = true;
 const TRADING_SHORT: bool = false;
+const MAX_BALANCE: Decimal = dec!(1000000);
+
+const MIN_BALANCE: Decimal = dec!(1000);
 
 #[allow(clippy::const_err)]
 pub async fn on_data_received(
@@ -142,6 +145,20 @@ pub async fn on_data_received(
                                         }
                                         println!("Market is closing soon, waiting for next day: Time: {}", strategy.time_local());
                                         continue;
+                                    }
+                                }
+
+                                // Stop trading if we hit max loss or max profit
+                                let balance = strategy.balance(&account);
+                                if balance != dec!(0) {
+                                    println!("Balance: {}", balance);
+                                    if balance >= MAX_BALANCE || balance <= MIN_BALANCE {
+                                        println!("Balance is too high or too low, flattening all positions: {}", balance);
+                                        if strategy.is_long(&account, &symbol_code) {
+                                            let open_quantity = strategy.position_size(&account, &symbol_code);
+                                            exit_order_id = Some(strategy.exit_long(&candle.symbol.name, Some(symbol_code.clone()), &account, None, open_quantity, "Exit Long Target Reached".to_string()).await);
+                                        }
+                                        break 'strategy_loop;
                                     }
                                 }
 
