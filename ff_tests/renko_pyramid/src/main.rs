@@ -4,7 +4,7 @@ use chrono_tz::Australia;
 use colored::Colorize;
 use ff_standard_lib::apis::rithmic::rithmic_systems::RithmicSystem;
 use rust_decimal::Decimal;
-use ff_standard_lib::standardized_types::enums::{MarketType, OrderSide, PositionSide, StrategyMode};
+use ff_standard_lib::standardized_types::enums::{Exchange, FuturesExchange, MarketType, OrderSide, PositionSide, StrategyMode};
 use ff_standard_lib::strategies::strategy_events::{StrategyEvent};
 use ff_standard_lib::standardized_types::subscriptions::{DataSubscription, SymbolName};
 use ff_standard_lib::strategies::fund_forge_strategy::FundForgeStrategy;
@@ -61,7 +61,7 @@ async fn main() {
 
     eprintln!("Strategy Initialized");
 
-    on_data_received(Arc::new(strategy), strategy_event_receiver, subscription, symbol_name, account).await;
+    on_data_received(Arc::new(strategy), strategy_event_receiver, subscription, symbol_name, account, exchange).await;
 }
 
 // This strategy is designed to pyramid into strong trends using renko. It will not work trading mean reverting markets or trading in both directions.
@@ -73,7 +73,7 @@ async fn main() {
 // 5. The limit order expiry is on the exchange/rithmic side.
 // 6. It will cancel the take profit order if the position is closed.
 
-const RENKO_RANGE: Decimal = dec!(3);
+const RENKO_RANGE: Decimal = dec!(10);
 const MAX_SIZE: Decimal = dec!(20);
 const SIZE: Decimal = dec!(5);
 const INCREMENTAL_SCALP_PNL: Decimal = dec!(150);
@@ -90,7 +90,8 @@ pub async fn on_data_received(
     mut event_receiver: mpsc::Receiver<StrategyEvent>,
     subscription: DataSubscription,
     symbol_name: SymbolName,
-    account: Account
+    account: Account,
+    exchange: FuturesExchange
 ) {
     println!("Starting Renko Pyramid Strategy with parameters: Renko Range: {}, Max Size: {}, Size: {}, Incremental Scalp PNL: {}, Limit Order Expire in Secs: {}, Trading Long: {}, Trading Short: {}", RENKO_RANGE, MAX_SIZE, SIZE, INCREMENTAL_SCALP_PNL, LIMIT_ORDER_EXPIRE_IN_SECS, TRADING_LONG, TRADING_SHORT);
 
@@ -106,7 +107,7 @@ pub async fn on_data_received(
     let mut last_short_result = Result::BreakEven;
     let mut last_long_result = Result::BreakEven;
     let hours = get_futures_trading_hours(&symbol_name).unwrap();
-    let symbol_code = "MNQZ4".to_string();
+    let symbol_code = strategy.get_front_month(account.brokerage, symbol_name.clone(), exchange).await.unwrap();
     // The engine will send a buffer of strategy events at the specified buffer interval, it will send an empty buffer if no events were buffered in the period.
     'strategy_loop: while let Some(strategy_event) = event_receiver.recv().await {
         //println!("Strategy: Buffer Received Time: {}", strategy.time_local());
