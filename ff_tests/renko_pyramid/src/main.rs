@@ -293,10 +293,6 @@ pub async fn on_data_received(
                             }
                             _ => {}
                         }
-                        let strategy = strategy.clone();
-                        task::spawn(async move {
-                            strategy.export_positions_to_csv(&String::from("./trades exports"));
-                        });
                     },
                 }
                 let msg = format!("{}, Time Local: {}", event, event.time_local(strategy.time_zone()));
