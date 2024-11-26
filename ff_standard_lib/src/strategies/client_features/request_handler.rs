@@ -58,6 +58,12 @@ pub(crate) async fn request_handler(
                         if let Err(e) =  sender.value_mut().write_all(&prefixed_msg).await {
                             eprintln!("Error sending message: {:?}", e);
                         }
+                        match sender.flush().await {
+                            Ok(_) => {}
+                            Err(e) => {
+                                eprintln!("Error flushing message: {:?}", e);
+                            }
+                        }
                     }
                 }
                 StrategyRequest::OneWay(connection_type, request) => {
@@ -74,6 +80,12 @@ pub(crate) async fn request_handler(
                         // Lock the mutex to get_requests mutable access
                         if let Err(e) =  sender.value_mut().write_all(&prefixed_msg).await {
                             eprintln!("Error sending message: {:?}", e);
+                        }
+                        match sender.flush().await {
+                            Ok(_) => {}
+                            Err(e) => {
+                                eprintln!("Error flushing message: {:?}", e);
+                            }
                         }
                     }
                 }
