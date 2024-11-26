@@ -12,6 +12,7 @@ use crate::standardized_types::broker_enum::Brokerage;
 use crate::standardized_types::new_types::{Price, Volume};
 use crate::standardized_types::orders::{OrderId, OrderUpdateEvent};
 use crate::standardized_types::time_slices::TimeSlice;
+use crate::strategies::handlers::market_handler::price_service::MarketPriceService;
 use crate::strategies::ledgers::ledger::{Ledger, LedgerMessage};
 use crate::strategies::strategy_events::StrategyEvent;
 
@@ -19,14 +20,16 @@ pub(crate) struct LedgerService {
     pub (crate) ledgers: DashMap<Account, &'static Ledger>,
     ledger_senders: DashMap<Account, tokio::sync::mpsc::Sender<LedgerMessage>>,
     strategy_sender: tokio::sync::mpsc::Sender<StrategyEvent>,
+    market_price_service: Arc<MarketPriceService>
 }
 
 impl LedgerService {
-    pub fn new(strategy_sender: tokio::sync::mpsc::Sender<StrategyEvent>) -> Self {
+    pub fn new(strategy_sender: tokio::sync::mpsc::Sender<StrategyEvent>, market_price_service: Arc<MarketPriceService>) -> Self {
         LedgerService {
             ledgers: Default::default(),
             ledger_senders: Default::default(),
             strategy_sender,
+            market_price_service
         }
     }
 
@@ -180,7 +183,8 @@ impl LedgerService {
                         strategy_mode,
                         synchronize_accounts,
                         self.strategy_sender.clone(),
-                        position_calculation_mode
+                        position_calculation_mode,
+                        self.market_price_service.clone(),
                     ));
                     let static_ledger: &'static Ledger = Box::leak(ledger);
 
@@ -218,6 +222,7 @@ impl LedgerService {
                         strategy_sender: self.strategy_sender.clone(),
                         rates: Arc::new(DashMap::new()),
                         position_calculation_mode,
+                        market_price_service: self.market_price_service.clone(),
 
                     });
                     let static_ledger: &'static Ledger = Box::leak(ledger);

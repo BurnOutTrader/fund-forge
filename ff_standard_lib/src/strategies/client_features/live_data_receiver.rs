@@ -16,7 +16,7 @@ use crate::strategies::client_features::init_clients::create_async_api_client;
 use crate::strategies::client_features::server_connections::set_warmup_complete;
 use crate::strategies::handlers::indicator_handler::IndicatorHandler;
 use crate::strategies::handlers::live_warmup::WARMUP_COMPLETE_BROADCASTER;
-use crate::strategies::handlers::market_handler::price_service::{get_price_service_sender, PriceServiceMessage};
+use crate::strategies::handlers::market_handler::price_service::MarketPriceService;
 use crate::strategies::handlers::subscription_handler::SubscriptionHandler;
 use crate::strategies::historical_time::{get_backtest_time, update_backtest_time};
 use crate::strategies::ledgers::ledger_service::LedgerService;
@@ -30,6 +30,7 @@ pub async fn handle_live_data(
     ledger_service: Arc<LedgerService>,
     indicator_handler: Arc<IndicatorHandler>,
     subscription_handler: Arc<SubscriptionHandler>,
+    market_price_service: Arc<MarketPriceService>,
 ) {
 
     let mut stream_client = match create_async_api_client(&connection_settings, true).await {
@@ -59,14 +60,13 @@ pub async fn handle_live_data(
     let _ = tokio::task::spawn_blocking(move || {
         let rt = Runtime::new().unwrap();
         rt.block_on(async {
-            let price_service_sender = get_price_service_sender();
             receive_and_process(
                 stream_client,
                 strategy_event_sender,
                 ledger_service,
                 indicator_handler,
                 subscription_handler,
-                price_service_sender,
+                market_price_service,
             ).await;
         });
     });
@@ -78,7 +78,7 @@ async fn receive_and_process(
     ledger_service: Arc<LedgerService>,
     indicator_handler: Arc<IndicatorHandler>,
     subscription_handler: Arc<SubscriptionHandler>,
-    price_service_sender: Sender<PriceServiceMessage>,
+    price_service: Arc<MarketPriceService>,
 ) {
     const LENGTH: usize = 4;
     let mut length_bytes = [0u8; LENGTH];
@@ -140,7 +140,7 @@ async fn receive_and_process(
             let mut strategy_time_slice = TimeSlice::new();
             let arc_slice = Arc::new(slice.clone());
 
-            let _ = price_service_sender.send(PriceServiceMessage::TimeSliceUpdate(arc_slice.clone())).await;
+            price_service.update_market_data(arc_slice.clone());
             ledger_service.timeslice_updates(arc_slice.clone()).await;
 
             if let Some(consolidated_data) = subscription_handler.update_time_slice(arc_slice).await {
@@ -196,7 +196,7 @@ async fn receive_and_process(
                              let mut strategy_time_slice = TimeSlice::new();
                             if !time_slice.is_empty() {
                                 let arc_slice = Arc::new(time_slice.clone());
-                                let _ = price_service_sender.send(PriceServiceMessage::TimeSliceUpdate(arc_slice.clone())).await;
+                                price_service.update_market_data(arc_slice.clone());
                                 ledger_service.timeslice_updates(arc_slice.clone()).await;
 
                                 if let Some(consolidated_data) = subscription_handler.update_time_slice(arc_slice).await {

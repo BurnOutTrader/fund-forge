@@ -11,7 +11,6 @@ use crate::standardized_types::orders::{OrderId, OrderUpdateEvent};
 use crate::standardized_types::position::{Position, PositionUpdateEvent};
 use crate::standardized_types::subscriptions::{SymbolCode, SymbolName};
 use crate::strategies::client_features::other_requests::get_exchange_rate;
-use crate::strategies::handlers::market_handler::price_service::price_service_request_market_fill_price;
 use crate::strategies::strategy_events::StrategyEvent;
 
 impl Ledger {
@@ -370,17 +369,14 @@ impl Ledger {
                 _ => unreachable!("This shouldn't happen")
             };
 
-            let market_price = match price_service_request_market_fill_price(
+            let market_price = match self.market_price_service.estimate_fill_price(
                 order_side,
-                symbol_name.clone(),
-                symbol_code.clone(),
+                &symbol_name,
+                &symbol_code,
                 quantity
-            ).await {
-                Ok(price) => match price.price() {
-                    None => continue,
-                    Some(price) => price
-                },
-                Err(_) => continue
+            ) {
+                Some(price) => price,
+                None => continue
             };
 
             const FLATTEN_ALL_ID_TAG: &str = "Flatten All"; //use this as tag and order_id

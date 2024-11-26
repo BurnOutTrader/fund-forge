@@ -22,6 +22,7 @@ use crate::strategies::handlers::subscription_handler::SubscriptionHandler;
 use crate::standardized_types::orders::OrderUpdateEvent;
 use crate::strategies::client_features::{request_handler, response_handler};
 use crate::strategies::client_features::request_handler::DATA_SERVER_SENDER;
+use crate::strategies::handlers::market_handler::price_service::MarketPriceService;
 use crate::strategies::ledgers::ledger_service::LedgerService;
 
 lazy_static! {
@@ -47,7 +48,8 @@ pub(crate) async fn init_connections(
     strategy_event_sender: Sender<StrategyEvent>,
     ledger_service: Arc<LedgerService>,
     indicator_handler: Arc<IndicatorHandler>,
-    subscription_handler: Arc<SubscriptionHandler>
+    subscription_handler: Arc<SubscriptionHandler>,
+    market_price_service: Arc<MarketPriceService>
 ) {
     let server_receivers: DashMap<ConnectionType, ReadHalf<TlsStream<TcpStream>>> = DashMap::with_capacity(SETTINGS_MAP.len());
     let server_senders: DashMap<ConnectionType, WriteHalf<TlsStream<TcpStream>>> = DashMap::with_capacity(SETTINGS_MAP.len());
@@ -75,5 +77,5 @@ pub(crate) async fn init_connections(
 
     let callbacks: Arc<DashMap<u64, oneshot::Sender<DataServerResponse>>> = Default::default();
     request_handler::request_handler(rx, server_senders, callbacks.clone()).await;
-    response_handler::response_handler(mode, buffer_duration, server_receivers, callbacks, order_updates_sender, synchronise_accounts, strategy_event_sender, ledger_service, indicator_handler, subscription_handler).await;
+    response_handler::response_handler(mode, buffer_duration, server_receivers, callbacks, order_updates_sender, synchronise_accounts, strategy_event_sender, ledger_service, indicator_handler, subscription_handler, market_price_service).await;
 }

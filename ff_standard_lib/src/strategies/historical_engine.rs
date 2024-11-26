@@ -12,7 +12,7 @@ use crate::standardized_types::subscriptions::DataSubscription;
 use tokio::sync::{broadcast, mpsc, Notify};
 use crate::strategies::handlers::indicator_handler::IndicatorHandler;
 use crate::strategies::handlers::market_handler::backtest_matching_engine::BackTestEngineMessage;
-use crate::strategies::handlers::market_handler::price_service::{get_price_service_sender, PriceServiceMessage};
+use crate::strategies::handlers::market_handler::price_service::MarketPriceService;
 use crate::strategies::handlers::subscription_handler::SubscriptionHandler;
 use crate::strategies::handlers::timed_events_handler::TimedEventHandler;
 use crate::strategies::historical_time::update_backtest_time;
@@ -34,7 +34,8 @@ pub(crate) struct HistoricalEngine {
     ledger_service: Arc<LedgerService>,
     timed_event_handler: Arc<TimedEventHandler>,
     indicator_handler: Arc<IndicatorHandler>,
-    subscription_handler: Arc<SubscriptionHandler>
+    subscription_handler: Arc<SubscriptionHandler>,
+    market_price_service: Arc<MarketPriceService>
 }
 
 // The date 2023-08-19 is in ISO week 33 of the year 2023
@@ -53,7 +54,8 @@ impl HistoricalEngine {
         ledger_service: Arc<LedgerService>,
         timed_event_handler: Arc<TimedEventHandler>,
         indicator_handler: Arc<IndicatorHandler>,
-        subscription_handler: Arc<SubscriptionHandler>
+        subscription_handler: Arc<SubscriptionHandler>,
+        market_price_service: Arc<MarketPriceService>
     ) -> Self {
         let rx = subscription_handler.subscribe_primary_subscription_updates();
         let engine = HistoricalEngine {
@@ -71,7 +73,8 @@ impl HistoricalEngine {
             ledger_service,
             timed_event_handler,
             indicator_handler,
-            subscription_handler
+            subscription_handler,
+            market_price_service
         };
         engine
     }
@@ -115,7 +118,6 @@ impl HistoricalEngine {
         mode: StrategyMode,
     ) {
         println!("Historical Engine: Warming up the strategy...");
-        let market_price_sender = get_price_service_sender();
         // here we are looping through 1 day at a time, if the strategy updates its subscriptions we will stop the data feed, download the historical data again to include updated symbols, and resume from the next time to be processed.
         let mut warm_up_complete = false;
         let mut primary_subscriptions = loop {
@@ -233,10 +235,7 @@ impl HistoricalEngine {
                 // update our consolidators and create the strategies time slice with any new data or just create empty slice.
                 if !time_slice.is_empty() {
                     let arc_slice = Arc::new(time_slice.clone());
-                    match market_price_sender.send(PriceServiceMessage::TimeSliceUpdate(arc_slice.clone())).await {
-                        Ok(_) => {}
-                        Err(e) => panic!("Market Handler: Error sending backtest message: {}", e)
-                    }
+                    self.market_price_service.update_market_data(arc_slice.clone());
                     self.ledger_service.timeslice_updates(arc_slice.clone()).await;
 
                     // Add only primary data which the strategy has subscribed to into the strategies time slice

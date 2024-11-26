@@ -11,7 +11,7 @@ use crate::standardized_types::enums::{OrderSide};
 use crate::product_maps::rithmic::maps::get_futures_trading_hours;
 use crate::standardized_types::new_types::{Price, Volume};
 use crate::standardized_types::orders::{Order, OrderId, OrderRequest, OrderState, OrderType, OrderUpdateEvent, OrderUpdateType, TimeInForce};
-use crate::strategies::handlers::market_handler::price_service::{price_service_request_limit_fill_price_quantity, price_service_request_market_fill_price, price_service_request_market_price, PriceServiceResponse};
+use crate::strategies::handlers::market_handler::price_service::MarketPriceService;
 use crate::strategies::historical_time::get_backtest_time;
 use crate::strategies::ledgers::ledger_service::{LedgerService};
 use crate::strategies::strategy_events::StrategyEvent;
@@ -26,7 +26,8 @@ pub(crate) async fn backtest_matching_engine(
     closed_order_cache: Arc<DashMap<OrderId, Order>>,
     strategy_event_sender: Sender<StrategyEvent>,
     ledger_service: Arc<LedgerService>,
-    notify: Arc<tokio::sync::Notify>
+    notify: Arc<tokio::sync::Notify>,
+    market_price_service: Arc<MarketPriceService>
 ) -> Sender<BackTestEngineMessage> {
     let (sender, mut receiver) = tokio::sync::mpsc::channel(100);
     tokio::task::spawn(async move {
@@ -38,12 +39,9 @@ pub(crate) async fn backtest_matching_engine(
                     let time = get_backtest_time();
                     match order_request {
                         OrderRequest::Create { account, mut order, .. } => {
-                            let market_price = match price_service_request_market_price(order.side, order.symbol_name.clone(), order.symbol_code.clone()).await {
-                                Ok(price) => match price.price() {
-                                    None => panic!("No market price found"),
-                                    Some(price) => price
-                                }
-                                Err(_) => panic!("No market price found")
+                            let market_price = match market_price_service.get_market_price(order.side, &order.symbol_name, &order.symbol_code) {
+                                Some(price) => price,
+                                None => panic!("No market price found")
                             };
                             //eprintln!("Market Price: {}", market_price);
                             if order.quantity_open <= dec!(0) {
@@ -157,7 +155,7 @@ pub(crate) async fn backtest_matching_engine(
                                 Ok(_) => {}
                                 Err(e) => eprintln!("Timed Event Handler: Failed to send event: {}", e)
                             }
-                            simulated_order_matching(&open_order_cache, &closed_order_cache, strategy_event_sender.clone(), &ledger_service).await;
+                            simulated_order_matching(&open_order_cache, &closed_order_cache, strategy_event_sender.clone(), &ledger_service, &market_price_service).await;
                         }
                         OrderRequest::Cancel { account,order_id } => {
                             if let Some((existing_order_id, order)) = open_order_cache.remove(&order_id) {
@@ -185,7 +183,7 @@ pub(crate) async fn backtest_matching_engine(
                                     Err(e) => eprintln!("Timed Event Handler: Failed to send event: {}", e)
                                 }
                             }
-                            simulated_order_matching(&open_order_cache, &closed_order_cache, strategy_event_sender.clone(), &ledger_service).await;
+                            simulated_order_matching(&open_order_cache, &closed_order_cache, strategy_event_sender.clone(), &ledger_service, &market_price_service).await;
                         }
                         OrderRequest::Update { account, order_id, update } => {
                             if let Some((order_id, mut order)) = open_order_cache.remove(&order_id) {
@@ -222,7 +220,7 @@ pub(crate) async fn backtest_matching_engine(
                                     Err(e) => eprintln!("Timed Event Handler: Failed to send event: {}", e)
                                 }
                             }
-                            simulated_order_matching(&open_order_cache, &closed_order_cache, strategy_event_sender.clone(), &ledger_service).await;
+                            simulated_order_matching(&open_order_cache, &closed_order_cache, strategy_event_sender.clone(), &ledger_service, &market_price_service).await;
                         }
                         OrderRequest::CancelAll { account } => {
                             let mut remove = vec![];
@@ -251,7 +249,7 @@ pub(crate) async fn backtest_matching_engine(
                                     closed_order_cache.insert(order_id, order);
                                 }
                             }
-                            simulated_order_matching(&open_order_cache, &closed_order_cache, strategy_event_sender.clone(), &ledger_service).await;
+                            simulated_order_matching(&open_order_cache, &closed_order_cache, strategy_event_sender.clone(), &ledger_service, &market_price_service).await;
                         }
                         OrderRequest::FlattenAllFor { account} => {
                             let orders_to_remove: Vec<_> = open_order_cache.iter()
@@ -283,7 +281,7 @@ pub(crate) async fn backtest_matching_engine(
                 }
                 BackTestEngineMessage::TickBufferTime => {
                     if !open_order_cache.is_empty() {
-                        simulated_order_matching(&open_order_cache, &closed_order_cache, strategy_event_sender.clone(), &ledger_service).await;
+                        simulated_order_matching(&open_order_cache, &closed_order_cache, strategy_event_sender.clone(), &ledger_service, &market_price_service).await;
                     }
                     notify.notify_one();
                 }
@@ -297,7 +295,8 @@ pub(crate) async fn simulated_order_matching (
     open_order_cache: &Arc<DashMap<OrderId, Order>>,
     closed_order_cache: &Arc<DashMap<OrderId, Order>>,
     strategy_event_sender: Sender<StrategyEvent>,
-    ledger_service: &Arc<LedgerService>
+    ledger_service: &Arc<LedgerService>,
+    market_price_service: &Arc<MarketPriceService>
 ) {
     let time = get_backtest_time();
     let mut rejected = Vec::new();
@@ -403,60 +402,40 @@ pub(crate) async fn simulated_order_matching (
         //3. respond with an order event
         match &order.order_type {
             OrderType::Limit => {
-                let market_price = match price_service_request_market_price(order.side, order.symbol_name.clone(), order.symbol_code.clone()).await {
-                    Ok(price) => match price.price() {
-                        None => continue,
-                        Some(price) => price
-                    }
-                    Err(_) => continue
+                let market_price = match market_price_service.get_market_price(order.side, &order.symbol_name, &order.symbol_code) {
+                    Some(price) => price,
+                    None => panic!("No market price found")
                 };
 
                 let is_fill_triggered = match order.side {
                     OrderSide::Buy => market_price <= order.limit_price.unwrap(),
                     OrderSide::Sell => market_price >= order.limit_price.unwrap()
                 };
-                let (market_price, volume_filled) = match price_service_request_limit_fill_price_quantity(order.side, order.symbol_name.clone(), order.symbol_code.clone(), order.quantity_open, order.limit_price.unwrap()).await {
-                    Ok(price_volume) => {
-                        match price_volume {
-                            PriceServiceResponse::LimitFillPriceEstimate { fill_price, fill_volume } => {
-                                if let (Some(fill_price), Some(fill_volume)) = (fill_price, fill_volume) {
-                                    (fill_price, fill_volume)
-                                } else {
-                                    continue
-                                }
-                            }
-                            _ => panic!("Incorrect response received from price service")
-                        }
-                    },
-                    Err(_) => continue
-                };
                 if is_fill_triggered {
+                    let (market_fill_price, volume_filled) = match market_price_service.estimate_limit_fill(order.side, &order.symbol_name, &order.symbol_code, order.quantity_open, order.limit_price.unwrap()) {
+                        Some((price, volume)) => {
+                            (price, volume)
+                        },
+                        None => continue
+                    };
                     match volume_filled == order.quantity_open {
-                        true => filled.push((order.id.clone(),  market_price)),
-                        false => partially_filled.push((order.id.clone(),  market_price, volume_filled))
+                        true => filled.push((order.id.clone(),  market_fill_price)),
+                        false => partially_filled.push((order.id.clone(),  market_fill_price, volume_filled))
                     }
                 }
             }
             OrderType::Market => {
-                let market_price = match price_service_request_market_fill_price(order.side, order.symbol_name.clone(), order.symbol_code.clone(), order.quantity_open).await {
-                    Ok(price) => {
-                        match price.price() {
-                            None =>  continue,
-                            Some(price) => price
-                        }
-                    },
-                    Err(_) => continue
+                let market_price = match market_price_service.estimate_fill_price(order.side, &order.symbol_name, &order.symbol_code, order.quantity_open) {
+                    Some(price) => price,
+                    None => continue
                 };
                 filled.push((order.id.clone(), market_price));
             },
             // Handle OrderType::StopMarket separately
             OrderType::StopMarket => {
-                let market_price = match price_service_request_market_price(order.side, order.symbol_name.clone(), order.symbol_code.clone(),).await {
-                    Ok(price) => match price.price() {
-                        None => continue,
-                        Some(price) => price
-                    }
-                    Err(_) => continue
+                let market_price = match market_price_service.get_market_price(order.side, &order.symbol_name, &order.symbol_code) {
+                    Some(price) => price,
+                    None => panic!("No market price found")
                 };
 
                 let trigger_price = order.trigger_price.unwrap();
@@ -465,27 +444,20 @@ pub(crate) async fn simulated_order_matching (
                     OrderSide::Sell => market_price <= trigger_price,
                 };
 
-                let market_fill_price = match price_service_request_market_fill_price(order.side, order.symbol_name.clone(), order.symbol_code.clone(), order.quantity_open).await {
-                    Ok(price) => match price.price() {
-                        None => continue,
-                        Some(price) => price
-                    }
-                    Err(_) => continue,
-                };
-
                 if is_fill_triggered {
+                    let market_fill_price = match market_price_service.estimate_fill_price(order.side, &order.symbol_name, &order.symbol_code, order.quantity_open) {
+                        Some(price) => price,
+                        None => continue
+                    };
                     filled.push((order.id.clone(), market_fill_price));
                 }
             }
 
             // Handle OrderType::MarketIfTouched separately
             OrderType::MarketIfTouched => {
-                let market_price = match price_service_request_market_price(order.side, order.symbol_name.clone(), order.symbol_code.clone(),).await {
-                    Ok(price) => match price.price() {
-                        None => continue,
-                        Some(price) => price
-                    }
-                    Err(_) => continue
+                let market_price = match market_price_service.get_market_price(order.side, &order.symbol_name, &order.symbol_code) {
+                    Some(price) => price,
+                    None => panic!("No market price found")
                 };
                 let trigger_price = order.trigger_price.unwrap();
 
@@ -517,45 +489,29 @@ pub(crate) async fn simulated_order_matching (
                     OrderSide::Sell => market_price >= trigger_price,
                 };
 
-                let market_fill_price = match price_service_request_market_fill_price(order.side, order.symbol_name.clone(), order.symbol_code.clone(), order.quantity_open).await {
-                    Ok(price) => match price.price() {
-                        None => continue,
-                        Some(price) => price
-                    }
-                    Err(_) => continue,
-                };
-
                 if is_fill_triggered {
+                    let market_fill_price = match market_price_service.estimate_fill_price(order.side, &order.symbol_name, &order.symbol_code, order.quantity_open) {
+                        Some(price) => price,
+                        None => continue
+                    };
                     filled.push((order.id.clone(), market_fill_price));
                 }
             }
             OrderType::StopLimit => {
-                let market_price = match price_service_request_market_price(order.side, order.symbol_name.clone(), order.symbol_code.clone(),).await {
-                    Ok(price) => match price.price() {
-                        None => continue,
-                        Some(price) => price
-                    }
-                    Err(_) => continue
+                let market_price = match market_price_service.get_market_price(order.side, &order.symbol_name, &order.symbol_code) {
+                    Some(price) => price,
+                    None => panic!("No market price found")
                 };
 
                 let is_fill_triggered = match order.side {
                     OrderSide::Buy => market_price <= order.trigger_price.unwrap() && market_price > order.limit_price.unwrap(),
                     OrderSide::Sell => market_price >= order.trigger_price.unwrap() && market_price < order.limit_price.unwrap()
                 };
-                let (market_price, volume_filled) = match price_service_request_limit_fill_price_quantity(order.side, order.symbol_name.clone(), order.symbol_code.clone(), order.quantity_open, order.limit_price.unwrap()).await {
-                    Ok(price_volume) => {
-                        match price_volume {
-                            PriceServiceResponse::LimitFillPriceEstimate { fill_price, fill_volume } => {
-                                if let (Some(fill_price), Some(fill_volume)) = (fill_price, fill_volume) {
-                                    (fill_price, fill_volume)
-                                } else {
-                                    continue
-                                }
-                            }
-                            _ => panic!("Incorrect response received from price service")
-                        }
+                let (market_price, volume_filled) = match market_price_service.estimate_limit_fill(order.side, &order.symbol_name, &order.symbol_code, order.quantity_open, order.limit_price.unwrap()) {
+                    Some((price, volume)) => {
+                        (price, volume)
                     },
-                    Err(_) => continue
+                    None => continue
                 };
                 if is_fill_triggered {
                     match volume_filled == order.quantity_open {
@@ -565,29 +521,33 @@ pub(crate) async fn simulated_order_matching (
                 }
             },
             OrderType::EnterLong => {
-                let market_fill_price = match price_service_request_market_fill_price(order.side, order.symbol_name.clone(), order.symbol_code.clone(), order.quantity_open).await {
-                    Ok(price) => match price.price() {
-                        None => continue,
-                        Some(price) => price
-                    }
-                    Err(_) => continue
-                };
                 if ledger_service.is_short(&order.account, &order.symbol_code) {
+                    let quantity = ledger_service.position_size(&order.account, &order.symbol_code);
+                    let market_fill_price = match market_price_service.estimate_fill_price(order.side, &order.symbol_name, &order.symbol_code, quantity) {
+                        Some(price) => price,
+                        None => continue
+                    };
                     ledger_service.paper_exit_position(&order.account,  order.symbol_code.clone(),  order.id.clone(), time, market_fill_price, String::from("Force Exit By Enter Long")).await;
                 }
+                let market_fill_price = match market_price_service.estimate_fill_price(order.side, &order.symbol_name, &order.symbol_code, order.quantity_open) {
+                    Some(price) => price,
+                    None => continue
+                };
                 filled.push((order.id.clone(), market_fill_price));
             }
             OrderType::EnterShort => {
-                let market_fill_price = match price_service_request_market_fill_price(order.side, order.symbol_name.clone(), order.symbol_code.clone(), order.quantity_open).await {
-                    Ok(price) => match price.price() {
-                        None => continue,
-                        Some(price) => price
-                    }
-                    Err(_) => continue,
-                };
                 if ledger_service.is_long(&order.account, &order.symbol_code) {
+                    let quantity = ledger_service.position_size(&order.account, &order.symbol_code);
+                    let market_fill_price = match market_price_service.estimate_fill_price(order.side, &order.symbol_name, &order.symbol_code, quantity) {
+                        Some(price) => price,
+                        None => continue
+                    };
                     ledger_service.paper_exit_position(&order.account,  order.symbol_code.clone(), order.id.clone(), time, market_fill_price, String::from("Force Exit By Enter Short")).await;
                 }
+                let market_fill_price = match market_price_service.estimate_fill_price(order.side, &order.symbol_name, &order.symbol_code, order.quantity_open) {
+                    Some(price) => price,
+                    None => continue
+                };
                 filled.push((order.id.clone(), market_fill_price));
             }
             OrderType::ExitLong => {
@@ -602,12 +562,9 @@ pub(crate) async fn simulated_order_matching (
                     true => long_quantity,
                     false => order.quantity_open
                 };
-                let market_fill_price = match price_service_request_market_fill_price(order.side, order.symbol_name.clone(), order.symbol_code.clone(), adjusted_size).await {
-                    Ok(price) => match price.price() {
-                        None => continue,
-                        Some(price) => price
-                    }
-                    Err(_) => continue,
+                let market_fill_price = match market_price_service.estimate_fill_price(order.side, &order.symbol_name, &order.symbol_code, adjusted_size) {
+                    Some(price) => price,
+                    None => continue
                 };
 
                 filled.push((order.id.clone(), market_fill_price));
@@ -624,12 +581,9 @@ pub(crate) async fn simulated_order_matching (
                     true => short_quantity,
                     false => order.quantity_open
                 };
-                let market_fill_price = match price_service_request_market_fill_price(order.side, order.symbol_name.clone(), order.symbol_code.clone(), adjusted_size).await {
-                    Ok(price) => match price.price() {
-                        None => continue,
-                        Some(price) => price
-                    }
-                    Err(_) => continue,
+                let market_fill_price = match market_price_service.estimate_fill_price(order.side, &order.symbol_name, &order.symbol_code, adjusted_size) {
+                    Some(price) => price,
+                    None => continue
                 };
                 filled.push((order.id.clone(), market_fill_price));
             }
