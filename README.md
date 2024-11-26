@@ -13,17 +13,6 @@ fund-forge is built to allow simple abstractions for common strategy functionali
 See below for all the free historical data you will ever need.
 
 ### Announcements
-- 12-11-24: Added a fix to avoid memory crash when downloading a large amount of high resolution data in short periods.
-- 12-11-24: I Added a compression algorithm to reduce the size of files by 98%, a 200mb tick file is now <5mb. This will have a massive impact on the amount of data we can process when running strategies on remote machines.
-- 12-11-24: Simplified the way we can subscribe to data, we now have the responsibility to explicitly declare if we want to consolidate from a primary data source or use the subscription as a primary source. [see](ff_standard_lib/src/strategies/STRATEGIES_README.md/#subscriptions)
-- 16-11-24: Indicators are no longer an enum, we now pass a `Box<dyn Indicators>` where Indicators is the trait common to all indicators. indicator::new() should return `Box<Self>`. [see](ff_standard_lib/src/strategies/STRATEGIES_README.md/#creating-indicators) The runtime cost of using dyn dispatch here is negligible, and it allows us to build custom indicators without modifying the engine.
-- 16-11-24: I added a lot of Ai generated indicators that are not tested.
-- 17-11-24: Added consolidators for daily and weekly resolutions (Have not been tested and will need some work to finish off), these need a TradingHours object to be passed in when subscribing to data. [see](ff_standard_lib/src/strategies/STRATEGIES_README.md/#trading-hours), also [see](ff_standard_lib/src/strategies/STRATEGIES_README.md/#subscriptions)
-- 20-11-24: Fixed some data base Serialization issues created when adding compression, add unit tests for data base.
-- 21-11-24: Starting DataBento Api.
-- 21-11-24: Added Trade statistics for high accuracy backtesting and statistics. [see](ff_standard_lib/src/strategies/STRATEGIES_README.md/#statistics)
-- 25-11-24: Fixed a Live trading bug related to live warm up that was created during weekend development.
-- 25-11-24: Add a strategy.get_front_month() function to allow getting front month `SymbolCode` automatically from rithmic. (in backtesting it is calculated from a map)
 - 26-11-26: Fixed bug preventing duplicate subscriptions that share the same primary.
 - 26-11-26: Fixed deadlock in backtesting.
 
