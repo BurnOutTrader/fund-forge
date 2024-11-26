@@ -42,8 +42,8 @@ async fn main() {
         StrategyMode::Backtest,
         dec!(100000),
         Currency::USD,
-        NaiveDate::from_ymd_opt(2019, 11, 7).unwrap().and_hms_opt(0, 0, 0).unwrap(),
-        NaiveDate::from_ymd_opt(2019, 11, 15).unwrap().and_hms_opt(0, 0, 0).unwrap(),
+        NaiveDate::from_ymd_opt(2024, 11, 1).unwrap().and_hms_opt(0, 0, 0).unwrap(),
+        NaiveDate::from_ymd_opt(2024, 11, 26).unwrap().and_hms_opt(0, 0, 0).unwrap(),
         Australia::Sydney,
         Duration::hours(1),
         vec![
@@ -73,7 +73,7 @@ async fn main() {
 // 5. The limit order expiry is on the exchange/rithmic side.
 // 6. It will cancel the take profit order if the position is closed.
 
-const RENKO_RANGE: Decimal = dec!(3);
+const RENKO_RANGE: Decimal = dec!(10);
 const MAX_SIZE: Decimal = dec!(20);
 const SIZE: Decimal = dec!(5);
 const INCREMENTAL_SCALP_PNL: Decimal = dec!(150);
@@ -255,6 +255,7 @@ pub async fn on_data_received(
                         strategy.print_ledger(event.account());
                     },
                     PositionUpdateEvent::PositionClosed { ref side, ref booked_pnl,.. } => {
+                        strategy.print_trade_statistics(event.account());
                         strategy.print_ledger(event.account());
                         exit_order_id = None;
                         entry_order_id = None;
