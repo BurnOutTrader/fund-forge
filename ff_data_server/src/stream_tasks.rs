@@ -183,10 +183,20 @@ pub async fn stream_handler(
                         prefixed_msg.extend_from_slice(&length);
                         prefixed_msg.extend_from_slice(&bytes);
 
-                        if let Err(e) = stream.write_all(&prefixed_msg).await {
-                            eprintln!("Error writing to stream: {}", e);
-                            broadcast_shutdown(stream_name).await;
-                            break;
+                        match stream.write_all(&prefixed_msg).await {
+                            Ok(_) => {
+                                // Add explicit flush after successful write
+                                if let Err(e) = stream.flush().await {
+                                    //eprintln!("Error flushing stream: {}", e);
+                                    broadcast_shutdown(stream_name).await;
+                                    break;
+                                }
+                            }
+                            Err(e) => {
+                                //eprintln!("Error writing to stream: {}", e);
+                                broadcast_shutdown(stream_name).await;
+                                break;
+                            }
                         }
                         time_slice.clear();
                     }

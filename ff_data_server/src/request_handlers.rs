@@ -84,15 +84,18 @@ pub async fn compressed_file_response(
     //todo i need to debug this and determine cause of time outs
     match data_storage.get_compressed_files_in_range(subscriptions, from_time, to_time).await {
         Ok(data) => {
-           // eprintln!("Got compressed files");
+            //eprintln!("Got compressed files");
             DataServerResponse::CompressedHistoricalData {
                 callback_id,
                 payload: data
             }
         },
-        Err(e) => DataServerResponse::Error {
-            callback_id,
-            error: FundForgeError::ServerErrorDebug(e.to_string())
+        Err(e) => {
+            //eprintln!("Error getting compressed files: {:?}", e);
+            DataServerResponse::Error {
+                callback_id,
+                error: FundForgeError::ServerErrorDebug(e.to_string())
+            }
         }
     }
 }
@@ -348,9 +351,10 @@ pub async fn manage_async_requests(
     });
 }
 
-async fn response_handler(receiver: Receiver<DataServerResponse>, writer: WriteHalf<TlsStream<TcpStream>>) {
-    let mut receiver = receiver;
-    let mut writer = writer;
+async fn response_handler(
+    mut receiver: Receiver<DataServerResponse>,
+    mut writer: WriteHalf<TlsStream<TcpStream>>
+) -> Result<(), Box<dyn std::error::Error>> {
     let mut shutdown_receiver = subscribe_server_shutdown();
 
     loop {
@@ -359,28 +363,21 @@ async fn response_handler(receiver: Receiver<DataServerResponse>, writer: WriteH
                 // Convert the response to bytes
                 let bytes = response.to_bytes();
 
-                // Prepare the message with a 4-byte length header in big-endian format
+                // Prepare the message with length header
                 let length = (bytes.len() as u64).to_be_bytes();
                 let mut prefixed_msg = Vec::with_capacity(8 + bytes.len());
                 prefixed_msg.extend_from_slice(&length);
                 prefixed_msg.extend_from_slice(&bytes);
 
-                // Write the response to the stream
-                if let Err(e) = writer.write_all(&prefixed_msg).await {
-                    eprintln!("Shutting down response handler {}", e);
-                    break;
-                }
+                // Write and explicitly flush
+                writer.write_all(&prefixed_msg).await?;
+                writer.flush().await?;
             }
-            _ = shutdown_receiver.recv() => {
-                // Server shutdown signal received
-                break;
-            }
-            else => {
-                // Both channels closed
-                break;
-            }
+            _ = shutdown_receiver.recv() => break,
+            else => break,
         }
     }
+    Ok(())
 }
 
 async fn handle_callback<F, Fut>(

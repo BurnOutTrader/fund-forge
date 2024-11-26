@@ -110,7 +110,7 @@ pub async fn get_compressed_historical_data(
         //println!("{:?}", request);
         send_request(request).await;
         let response = rx.await.expect(&"Failed to receive callback data");
-
+        //println!("Received data response for {} to {}", from_time, to_time);
         match response {
             DataServerResponse::CompressedHistoricalData { payload, .. } => {
                 process_payload(payload, from_time, to_time).await

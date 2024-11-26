@@ -522,6 +522,7 @@ impl HybridStorage {
         }
 
         // Create a bounded semaphore for concurrent file operations
+       // println!("Creating file semaphore");
         let file_semaphore = Arc::new(Semaphore::new(MAX_CONCURRENT_FILES));
         let mut file_tasks = Vec::new();
 
@@ -538,6 +539,7 @@ impl HybridStorage {
                 if !file_path.exists() {
                     continue;
                 }
+                //println!("Adding file task for {:?}", file_path);
 
                 let path_str = file_path.to_string_lossy().to_string();
                 let file_lock = self.file_locks
@@ -558,8 +560,9 @@ impl HybridStorage {
                     };
 
                     // Acquire the file-specific lock with timeout
+                    //println!("Acquiring file lock for {:?}", file_path);
                     let file_permit = match timeout(
-                        Duration::from_secs(5),
+                        Duration::from_secs(60),
                         file_lock.acquire()
                     ).await {
                         Ok(permit) => match permit {
@@ -573,9 +576,10 @@ impl HybridStorage {
                         )),
                     };
 
+                    //println!("Reading file {:?}", file_path);
                     // Open and read the file with timeout
                     let result = timeout(
-                        Duration::from_secs(10),
+                        Duration::from_secs(60),
                         async {
                             let mut file = File::open(&file_path)
                                 .map_err(|e| FundForgeError::ServerErrorDebug(
@@ -586,6 +590,7 @@ impl HybridStorage {
                                 .map_err(|e| FundForgeError::ServerErrorDebug(
                                     format!("Error getting file size {:?}: {}", file_path, e)
                                 ))?.len() as usize;
+                            println!("File size: {}", file_size);
 
                             let mut compressed_data = Vec::with_capacity(file_size);
                             file.read_to_end(&mut compressed_data)
@@ -597,8 +602,10 @@ impl HybridStorage {
                         }
                     ).await;
 
+                    //println!("Releasing file lock for {:?}", file_path);
                     drop(file_permit);
 
+                    //println!("Releasing global file semaphore");
                     match result {
                         Ok(data) => data,
                         Err(_) => Err(FundForgeError::ServerErrorDebug(
@@ -611,6 +618,7 @@ impl HybridStorage {
             }
         }
 
+        //println!("Executing file tasks");
         // Execute all file tasks with an overall timeout
         let results = match timeout(TIMEOUT_DURATION, join_all(file_tasks)).await {
             Ok(results) => results,
@@ -620,6 +628,7 @@ impl HybridStorage {
         };
 
         // Collect successful results
+        //println!("Processing file results");
         let mut files_data = Vec::new();
         for result in results {
             match result {
@@ -628,6 +637,7 @@ impl HybridStorage {
             }
         }
 
+        //println!("Returning {} files", files_data.len());
         if files_data.is_empty() {
             return Err(FundForgeError::ServerErrorDebug("No files found in range".to_string()));
         }

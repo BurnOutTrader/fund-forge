@@ -159,18 +159,16 @@ impl HistoricalEngine {
 
             let mut time_slices = match get_compressed_historical_data(primary_subscriptions.clone(), last_time.clone(), to_time).await {
                 Ok(time_slices) => {
-                    if time_slices.is_empty() && self.tick_over_no_data {
-                        println!("Historical Engine: No data period, weekend or holiday: ticking through at buffering resolution, data will resume shortly");
-                    } else if time_slices.is_empty() && !self.tick_over_no_data {
+                    if time_slices.is_empty() && !self.tick_over_no_data {
+                        //eprintln!("Historical Engine: No data period, weekend or holiday: skipping");
                         last_time = to_time + ChronoDuration::nanoseconds(1);
                         continue 'main_loop
                     }
                     time_slices
                 },
-                Err(e) => {
-                    if self.tick_over_no_data {
-                        println!("Historical Engine: Error getting data: {}", e);
-                    } else if !self.tick_over_no_data {
+                Err(_e) => {
+                    if !self.tick_over_no_data {
+                        //eprintln!("Historical Engine: Error getting data: {}", e);
                         last_time = to_time + ChronoDuration::nanoseconds(1);
                         continue 'main_loop
                     }
