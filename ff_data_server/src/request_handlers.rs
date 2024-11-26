@@ -112,7 +112,7 @@ pub async fn manage_async_requests(
     RESPONSE_SENDERS.insert(stream_name.clone(), response_sender.clone());
     // Response handler for outgoing messages
     let write_task = tokio::spawn(async move {
-        response_handler(request_receiver, write_half).await;
+        let _ = response_handler(request_receiver, write_half).await;
     });
     tokio::spawn(async move {
         const LENGTH: usize = 4;
