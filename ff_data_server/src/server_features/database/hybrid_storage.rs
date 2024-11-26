@@ -319,7 +319,7 @@ impl HybridStorage {
 
         drop(temp_file);
         std::fs::remove_file(&temp_path)?;
-        println!("Created mmap for file: {:?}", file_path);
+        //println!("Created mmap for file: {:?}", file_path);
         Ok(mmap)
     }
 
