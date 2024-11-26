@@ -312,7 +312,7 @@ impl HybridStorage {
         // Create mmap
         let temp_file = File::open(&temp_path)?;
         let mmap = Arc::new(unsafe { Mmap::map(&temp_file)? });
-        self.mmap_cache.insert(path_str.clone(), Arc::clone(&mmap));
+        //self.mmap_cache.insert(path_str.clone(), Arc::clone(&mmap));
         self.cache_last_accessed.insert(path_str.clone(), Utc::now());
 
         drop(temp_file);

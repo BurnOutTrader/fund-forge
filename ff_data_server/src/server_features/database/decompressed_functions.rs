@@ -193,6 +193,7 @@ impl HybridStorage {
                         .filter(|d| d.time_closed_utc() <= target_time)
                         .max_by_key(|d| d.time_closed_utc())
                     {
+                        drop(mmap);
                         return Ok(Some(latest_data));
                     }
                 }
