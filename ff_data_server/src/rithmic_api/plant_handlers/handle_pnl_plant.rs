@@ -336,17 +336,16 @@ pub async fn match_pnl_plant_id(
                     }
                 };
 
-                if let (Some(cash_value), Some(cash_available)) = (
-                    client.account_balance.get(&id).map(|r| *r),
-                    client.account_cash_available.get(&id).map(|r| *r)
-                ) {
+                if let Some(cash_available) = client.account_cash_available.get(&id).map(|r| *r)
+                {
                     let cash_used = dec!(0.0); //cash_available - cash_value ;
                     // Update the cash_used in the DashMap
                     client.account_cash_used.insert(id.clone(), cash_used);
+                    client.account_balance.insert(id.clone(), balance);
 
                     send_updates(DataServerResponse::LiveAccountUpdates {
                         account: Account::new(client.brokerage, id),
-                        cash_value,
+                        cash_value: balance,
                         cash_available,
                         cash_used,
                     }).await;

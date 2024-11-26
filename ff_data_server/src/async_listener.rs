@@ -62,7 +62,7 @@ pub(crate) async fn async_server(config: ServerConfig, addr: SocketAddr) {
 
     // Track active connection IDs to ensure uniqueness
     let active_ids = Arc::new(Mutex::new(HashSet::new()));
-    let next_id = Arc::new(AtomicU16::new(0));
+    let next_id = Arc::new(AtomicU16::new(1));
 
     loop {
         tokio::select! {
