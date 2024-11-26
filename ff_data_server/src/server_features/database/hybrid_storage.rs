@@ -590,7 +590,7 @@ impl HybridStorage {
                                 .map_err(|e| FundForgeError::ServerErrorDebug(
                                     format!("Error getting file size {:?}: {}", file_path, e)
                                 ))?.len() as usize;
-                            println!("File size: {}", file_size);
+                            //println!("File size: {}", file_size);
 
                             let mut compressed_data = Vec::with_capacity(file_size);
                             file.read_to_end(&mut compressed_data)
