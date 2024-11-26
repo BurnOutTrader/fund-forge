@@ -156,7 +156,7 @@ pub async fn on_data_received(
                                         println!("Balance is too high or too low, flattening all positions: {}", balance);
                                         if strategy.is_long(&account, &symbol_code) {
                                             let open_quantity = strategy.position_size(&account, &symbol_code);
-                                            exit_order_id = Some(strategy.exit_long(&candle.symbol.name, Some(symbol_code.clone()), &account, None, open_quantity, "Exit Long Target Reached".to_string()).await);
+                                            exit_order_id = Some(strategy.exit_long(&subscription.symbol.name, Some(symbol_code.clone()), &account, None, open_quantity, "Exit Long Target Reached".to_string()).await);
                                         }
                                         break 'strategy_loop;
                                     }
