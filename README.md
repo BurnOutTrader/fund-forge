@@ -14,7 +14,7 @@ See below for all the free historical data you will ever need.
 
 ### Announcements
 - 26-11-26: Fixed bug preventing duplicate subscriptions that share the same primary.
-- 26-11-26: Fixed deadlock in backtesting.
+- 26-11-26: Fixed deadlock in backtesting. Deadlock was caused by not flushing TCP Streams. Backtesting and Live trading should now be more stable and backtesting should not deadlock (because of the engine).
 
 ### Current State and Future Development
 The platform is currently in a semi-working state, think of it as a proof of concept, there is a lot of untested functionality, both in backtesting and live trading.
