@@ -18,6 +18,7 @@ use crate::strategies::client_features::{live_data_receiver, request_handler};
 use crate::strategies::client_features::request_handler::StrategyRequest;
 use crate::strategies::client_features::server_connections::SETTINGS_MAP;
 use crate::strategies::handlers::indicator_handler::IndicatorHandler;
+use crate::strategies::handlers::market_handler::price_service::MarketPriceService;
 use crate::strategies::handlers::subscription_handler::SubscriptionHandler;
 use crate::strategies::ledgers::ledger_service::LedgerService;
 use crate::strategies::strategy_events::StrategyEvent;
@@ -33,6 +34,7 @@ pub async fn response_handler(
     ledger_service: Arc<LedgerService>, //it is better to do this than use messaging, because using a direct fn call we can concurrently update individual ledgers and have a que per ledger. sending a msg here would cause a bottleneck with more ledgers.
     indicator_handler: Arc<IndicatorHandler>,
     subscription_handler: Arc<SubscriptionHandler>,
+    market_price_service: Arc<MarketPriceService>
 ) {
     let settings_map = SETTINGS_MAP.clone();
     for (connection, settings) in settings_map.iter() {
@@ -48,6 +50,7 @@ pub async fn response_handler(
             let ledger_service = ledger_service.clone();
             let subscription_handler = subscription_handler.clone();
             let indicator_handler = indicator_handler.clone();
+            let market_price_service = market_price_service.clone();
             tokio::task::spawn(async move {
                 const LENGTH: usize = 8;
                 let mut length_bytes = [0u8; LENGTH];
@@ -116,7 +119,7 @@ pub async fn response_handler(
                                 DataServerResponse::RegistrationResponse(port) => {
                                     //println!("Connected to server port: {}", port);
                                     if mode != StrategyMode::Backtest {
-                                        live_data_receiver::handle_live_data(settings.clone(), port, buffer_duration, strategy_event_sender.clone(), ledger_service.clone(), indicator_handler.clone(), subscription_handler.clone()).await;
+                                        live_data_receiver::handle_live_data(settings.clone(), port, buffer_duration, strategy_event_sender.clone(), ledger_service.clone(), indicator_handler.clone(), subscription_handler.clone(), market_price_service.clone()).await;
                                     }
                                 }
                                 _ => unreachable!("Incorrect response here: {:?}", response)

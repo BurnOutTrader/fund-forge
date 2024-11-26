@@ -1,5 +1,5 @@
 use dashmap::DashMap;
-use tokio::sync::{oneshot, Mutex};
+use tokio::sync::{oneshot};
 use rust_decimal::Decimal;
 use chrono::{DateTime, Duration, Utc};
 use std::fs::create_dir_all;
@@ -7,7 +7,6 @@ use std::path::Path;
 use std::str::FromStr;
 use csv::Writer;
 use std::sync::Arc;
-use ahash::AHashMap;
 use rust_decimal::prelude::FromPrimitive;
 use rust_decimal_macros::dec;
 use serde_derive::Serialize;
@@ -27,7 +26,7 @@ use crate::standardized_types::subscriptions::{SymbolCode, SymbolName};
 use crate::standardized_types::symbol_info::SymbolInfo;
 use crate::standardized_types::time_slices::TimeSlice;
 use crate::strategies::client_features::other_requests::get_exchange_rate;
-use crate::strategies::handlers::market_handler::price_service::{price_service_request_market_price, PriceServiceResponse};
+use crate::strategies::handlers::market_handler::price_service::MarketPriceService;
 use crate::strategies::strategy_events::StrategyEvent;
 
 /*
@@ -67,7 +66,8 @@ pub struct Ledger {
     pub is_simulating_pnl: bool,
     pub(crate) strategy_sender: Sender<StrategyEvent>,
     pub rates: Arc<DashMap<Currency, Decimal>>,
-    pub position_calculation_mode: PositionCalculationMode
+    pub position_calculation_mode: PositionCalculationMode,
+    pub market_price_service: Arc<MarketPriceService>
     //todo, add daily max loss, max order size etc to ledger
 }
 
@@ -77,7 +77,9 @@ impl Ledger {
         mode: StrategyMode,
         synchronise_accounts: bool,
         strategy_sender: Sender<StrategyEvent>,
-        position_calculation_mode: PositionCalculationMode
+        position_calculation_mode: PositionCalculationMode,
+        market_price_service: Arc<MarketPriceService>
+
     ) -> Self {
         let is_simulating_pnl = match synchronise_accounts {
             true => false,
@@ -118,7 +120,8 @@ impl Ledger {
             is_simulating_pnl,
             strategy_sender,
             rates: Arc::new(Default::default()),
-            position_calculation_mode
+            position_calculation_mode,
+            market_price_service,
         };
         ledger
     }
@@ -174,10 +177,11 @@ impl Ledger {
                     LedgerMessage::UpdateOrCreatePosition { .. } => eprintln!("{:?}", message),
                     _ => {}
                 }*/
-                let mut position_locks = AHashMap::new();
+                //let mut position_locks = AHashMap::new();
                 match message {
+                    #[allow(unused_variables)]
                     LedgerMessage::SyncPosition { symbol_name, symbol_code, account, open_quantity, average_price, side, open_pnl, time } => {
-                        if !static_self.is_simulating_pnl {
+                      /*  if !static_self.is_simulating_pnl {
                             if !position_locks.contains_key(&symbol_code) {
                                 position_locks.insert(symbol_code.clone(), Mutex::new(()));
                             }
@@ -185,7 +189,7 @@ impl Ledger {
                                 let _guard = lock.lock().await;
                                 static_self.synchronize_live_position(symbol_name, symbol_code, account, open_quantity, average_price, side, open_pnl, time).await;
                             }
-                        }
+                        }*/
                     }
                     LedgerMessage::UpdateOrCreatePosition { symbol_name, symbol_code, quantity, side, time, market_fill_price, tag , paper_response_sender, order_id} => {
                         match mode {
@@ -214,7 +218,7 @@ impl Ledger {
         });
     }
 
-    async fn synchronize_live_position(&mut self, symbol_name: SymbolName, symbol_code: SymbolCode, account: Account, open_quantity: f64, average_price: f64, side: PositionSide, open_pnl: f64, time: String) {
+    /*async fn synchronize_live_position(&mut self, symbol_name: SymbolName, symbol_code: SymbolCode, account: Account, open_quantity: f64, average_price: f64, side: PositionSide, open_pnl: f64, time: String) {
         //sleep(std::time::Duration::from_millis(100)).await;
         let mut to_remove = false;
         let mut to_create = true;
@@ -360,7 +364,7 @@ impl Ledger {
                 self.strategy_sender.send(StrategyEvent::PositionEvents(event)).await.unwrap();
             }
         }
-    }
+    }*/
 
     pub fn in_profit(&self, symbol_name: &SymbolName) -> bool {
         if let Some(position) = self.positions.get(symbol_name) {

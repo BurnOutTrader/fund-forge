@@ -7,7 +7,7 @@ use tokio::sync::mpsc::Sender;
 use crate::standardized_types::base_data::history::{get_compressed_historical_data};
 use crate::standardized_types::time_slices::TimeSlice;
 use crate::strategies::handlers::indicator_handler::IndicatorHandler;
-use crate::strategies::handlers::market_handler::price_service::{get_price_service_sender, PriceServiceMessage};
+use crate::strategies::handlers::market_handler::price_service::MarketPriceService;
 use crate::strategies::handlers::subscription_handler::SubscriptionHandler;
 use crate::strategies::handlers::timed_events_handler::TimedEventHandler;
 use crate::strategies::historical_time::update_backtest_time;
@@ -28,11 +28,11 @@ pub(crate) async fn live_warm_up(
     strategy_event_sender: Sender<StrategyEvent>,
     timed_event_handler: Arc<TimedEventHandler>,
     ledger_service: Arc<LedgerService>,
-    indicator_handler: Arc<IndicatorHandler>
+    indicator_handler: Arc<IndicatorHandler>,
+    market_price_service: Arc<MarketPriceService>
 ) {
     tokio::task::spawn(async move {
         println!("Live Warmup: Warming up the strategy...");
-        let market_price_sender = get_price_service_sender();
 
         // Get initial subscriptions
         let mut primary_subscriptions = loop {
@@ -135,18 +135,11 @@ pub(crate) async fn live_warm_up(
                     let arc_slice = Arc::new(time_slice.clone());
 
                     // Send updates in parallel using join
-                    let (market_result, _ledger_result, subscription_result) = tokio::join!(
-                        market_price_sender.send(PriceServiceMessage::TimeSliceUpdate(arc_slice.clone())),
-                        ledger_service.timeslice_updates(arc_slice.clone()),
-                        subscription_handler.update_time_slice(arc_slice)
-                    );
-
-                    if let Err(e) = market_result {
-                        panic!("Live Warmup: Error sending backtest message: {}", e);
-                    }
+                    market_price_service.update_market_data(arc_slice.clone());
+                    ledger_service.timeslice_updates(arc_slice.clone()).await;
 
                     let mut strategy_time_slice = TimeSlice::new();
-                    if let Some(consolidated_data) = subscription_result {
+                    if let Some(consolidated_data) = subscription_handler.update_time_slice(arc_slice).await {
                         strategy_time_slice.extend(consolidated_data);
                     }
                     strategy_time_slice.extend(time_slice);

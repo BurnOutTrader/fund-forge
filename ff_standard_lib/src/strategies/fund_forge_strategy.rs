@@ -45,7 +45,7 @@ use crate::strategies::handlers::live_warmup::live_warm_up;
 use crate::strategies::handlers::market_handler::backtest_matching_engine;
 use crate::strategies::handlers::market_handler::backtest_matching_engine::BackTestEngineMessage;
 use crate::strategies::handlers::market_handler::live_order_matching::live_order_handler;
-use crate::strategies::handlers::market_handler::price_service::{price_service_request_market_fill_price, price_service_request_market_price};
+use crate::strategies::handlers::market_handler::price_service::MarketPriceService;
 use crate::strategies::historical_engine::HistoricalEngine;
 use crate::strategies::historical_time::{get_backtest_time, update_backtest_time};
 use crate::strategies::indicators::indicator_events::IndicatorEvents;
@@ -84,7 +84,9 @@ pub struct FundForgeStrategy {
 
     accounts: Vec<Account>,
 
-    ledger_service: Arc<LedgerService>
+    ledger_service: Arc<LedgerService>,
+
+    market_price_service: Arc<MarketPriceService>
 
 }
 
@@ -146,7 +148,8 @@ impl FundForgeStrategy {
         accounts: Vec<Account>
     ) -> FundForgeStrategy {
 
-        let ledger_service = Arc::new(LedgerService::new(strategy_event_sender.clone()));
+        let price_service = Arc::new(MarketPriceService::new());
+        let ledger_service = Arc::new(LedgerService::new(strategy_event_sender.clone(), price_service.clone()));
 
         let timed_event_handler = Arc::new(TimedEventHandler::new(strategy_event_sender.clone()));
         let drawing_objects_handler = Arc::new(DrawingObjectHandler::new(AHashMap::new()));
@@ -169,7 +172,8 @@ impl FundForgeStrategy {
         if strategy_mode == StrategyMode::Live {
             live_order_handler(open_order_cache.clone(), closed_order_cache.clone(), live_order_updates_receiver, strategy_event_sender.clone(), ledger_service.clone(), synchronize_accounts);
         }
-        init_connections(gui_enabled, buffering_duration.clone(), strategy_mode.clone(), live_order_updates_sender, synchronize_accounts, strategy_event_sender.clone(), ledger_service.clone(), indicator_handler.clone(), subscription_handler.clone()).await;
+
+        init_connections(gui_enabled, buffering_duration.clone(), strategy_mode.clone(), live_order_updates_sender, synchronize_accounts, strategy_event_sender.clone(), ledger_service.clone(), indicator_handler.clone(), subscription_handler.clone(), price_service.clone()).await;
 
         for (primary, sub, trading_hours) in intraday_subscriptions {
             subscription_handler.subscribe(primary, sub, warm_up_start_time, fill_forward, retain_history, false, trading_hours).await;
@@ -178,7 +182,7 @@ impl FundForgeStrategy {
         let paper_order_sender = match strategy_mode {
             StrategyMode::Live => None,
             StrategyMode::LivePaperTrading | StrategyMode::Backtest => {
-                let sender = backtest_matching_engine::backtest_matching_engine(open_order_cache.clone(), closed_order_cache.clone(), strategy_event_sender.clone(), ledger_service.clone(), notify.clone()).await;
+                let sender = backtest_matching_engine::backtest_matching_engine(open_order_cache.clone(), closed_order_cache.clone(), strategy_event_sender.clone(), ledger_service.clone(), notify.clone(), price_service.clone()).await;
                 Some(sender) //todo, live paper wont update orders unless we update time in the backtest engine.
             }
         };
@@ -198,8 +202,10 @@ impl FundForgeStrategy {
             drawing_objects_handler,
             synchronize_accounts,
             accounts: accounts.clone(),
-            ledger_service: ledger_service.clone()
+            ledger_service: ledger_service.clone(),
+            market_price_service: price_service.clone()
         };
+
 
         match strategy_mode {
             StrategyMode::Backtest => {
@@ -218,6 +224,7 @@ impl FundForgeStrategy {
                     timed_event_handler.clone(),
                     indicator_handler.clone(),
                     subscription_handler.clone(),
+                    price_service.clone()
                 ).await;
 
                 HistoricalEngine::launch(engine).await;
@@ -233,7 +240,7 @@ impl FundForgeStrategy {
         }
 
         if strategy_mode != StrategyMode::Backtest {
-            live_warm_up(Utc::now() - warmup_duration, buffering_duration, subscription_handler, strategy_event_sender, timed_event_handler, ledger_service, indicator_handler).await;
+            live_warm_up(Utc::now() - warmup_duration, buffering_duration, subscription_handler, strategy_event_sender, timed_event_handler, ledger_service, indicator_handler, price_service.clone()).await;
         }
         strategy
     }
@@ -317,10 +324,7 @@ impl FundForgeStrategy {
         symbol_code: &SymbolCode,
         volume: Volume,
     ) -> Option<Price> {
-        match price_service_request_market_fill_price(order_side, symbol_name.clone(),  symbol_code.clone(), volume).await {
-            Ok(price) => price.price(),
-            Err(_) => None
-        }
+        self.market_price_service.estimate_fill_price(order_side, &symbol_name,  &symbol_code, volume)
     }
 
     ///
@@ -330,10 +334,7 @@ impl FundForgeStrategy {
         symbol_name: &SymbolName,
         symbol_code: &SymbolCode
     ) -> Option<Price> {
-        match price_service_request_market_price(order_side, symbol_name.clone(), symbol_code.clone(),).await {
-            Ok(price) => price.price(),
-            Err(_) => None
-        }
+        self.market_price_service.get_market_price(order_side, &symbol_name, &symbol_code)
     }
 
     /// true if long, false if flat or short.
