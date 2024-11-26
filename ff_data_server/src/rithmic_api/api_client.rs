@@ -34,7 +34,7 @@ use tokio::{select, task};
 use tokio::task::JoinHandle;
 use tokio::time::{interval, sleep_until, timeout, Instant};
 use tokio_tungstenite::{MaybeTlsStream, WebSocketStream};
-use tungstenite::Message;
+use tungstenite::{Error, Message};
 use ff_standard_lib::apis::rithmic::rithmic_systems::RithmicSystem;
 use crate::server_features::server_side_datavendor::VendorApiResponse;
 use ff_standard_lib::standardized_types::accounts::AccountInfo;
@@ -344,8 +344,10 @@ impl RithmicBrokerageClient {
                     eprintln!("Failed to send message to {:?}: {}. Retrying...", plant, e)
                 },
             }
-        } else {
-            eprintln!("No write stream available for {:?}. Retrying...", plant);
+            match write_stream.flush().await {
+                Ok(_) => {}
+                Err(_) => {}
+            }
         }
     }
 
