@@ -26,7 +26,7 @@ use ff_standard_lib::strategies::indicators::indicator_events::IndicatorEvents;
 #[tokio::main]
 async fn main() {
     let (strategy_event_sender, strategy_event_receiver) = mpsc::channel(100);
-    let account = Account::new(Brokerage::Rithmic(RithmicSystem::Apex), "APEX-3396-169".to_string());
+    let account = Account::new(Brokerage::Rithmic(RithmicSystem::Apex), "XXX-123-abc".to_string());
     let symbol_name = SymbolName::from("MNQ");
     let exchange = get_futures_exchange(&symbol_name).unwrap();
 
