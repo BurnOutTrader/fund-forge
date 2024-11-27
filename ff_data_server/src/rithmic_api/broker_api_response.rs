@@ -394,10 +394,10 @@ impl BrokerApiResponse for RithmicBrokerageClient {
         const PLANT: SysInfraType = SysInfraType::OrderPlant;
         self.cancel_orders_on_account(account.clone()).await;
         if let Some(tag_map) = self.short_quantity.get(&account.account_id) {
-            for tag in tag_map.value() {
-                let exchange = match get_exchange_by_symbol_name(tag.key()) {
+            for symbol in tag_map.value() {
+                let exchange = match get_exchange_by_symbol_name(symbol.key()) {
                     None => {
-                        eprintln!("Rithmic `flatten_all_for()` error, No exchange found for symbol: {}", tag.key());
+                        eprintln!("Rithmic `flatten_all_for()` error, No exchange found for symbol: {}", symbol.key());
                         continue
                     },
                     Some(exchange) => exchange
@@ -409,7 +409,7 @@ impl BrokerApiResponse for RithmicBrokerageClient {
                     fcm_id: self.fcm_id.clone(),
                     ib_id: self.ib_id.clone(),
                     account_id: Some(account.account_id.clone()),
-                    symbol: Some(tag.key().to_string()),
+                    symbol: Some(symbol.key().to_string()),
                     exchange: Some(exchange.to_string()),
                     trading_algorithm: None,
                     manual_or_auto: Some(2),
@@ -418,10 +418,10 @@ impl BrokerApiResponse for RithmicBrokerageClient {
             }
         }
         if let Some(tag_map) = self.long_quantity.get(&account.account_id) {
-            for tag in tag_map.value() {
-                let exchange = match get_exchange_by_symbol_name(tag.key()) {
+            for symbol in tag_map.value() {
+                let exchange = match get_exchange_by_symbol_name(symbol.key()) {
                     None => {
-                        eprintln!("Rithmic `flatten_all_for()` error, No exchange found for symbol: {}", tag.key());
+                        eprintln!("Rithmic `flatten_all_for()` error, No exchange found for symbol: {}", symbol.key());
                         continue
                     },
                     Some(exchange) => exchange
@@ -433,7 +433,7 @@ impl BrokerApiResponse for RithmicBrokerageClient {
                     fcm_id: self.fcm_id.clone(),
                     ib_id: self.ib_id.clone(),
                     account_id: Some(account.account_id.clone()),
-                    symbol: Some(tag.key().to_string()),
+                    symbol: Some(symbol.key().to_string()),
                     exchange: Some(exchange.to_string()),
                     trading_algorithm: None,
                     manual_or_auto: Some(2),
