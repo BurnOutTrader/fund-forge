@@ -16,7 +16,7 @@ use crate::standardized_types::base_data::traits::BaseData;
 
 /// Renko Indicator
 /// The Renko Indicator can output more than 1 "IndicatorValues" object per update, multiple blocks may be returned in a single buffer.
-/// `plots: "open", "close"`
+/// `plots: "open", "close", "delta", "delta_percent", "volume", "bear_volume", "bull_volume"`
 #[derive(Clone, Debug)]
 pub struct Renko {
     name: IndicatorName,
@@ -165,6 +165,8 @@ impl Renko {
             let close_plot = IndicatorPlot::new("close".to_string(), close, color.clone());
             let volume_plot = IndicatorPlot::new("volume".to_string(), self.volume, color.clone());
             let delta_plot = IndicatorPlot::new("delta".to_string(), self.buy_aggressors - self.sell_aggressors, color.clone());
+            let bull_volume_plot = IndicatorPlot::new("bull_volume".to_string(), self.buy_aggressors, color.clone());
+            let bear_volume_plot = IndicatorPlot::new("bear_volume".to_string(), self.sell_aggressors, color.clone());
 
             let delta_percent_plot = if self.volume > dec!(0) {
                 IndicatorPlot::new(
@@ -180,6 +182,8 @@ impl Renko {
             values.insert_plot("volume".to_string(), volume_plot);
             values.insert_plot("open".to_string(), open_plot);
             values.insert_plot("close".to_string(), close_plot);
+            values.insert_plot("bull_volume".to_string(), bull_volume_plot);
+            values.insert_plot("bear_volume".to_string(), bear_volume_plot);
             self.volume = dec!(0);
             self.buy_aggressors = dec!(0);
             self.sell_aggressors = dec!(0);
