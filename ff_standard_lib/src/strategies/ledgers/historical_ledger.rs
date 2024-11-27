@@ -1,3 +1,4 @@
+use std::cmp::min;
 use crate::strategies::ledgers::ledger::Ledger;
 use chrono::{DateTime, Utc};
 use rust_decimal::Decimal;
@@ -159,6 +160,7 @@ impl Ledger {
                 || (existing_position.side == PositionSide::Short && side == OrderSide::Buy);
 
             if is_reducing {
+                let quantity = min(remaining_quantity, existing_position.quantity_open);
                 remaining_quantity -= existing_position.quantity_open;
                 let exchange_rate = if self.currency != existing_position.symbol_info.pnl_currency {
                     match get_exchange_rate(self.currency, existing_position.symbol_info.pnl_currency, time, side).await {
@@ -172,9 +174,8 @@ impl Ledger {
                     dec!(1.0)
                 };
                 self.charge_commission(&symbol_name, existing_position.quantity_open, exchange_rate).await;
-                let event = existing_position.reduce_position_size(market_fill_price, quantity, order_id.clone(), self.currency,exchange_rate, time, tag.clone()).await;
 
-               // eprintln!("symbol_code: {}, existing_position: {:?}", symbol_code, existing_position);
+                let event = existing_position.reduce_position_size(market_fill_price, quantity, order_id.clone(), self.currency,exchange_rate, time, tag.clone()).await;
 
                 match &event {
                     PositionUpdateEvent::PositionReduced { booked_pnl, .. } => {

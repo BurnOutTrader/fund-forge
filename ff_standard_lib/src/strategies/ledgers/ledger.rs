@@ -1,3 +1,4 @@
+use std::cmp::min;
 use dashmap::DashMap;
 use tokio::sync::{oneshot};
 use rust_decimal::Decimal;
@@ -713,6 +714,7 @@ impl Ledger {
                 || (existing_position.side == PositionSide::Short && side == OrderSide::Buy);
 
             if is_reducing {
+                let quantity = min(remaining_quantity, existing_position.quantity_open);
                 remaining_quantity -= existing_position.quantity_open;
                 let exchange_rate = if self.currency != existing_position.symbol_info.pnl_currency {
                     match get_exchange_rate(self.currency, existing_position.symbol_info.pnl_currency, time, side).await {
