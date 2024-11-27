@@ -11,6 +11,7 @@ use crate::strategies::indicators::indicator_values::{IndicatorPlot, IndicatorVa
 use crate::strategies::indicators::indicators_trait::{IndicatorName, Indicators};
 use rust_decimal_macros::dec;
 use crate::standardized_types::base_data::base_data_type::BaseDataType;
+use crate::standardized_types::base_data::tick::Aggressor;
 use crate::standardized_types::base_data::traits::BaseData;
 
 /// Renko Indicator
@@ -30,6 +31,9 @@ pub struct Renko {
     history: RollingWindow<IndicatorValues>,
     is_ready: bool,
     renko_range: Decimal,
+    sell_aggressors: Decimal,
+    buy_aggressors: Decimal,
+    volume: Decimal,
     open_price: Option<Decimal>,
     open_time: Option<DateTime<Utc>>
 }
@@ -56,6 +60,8 @@ impl Renko {
             subscription,
             decimal_accuracy,
             renko_range,
+            sell_aggressors: Default::default(),
+            buy_aggressors: Default::default(),
             tick_size,
             up_color,
             down_color,
@@ -63,6 +69,7 @@ impl Renko {
             is_ready: false,
             open_price: None,
             open_time: None,
+            volume: Default::default(),
         })
     }
 
@@ -138,36 +145,7 @@ impl Renko {
         }
     }
 
-    #[allow(dead_code)]
-    fn update_base_data(&mut self, base_data: &BaseDataEnum) -> Option<Vec<IndicatorValues>> {
-        if base_data.subscription() != self.subscription {
-            return None;
-        }
-
-        match base_data {
-            BaseDataEnum::Tick(tick) => {
-                // Only process if movement >= tick size to reduce noise
-                if let Some(last_price) = self.open_price {
-                    if (tick.price - last_price).abs() < self.tick_size {
-                        return None;
-                    }
-                }
-                self.process_price(tick.price, tick.time_utc())
-            },
-            BaseDataEnum::Quote(quote) => {
-                // Same check for quotes
-                if let Some(last_price) = self.open_price {
-                    if (quote.bid - last_price).abs() < self.tick_size {
-                        return None;
-                    }
-                }
-                self.process_price(quote.bid, quote.time_utc())
-            },
-            _ => None,
-        }
-    }
-
-    fn create_renko_block(&self, open: Decimal, close: Decimal, time: DateTime<Utc>) -> IndicatorValues {
+    fn create_renko_block(&mut self, open: Decimal, close: Decimal, time: DateTime<Utc>) -> IndicatorValues {
         let mut values = IndicatorValues::new(
             self.name.clone(),
             self.subscription.clone(),
@@ -177,14 +155,34 @@ impl Renko {
 
         let color = if close > open { self.up_color.clone() } else { self.down_color.clone() };
 
+      /*  println!("Creating block - Before reset: Volume: {}, Buy: {}, Sell: {}",
+                 self.volume, self.buy_aggressors, self.sell_aggressors);*/
+
         // Only create if it's a full block
         let movement = (close - open).abs();
         if movement >= self.renko_range {
             let open_plot = IndicatorPlot::new("open".to_string(), open, color.clone());
-            let close_plot = IndicatorPlot::new("close".to_string(), close, color);
+            let close_plot = IndicatorPlot::new("close".to_string(), close, color.clone());
+            let volume_plot = IndicatorPlot::new("volume".to_string(), self.volume, color.clone());
+            let delta_plot = IndicatorPlot::new("delta".to_string(), self.buy_aggressors - self.sell_aggressors, color.clone());
 
+            let delta_percent_plot = if self.volume > dec!(0) {
+                IndicatorPlot::new(
+                    "delta_percent".to_string(),
+                    ((self.buy_aggressors - self.sell_aggressors) / self.volume) * dec!(100),  // multiply by 100 to get percentage
+                    color
+                )
+            } else {
+                IndicatorPlot::new("delta_percent".to_string(), dec!(0), color)
+            };
+            values.insert_plot("delta".to_string(), delta_plot);
+            values.insert_plot("delta_percent".to_string(), delta_percent_plot);
+            values.insert_plot("volume".to_string(), volume_plot);
             values.insert_plot("open".to_string(), open_plot);
             values.insert_plot("close".to_string(), close_plot);
+            self.volume = dec!(0);
+            self.buy_aggressors = dec!(0);
+            self.sell_aggressors = dec!(0);
         }
 
         values
@@ -206,7 +204,15 @@ impl Indicators for Renko {
         }
 
         let (price, time) = match base_data {
-            BaseDataEnum::Tick(tick) => (tick.price, tick.time_utc()),
+            BaseDataEnum::Tick(tick) => {
+                match tick.aggressor {
+                    Aggressor::Buy => self.buy_aggressors += tick.volume,
+                    Aggressor::Sell => self.sell_aggressors += tick.volume,
+                    Aggressor::None => {}
+                }
+                self.volume += tick.volume;
+                (tick.price, tick.time_utc())
+            },
             BaseDataEnum::Quote(quote) => (quote.bid, quote.time_utc()),
             _ => return None,
         };
