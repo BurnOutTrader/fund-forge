@@ -645,10 +645,6 @@ impl SymbolSubscriptionHandler {
 
         let mut returned_windows = AHashMap::new();
         if let Some(primary) = primary_source {
-            if !self.vendor_primary_resolutions.contains(&primary) {
-                return Err(DataSubscriptionEvent::FailedToSubscribe(new_subscription.clone(), format!("{}: Does not support this subscription: {}", new_subscription.symbol.data_vendor, new_subscription)))
-            }
-
             // Handle primary subscription if it doesn't exist
             if !self.primary_subscriptions.contains_key(&primary) {
                 let new_primary = DataSubscription::new(new_subscription.symbol.name.clone(), new_subscription.symbol.data_vendor.clone(), primary.resolution, primary.base_data_type, new_subscription.market_type.clone());
