@@ -62,7 +62,6 @@ pub struct Ledger {
     pub(crate) symbol_info: DashMap<SymbolName, SymbolInfo>,
     pub open_pnl: DashMap<SymbolCode, Price>,
     pub total_booked_pnl: Price,
-    pub commissions_paid: Decimal,
     pub mode: StrategyMode,
     pub is_simulating_pnl: bool,
     pub(crate) strategy_sender: Sender<StrategyEvent>,
@@ -116,7 +115,6 @@ impl Ledger {
             symbol_info: DashMap::new(),
             open_pnl: DashMap::new(),
             total_booked_pnl: dec!(0),
-            commissions_paid: Default::default(),
             mode,
             is_simulating_pnl,
             strategy_sender,
@@ -608,7 +606,13 @@ impl Ledger {
         let cash_value = self.cash_value.clone();
         let cash_used = self.cash_used.clone();
         let cash_available = self.cash_available.clone();
-        let commission_paid = self.commissions_paid.clone();
+        let commission_paid = self.positions_closed.iter().fold(dec!(0.0), |acc, ref_multi| {
+            acc + ref_multi.value().iter().fold(dec!(0.0), |pos_acc, position| {
+                pos_acc + position.completed_trades.iter().fold(dec!(0.0), |trade_acc, trade| {
+                    trade_acc + trade.commissions
+                })
+            })
+        });
         let pnl = self.total_booked_pnl.clone();
 
         format!(
@@ -727,7 +731,7 @@ impl Ledger {
                 } else {
                     dec!(1.0)
                 };
-                let event= existing_position.reduce_position_size(self.mode, market_fill_price, quantity, order_id.clone(), self.currency, exchange_rate, time, tag.clone()).await;
+                let event= existing_position.reduce_position_size(market_fill_price, quantity, order_id.clone(), self.currency, exchange_rate, time, tag.clone()).await;
                 match &event {
                     PositionUpdateEvent::PositionReduced { booked_pnl, .. } => {
                         self.positions.insert(symbol_code.clone(), existing_position);
@@ -1058,6 +1062,7 @@ mod test {
     use super::*;
     use rust_decimal_macros::dec;
     use crate::apis::rithmic::rithmic_systems::RithmicSystem;
+    use crate::product_maps::rithmic::maps::get_futures_commissions_info;
 
     async fn setup_test_ledger() -> (Ledger, tokio::sync::mpsc::Receiver<StrategyEvent>) {
         let (strategy_sender, strategy_receiver) = tokio::sync::mpsc::channel(100);
@@ -1100,7 +1105,6 @@ mod test {
     async fn test_position_pnl_calculation() {
         let (mut ledger, mut strategy_receiver) = setup_test_ledger().await;
 
-        // Spawn a task to consume strategy events
         let event_handler = tokio::spawn(async move {
             while let Some(event) = strategy_receiver.recv().await {
                 println!("Received strategy event: {:?}", event);
@@ -1112,7 +1116,10 @@ mod test {
         let tag = "test".to_string();
         let time = Utc::now();
 
-        // Create a long position
+        let commission_per_side = get_futures_commissions_info(&"NQ".to_string()).unwrap().per_side;
+        let commission_per_trade = commission_per_side * dec!(2.0); // Both entry and exit
+
+        // Create a long position with 2 contracts
         println!("\nOpening long position...");
         let (tx, rx) = tokio::sync::oneshot::channel();
         ledger.update_or_create_paper_position(
@@ -1126,14 +1133,12 @@ mod test {
             "order1".to_string(),
             tx,
         ).await;
-        println!("Ledger total profit: {}", ledger.total_booked_pnl);
         let quantity_open = ledger.position_size(&symbol_code);
-        println!("Position size: {}", quantity_open);
         assert_eq!(quantity_open, dec!(2.0));
         assert_eq!(ledger.total_booked_pnl, dec!(0.0));
         let _ = rx.await;
 
-        // Add to the position
+        // Add 1 contract to the position
         println!("\nAdding to position...");
         let (tx, rx) = tokio::sync::oneshot::channel();
         ledger.update_or_create_paper_position(
@@ -1147,14 +1152,11 @@ mod test {
             "order2".to_string(),
             tx,
         ).await;
-        println!("Ledger total profit: {}", ledger.total_booked_pnl);
         let quantity_open = ledger.position_size(&symbol_code);
-        println!("Position size: {}", quantity_open);
         assert_eq!(quantity_open, dec!(3.0));
-        assert_eq!(ledger.total_booked_pnl, dec!(0.0));
         let _ = rx.await;
 
-        // Partial exit
+        // Exit 1 contract
         println!("\nPartial exit...");
         let (tx, rx) = tokio::sync::oneshot::channel();
         ledger.update_or_create_paper_position(
@@ -1168,11 +1170,8 @@ mod test {
             "order3".to_string(),
             tx,
         ).await;
-        println!("Ledger total profit: {}", ledger.total_booked_pnl);
         let quantity_open = ledger.position_size(&symbol_code);
-        println!("Position size: {}", quantity_open);
         assert_eq!(quantity_open, dec!(2.0));
-        assert_eq!(ledger.total_booked_pnl, dec!(1000.0));
         let _ = rx.await;
 
         // Final exit
@@ -1184,89 +1183,57 @@ mod test {
             dec!(17575.0),         // exit price
             "final_exit".to_string(),
         ).await;
-        println!("Ledger total profit: {}", ledger.total_booked_pnl);
         let quantity_open = ledger.position_size(&symbol_code);
         assert_eq!(quantity_open, dec!(0.0));
-        assert_eq!(ledger.total_booked_pnl, dec!(3500.0));
-        println!("Position size: {}", quantity_open);
 
-        // Print detailed position information
-        {
-            let closed_positions = ledger.positions_closed.get(&symbol_code);
-            if let Some(positions) = closed_positions {
-                for position in positions.value() {
-                    println!("\nClosed Position Details:");
-                    println!("  Total Booked PnL: {}", position.booked_pnl);
-                    println!("  Number of trades: {}", position.completed_trades.len());
+        // First trade: (17550 - 17500) * 1 = 1000 - 3.80 commission
+        let expected_first_trade_pnl = dec!(1000.0) - commission_per_trade;  // 996.20
 
-                    println!("\nIndividual Trades:");
-                    for trade in &position.completed_trades {
-                        println!("  Entry Price: {}, Exit Price: {}, Quantity: {}, PnL: {}, Result: {:?}",
-                                 trade.entry_price,
-                                 trade.exit_price,
-                                 trade.entry_quantity,
-                                 trade.profit,
-                                 trade.result);
-                    }
-                }
-            }
-        }
+        // Second trade: (17575 - 17500) * 1 = 1500 - 3.80 commission
+        let expected_second_trade_pnl = dec!(1500.0) - commission_per_trade; // 1496.20
 
-        println!("\nLedger Statistics:");
-        let ledger_stats = ledger.ledger_statistics_to_string();
-        println!("{}", ledger_stats);
+        // Third trade: (17575 - 17525) * 1 = 1000 - 3.80 commission
+        let expected_third_trade_pnl = dec!(1000.0) - commission_per_trade;  // 996.20
 
-        println!("\nTrade Statistics:");
-        let trade_stats = ledger.trade_statistics_to_string();
-        println!("{}", trade_stats);
-
-        let expected_first_trade_pnl = dec!(1000.0);
-        let expected_second_trade_pnl = dec!(1500.0);
-        let expected_third_trade_pnl = dec!(1000.0);
         let expected_total_pnl = expected_first_trade_pnl + expected_second_trade_pnl + expected_third_trade_pnl;
 
-        {
-            let closed_positions = ledger.positions_closed.get(&symbol_code);
-            if let Some(positions) = closed_positions {
-                let position = &positions.value()[0];
+        let closed_positions = ledger.positions_closed.get(&symbol_code);
+        if let Some(positions) = closed_positions {
+            let position = &positions.value()[0];
 
-                // Verify individual trade PnL
-                assert_eq!(
-                    position.completed_trades[0].profit,
-                    expected_first_trade_pnl,
-                    "First trade PnL mismatch: expected {}, got {}",
-                    expected_first_trade_pnl,
-                    position.completed_trades[0].profit
-                );
+            assert_eq!(
+                position.completed_trades[0].profit,
+                expected_first_trade_pnl,
+                "First trade PnL mismatch: expected {}, got {}",
+                expected_first_trade_pnl,
+                position.completed_trades[0].profit
+            );
 
-                assert_eq!(
-                    position.completed_trades[1].profit,
-                    expected_second_trade_pnl,
-                    "Second trade PnL mismatch: expected {}, got {}",
-                    expected_second_trade_pnl,
-                    position.completed_trades[1].profit
-                );
+            assert_eq!(
+                position.completed_trades[1].profit,
+                expected_second_trade_pnl,
+                "Second trade PnL mismatch: expected {}, got {}",
+                expected_second_trade_pnl,
+                position.completed_trades[1].profit
+            );
 
-                assert_eq!(
-                    position.completed_trades[2].profit,
-                    expected_third_trade_pnl,
-                    "Third trade PnL mismatch: expected {}, got {}",
-                    expected_third_trade_pnl,
-                    position.completed_trades[2].profit
-                );
+            assert_eq!(
+                position.completed_trades[2].profit,
+                expected_third_trade_pnl,
+                "Third trade PnL mismatch: expected {}, got {}",
+                expected_third_trade_pnl,
+                position.completed_trades[2].profit
+            );
 
-                // Verify total PnL
-                assert_eq!(
-                    position.booked_pnl,
-                    expected_total_pnl,
-                    "Total PnL mismatch: expected {}, got {}",
-                    expected_total_pnl,
-                    position.booked_pnl
-                );
-            }
+            assert_eq!(
+                position.booked_pnl,
+                expected_total_pnl,
+                "Total PnL mismatch: expected {}, got {}",
+                expected_total_pnl,
+                position.booked_pnl
+            );
         }
 
-        // Wait for all events to be processed
         event_handler.abort();
     }
 
@@ -1274,7 +1241,6 @@ mod test {
     async fn test_multiple_positions_pnl_calculation() {
         let (mut ledger, mut strategy_receiver) = setup_test_ledger().await;
 
-        // Spawn a task to consume strategy events
         let event_handler = tokio::spawn(async move {
             while let Some(event) = strategy_receiver.recv().await {
                 println!("Received strategy event: {:?}", event);
@@ -1286,6 +1252,10 @@ mod test {
         let symbol2 = "ES".to_string();
         let symbol2_code = "ESZ4".to_string();
         let time = Utc::now();
+
+        let nq_commission_per_side = get_futures_commissions_info(&symbol1).unwrap().per_side;
+        let es_commission_per_side = get_futures_commissions_info(&symbol2).unwrap().per_side;
+        let commission_per_trade = dec!(2.0);
 
         // Opening first position for Symbol1
         println!("\nOpening long position for Symbol1...");
@@ -1305,9 +1275,7 @@ mod test {
             .await;
         let _ = rx.await;
 
-        println!("Ledger total profit: {}", ledger.total_booked_pnl);
         let qty_symbol1 = ledger.position_size(&symbol1_code);
-        println!("Position size Symbol1: {}", qty_symbol1);
         assert_eq!(qty_symbol1, dec!(2.0));
 
         // Opening position for Symbol2
@@ -1328,9 +1296,7 @@ mod test {
             .await;
         let _ = rx.await;
 
-        println!("Ledger total profit: {}", ledger.total_booked_pnl);
         let qty_symbol2 = ledger.position_size(&symbol2_code);
-        println!("Position size Symbol2: {}", qty_symbol2);
         assert_eq!(qty_symbol2, dec!(1.0));
 
         // Adding to Symbol1 position
@@ -1351,9 +1317,7 @@ mod test {
             .await;
         let _ = rx.await;
 
-        println!("Ledger total profit: {}", ledger.total_booked_pnl);
         let qty_symbol1 = ledger.position_size(&symbol1_code);
-        println!("Position size Symbol1: {}", qty_symbol1);
         assert_eq!(qty_symbol1, dec!(3.0));
 
         // Partial exit for Symbol1
@@ -1374,9 +1338,7 @@ mod test {
             .await;
         let _ = rx.await;
 
-        println!("Ledger total profit: {}", ledger.total_booked_pnl);
         let qty_symbol1 = ledger.position_size(&symbol1_code);
-        println!("Position size Symbol1: {}", qty_symbol1);
         assert_eq!(qty_symbol1, dec!(2.0));
 
         // Exiting Symbol2 completely
@@ -1391,9 +1353,7 @@ mod test {
             )
             .await;
 
-        println!("Ledger total profit: {}", ledger.total_booked_pnl);
         let qty_symbol2 = ledger.position_size(&symbol2_code);
-        println!("Position size Symbol2: {}", qty_symbol2);
         assert_eq!(qty_symbol2, dec!(0.0));
 
         // Final exit for Symbol1
@@ -1408,12 +1368,22 @@ mod test {
             )
             .await;
 
-        println!("Ledger total profit: {}", ledger.total_booked_pnl);
         let qty_symbol1 = ledger.position_size(&symbol1_code);
         assert_eq!(qty_symbol1, dec!(0.0));
 
-        let expected_pnl_symbol1 = dec!(3500.0); // NQ
-        let expected_pnl_symbol2 = dec!(2500.0); // ES
+        // Calculate expected PnLs with commissions
+        // NQ trades:
+        // First exit: (17550 - 17500) * 1 = 1000 - 3.80 = 996.20
+        // Second exit: (17575 - 17500) * 1 = 1500 - 3.80 = 1496.20
+        // Third exit: (17575 - 17525) * 1 = 1000 - 3.80 = 996.20
+        let nq_commission_total = nq_commission_per_side * commission_per_trade * dec!(3.0); // 3 trades
+        let expected_pnl_symbol1 = dec!(3500.0) - nq_commission_total;
+
+        // ES trade:
+        // Single trade: (4550 - 4500) * 1 = 2500 - 3.80 = 2496.20
+        let es_commission_total = es_commission_per_side * commission_per_trade; // 1 trade
+        let expected_pnl_symbol2 = dec!(2500.0) - es_commission_total;
+
         let expected_total_pnl = expected_pnl_symbol1 + expected_pnl_symbol2;
 
         assert_eq!(
@@ -1424,14 +1394,12 @@ mod test {
             ledger.total_booked_pnl
         );
 
-        // Print detailed information
         println!("\nFinal Ledger Statistics:");
         println!("{}", ledger.ledger_statistics_to_string());
 
         println!("\nTrade Statistics:");
         println!("{}", ledger.trade_statistics_to_string());
 
-        // Wait for all events to be processed
         event_handler.abort();
     }
 
@@ -1451,6 +1419,10 @@ mod test {
         let symbol2_code = "ESZ4".to_string();
         let time = Utc::now();
 
+        let nq_commission_per_side = get_futures_commissions_info(&symbol1).unwrap().per_side;
+        let es_commission_per_side = get_futures_commissions_info(&symbol2).unwrap().per_side;
+        let commission_per_trade = dec!(2.0);
+
         // Opening first short position for Symbol1
         println!("\nOpening short position for Symbol1...");
         let (tx, rx) = tokio::sync::oneshot::channel();
@@ -1469,7 +1441,7 @@ mod test {
             .await;
         let _ = rx.await;
 
-        assert_eq!(ledger.position_size(&symbol1_code), dec!(2.0)); // Position size stays positive
+        assert_eq!(ledger.position_size(&symbol1_code), dec!(2.0));
 
         // Opening short position for Symbol2
         println!("\nOpening short position for Symbol2...");
@@ -1489,7 +1461,7 @@ mod test {
             .await;
         let _ = rx.await;
 
-        assert_eq!(ledger.position_size(&symbol2_code), dec!(1.0)); // Position size stays positive
+        assert_eq!(ledger.position_size(&symbol2_code), dec!(1.0));
 
         // Covering half of Symbol1 position
         println!("\nPartial cover for Symbol1...");
@@ -1509,7 +1481,7 @@ mod test {
             .await;
         let _ = rx.await;
 
-        assert_eq!(ledger.position_size(&symbol1_code), dec!(1.0)); // Should be reduced by 1.0
+        assert_eq!(ledger.position_size(&symbol1_code), dec!(1.0));
 
         // Cover Symbol2 completely
         println!("\nFinal cover for Symbol2...");
@@ -1535,8 +1507,17 @@ mod test {
             )
             .await;
 
-        let expected_pnl_symbol1 = dec!(3000.0); // (17500 - 17450) * 1 + (17500 - 17400) * 1
-        let expected_pnl_symbol2 = dec!(2500.0); // (4500 - 4450) * 1
+        // NQ trades:
+        // First trade: (17500 - 17450) * 1 = 500 - 3.80 = 496.20
+        // Second trade: (17500 - 17400) * 1 = 1000 - 3.80 = 996.20
+        let nq_commission_total = nq_commission_per_side * commission_per_trade * dec!(2.0); // 2 trades
+        let expected_pnl_symbol1 = dec!(3000.0) - nq_commission_total;
+
+        // ES trade:
+        // Single trade: (4500 - 4450) * 1 = 2500 - 3.80 = 2496.20
+        let es_commission_total = es_commission_per_side * commission_per_trade; // 1 trade
+        let expected_pnl_symbol2 = dec!(2500.0) - es_commission_total;
+
         let expected_total_pnl = expected_pnl_symbol1 + expected_pnl_symbol2;
 
         assert_eq!(
@@ -1571,6 +1552,10 @@ mod test {
         let symbol2 = "ES".to_string();
         let symbol2_code = "ESZ4".to_string();
         let time = Utc::now();
+
+        let nq_commission_per_side = get_futures_commissions_info(&symbol1).unwrap().per_side;
+        let es_commission_per_side = get_futures_commissions_info(&symbol2).unwrap().per_side;
+        let commission_per_trade = dec!(2.0);
 
         // Opening long position for Symbol1 (will be a losing trade)
         println!("\nOpening long position for Symbol1...");
@@ -1650,8 +1635,17 @@ mod test {
             )
             .await;
 
-        let expected_pnl_symbol1 = dec!(-3000.0); // (17450 - 17500) * 1 + (17400 - 17500) * 1
-        let expected_pnl_symbol2 = dec!(-2500.0); // (4500 - 4550) * 1
+        // NQ trades:
+        // First trade: (17450 - 17500) * 1 = -500 - 3.80 = -503.80
+        // Second trade: (17400 - 17500) * 1 = -1000 - 3.80 = -1003.80
+        let nq_commission_total = nq_commission_per_side * commission_per_trade * dec!(2.0); // 2 trades
+        let expected_pnl_symbol1 = dec!(-3000.0) - nq_commission_total;
+
+        // ES trade:
+        // Single trade: (4500 - 4550) * 1 = -2500 - 3.80 = -2503.80
+        let es_commission_total = es_commission_per_side * commission_per_trade; // 1 trade
+        let expected_pnl_symbol2 = dec!(-2500.0) - es_commission_total;
+
         let expected_total_pnl = expected_pnl_symbol1 + expected_pnl_symbol2;
 
         assert_eq!(

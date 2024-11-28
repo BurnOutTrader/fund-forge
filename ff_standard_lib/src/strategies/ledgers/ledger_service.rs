@@ -216,7 +216,6 @@ impl LedgerService {
                         symbol_info: Default::default(),
                         open_pnl: Default::default(),
                         total_booked_pnl: dec!(0),
-                        commissions_paid: Default::default(),
                         mode: strategy_mode.clone(),
                         is_simulating_pnl: true,
                         strategy_sender: self.strategy_sender.clone(),

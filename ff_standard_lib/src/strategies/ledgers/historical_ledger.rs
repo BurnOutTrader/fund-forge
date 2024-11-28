@@ -1,10 +1,8 @@
 use std::cmp::min;
 use crate::strategies::ledgers::ledger::Ledger;
 use chrono::{DateTime, Utc};
-use rust_decimal::Decimal;
 use rust_decimal_macros::dec;
 use crate::messages::data_server_messaging::FundForgeError;
-use crate::product_maps::rithmic::maps::get_futures_commissions_info;
 use crate::standardized_types::accounts::{Currency};
 use crate::standardized_types::enums::{OrderSide, PositionSide, StrategyMode};
 use crate::standardized_types::new_types::{Price, Volume};
@@ -15,15 +13,6 @@ use crate::strategies::client_features::other_requests::get_exchange_rate;
 use crate::strategies::strategy_events::StrategyEvent;
 
 impl Ledger {
-    pub(crate) async fn record_commissions(&mut self, symbol_name: &SymbolName, contracts: Volume, exchange_rate: Decimal) {
-        //todo, this fn get_futures_commissions_info() will need to be a more dynamic / generic function to cover all brokerages, we also need to use
-        // commission info to get the exchange rate, for example pnl currency will not be exchange rate currency
-        if let Ok(commission_info) = get_futures_commissions_info(&symbol_name) {
-            let commission = contracts * commission_info.per_side * exchange_rate;
-            self.commissions_paid += commission;
-        }
-    }
-
     pub(crate) async fn release_margin_used(&mut self, symbol_code: &SymbolCode) {
         // First get_requests the margin amount without removing it
         if let Some((_,margin_used)) = self.margin_used.remove(symbol_code) {
@@ -104,8 +93,7 @@ impl Ledger {
             } else {
                 dec!(1.0)
             };
-            self.record_commissions(&symbol_name, existing_position.quantity_open, exchange_rate).await;
-            let event = existing_position.reduce_position_size(self.mode, market_price, existing_position.quantity_open, order_id, self.currency, exchange_rate, time, tag).await;
+            let event = existing_position.reduce_position_size(market_price, existing_position.quantity_open, order_id, self.currency, exchange_rate, time, tag).await;
             match &event {
                 PositionUpdateEvent::PositionClosed { booked_pnl, .. } => {
                     // TODO[Strategy]: Add option to mirror account position or use internal position curating.
@@ -172,9 +160,8 @@ impl Ledger {
                 } else {
                     dec!(1.0)
                 };
-                self.record_commissions(&symbol_name, existing_position.quantity_open, exchange_rate).await;
 
-                let event = existing_position.reduce_position_size(self.mode, market_fill_price, quantity, order_id.clone(), self.currency,exchange_rate, time, tag.clone()).await;
+                let event = existing_position.reduce_position_size(market_fill_price, quantity, order_id.clone(), self.currency,exchange_rate, time, tag.clone()).await;
 
                 match &event {
                     PositionUpdateEvent::PositionReduced { booked_pnl, .. } => {
@@ -284,7 +271,6 @@ impl Ledger {
             };
             //eprintln!("symbol_code: {}, exchange_rate: {}, {}, {}", symbol_code, exchange_rate, self.currency, info.pnl_currency);
             //todo, we only need to do this for certain brokerages, I will need a better pattern..
-            self.record_commissions(&symbol_name, remaining_quantity, exchange_rate).await;
             if symbol_name != symbol_code && !self.symbol_code_map.contains_key(&symbol_name) {
                 self.symbol_code_map.insert(symbol_name.clone(), vec![]);
             };

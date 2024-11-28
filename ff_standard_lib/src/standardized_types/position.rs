@@ -452,7 +452,7 @@ impl Position {
     }
 
     /// Reduces position size a position event, this event will include a booked_pnl property
-    pub(crate) async fn reduce_position_size(&mut self, mode: StrategyMode, market_price: Price, quantity: Volume, order_id: OrderId, account_currency: Currency, exchange_rate: Decimal, time: DateTime<Utc>, tag: String) -> PositionUpdateEvent {
+    pub(crate) async fn reduce_position_size(&mut self, market_price: Price, quantity: Volume, order_id: OrderId, account_currency: Currency, exchange_rate: Decimal, time: DateTime<Utc>, tag: String) -> PositionUpdateEvent {
         if quantity > self.quantity_open {
             panic!("Something wrong with logic, ledger should know this not to be possible")
         }
@@ -795,7 +795,6 @@ mod test {
 
         // Reduce position (should take from first entry - FIFO)
         let event = position.reduce_position_size(
-            StrategyMode::Backtest,
             dec!(17575.0),
             dec!(1.0),
             "Test".to_string(),
@@ -862,7 +861,6 @@ mod test {
 
         // Reduce position (should take from last entry - LIFO)
         let event = position.reduce_position_size(
-            StrategyMode::Backtest,
             dec!(17575.0),
             dec!(1.0),
             "Test".to_string(),
@@ -903,7 +901,6 @@ mod test {
 
         // Reduce position partially
         position.reduce_position_size(
-            StrategyMode::Backtest,
             dec!(17550.0),
             dec!(1.5),
             "Test".to_string(),
@@ -931,7 +928,6 @@ mod test {
 
         // Close entire position
         let event = position.reduce_position_size(
-            StrategyMode::Backtest,
             dec!(17525.0),
             dec!(1.0),
             "Test".to_string(),
@@ -978,7 +974,6 @@ mod test {
 
         // Reduce position
         position.reduce_position_size(
-            StrategyMode::Backtest,
             dec!(17650.0),
             dec!(1.0),
             "Test".to_string(),
@@ -1023,7 +1018,6 @@ mod test {
 
         // Close half position and verify booked PnL
         let event = position.reduce_position_size(
-            StrategyMode::Backtest,
             dec!(17550.0),
             dec!(1.0),
             "Test".to_string(),
@@ -1049,7 +1043,6 @@ mod test {
 
         // Try to reduce more than available
         position.reduce_position_size(
-            StrategyMode::Backtest,
             dec!(17525.0),
             dec!(2.0), // More than position size
             "Test".to_string(),
@@ -1116,7 +1109,6 @@ mod test {
 
         // Reduce position in parts
         position.reduce_position_size(
-            StrategyMode::Backtest,
             dec!(17550.0),
             dec!(1.5),
             "Test".to_string(),
@@ -1127,7 +1119,6 @@ mod test {
         ).await;
 
         position.reduce_position_size(
-            StrategyMode::Backtest,
             dec!(17575.0),
             dec!(1.5),
             "Test".to_string(),
@@ -1164,7 +1155,6 @@ mod test {
 
         // Reduce position in parts
         position.reduce_position_size(
-            StrategyMode::Backtest,
             dec!(17550.0),
             dec!(1.5),
             "Test".to_string(),
@@ -1175,7 +1165,6 @@ mod test {
         ).await;
 
         position.reduce_position_size(
-            StrategyMode::Backtest,
             dec!(17575.0),
             dec!(1.5),
             "Test".to_string(),
