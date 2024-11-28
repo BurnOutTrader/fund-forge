@@ -918,6 +918,7 @@ impl Ledger {
         let mut total_hold_time = Duration::zero();
         let mut largest_win = dec!(0.0);
         let mut largest_loss = dec!(0.0);
+        let mut commission_paid = dec!(0.0);
 
         // Collect statistics for each individual trade
         for entry in self.positions_closed.iter() {
@@ -925,7 +926,7 @@ impl Ledger {
                 for trade in &position.completed_trades {
                     total_trades += 1;
                     total_pnl += trade.profit;
-
+                    commission_paid += trade.commissions;
                     match trade.result {
                         TradeResult::Win => {
                             wins += 1;
@@ -1031,7 +1032,7 @@ impl Ledger {
             format_duration(avg_hold_time),
             format_duration(shortest_hold),
             format_duration(longest_hold),
-            self.commissions_paid.round_dp(2)
+            commission_paid.round_dp(2)
         )
     }
 }
@@ -1060,7 +1061,7 @@ mod test {
 
     async fn setup_test_ledger() -> (Ledger, tokio::sync::mpsc::Receiver<StrategyEvent>) {
         let (strategy_sender, strategy_receiver) = tokio::sync::mpsc::channel(100);
-
+        let market_price_service = Arc::new(MarketPriceService::new());
         let account_info = AccountInfo {
             brokerage: Brokerage::Rithmic(RithmicSystem::Rithmic01),
             account_id: "TEST-123".to_string(),
@@ -1088,6 +1089,7 @@ mod test {
             false,
             strategy_sender,
             PositionCalculationMode::FIFO,
+            market_price_service
         );
 
         (ledger, strategy_receiver)

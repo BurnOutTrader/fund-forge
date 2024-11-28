@@ -369,24 +369,25 @@ impl Position {
             Some(time) => (time.to_string(), format_duration(DateTime::<Utc>::from_str(time).unwrap() - DateTime::<Utc>::from_str(&self.open_time).unwrap()))
         };
 
-        // Calculate final stats from completed trades
+        // Calculate weighted average entry and exit prices from completed trades
         let (weighted_entry, weighted_exit, total_quantity) = self.completed_trades.iter()
             .fold((dec!(0.0), dec!(0.0), dec!(0.0)), |(entry_sum, exit_sum, qty_sum), trade| {
                 (
-                    entry_sum + trade.entry_price * trade.entry_quantity,
-                    exit_sum + trade.exit_price * trade.exit_quantity,
-                    qty_sum + trade.entry_quantity
+                    entry_sum + (trade.entry_price * trade.entry_quantity),
+                    exit_sum + (trade.exit_price * trade.exit_quantity),
+                    qty_sum + trade.entry_quantity // Use entry quantity for consistency
                 )
             });
 
+        // Calculate final prices, using position's average price as fallback
         let final_entry_price = if total_quantity > dec!(0.0) {
-            weighted_entry / total_quantity
+            (weighted_entry / total_quantity).round_dp(self.symbol_info.decimal_accuracy)
         } else {
             self.average_price
         };
 
         let final_exit_price = if total_quantity > dec!(0.0) {
-            weighted_exit / total_quantity
+            (weighted_exit / total_quantity).round_dp(self.symbol_info.decimal_accuracy)
         } else {
             self.average_exit_price.unwrap_or(self.average_price)
         };
@@ -485,10 +486,11 @@ impl Position {
                 account_currency
             );
 
+            // In reduce_position_size
             let commissions = if let Ok(commission_info) = get_futures_commissions_info(&self.symbol_name) {
-                let commission = exit_quantity * commission_info.per_side * exchange_rate;
-                portion_booked_pnl -= commission * dec!(2.0); // Subtract commission from both sides
-                commission
+                let commission_per_side = exit_quantity * commission_info.per_side * exchange_rate;
+                portion_booked_pnl -= commission_per_side * dec!(2.0); // Subtract both entry and exit commission
+                commission_per_side * dec!(2.0)  // Store total commission (both entry and exit)
             } else {
                 dec!(0.0)
             };
@@ -728,7 +730,7 @@ impl Position {
     }
 }
 
-
+//todo fix tests after adding commissions to trades
 #[cfg(test)]
 mod test {
     use super::*;
@@ -793,6 +795,7 @@ mod test {
 
         // Reduce position (should take from first entry - FIFO)
         let event = position.reduce_position_size(
+            StrategyMode::Backtest,
             dec!(17575.0),
             dec!(1.0),
             "Test".to_string(),
@@ -859,6 +862,7 @@ mod test {
 
         // Reduce position (should take from last entry - LIFO)
         let event = position.reduce_position_size(
+            StrategyMode::Backtest,
             dec!(17575.0),
             dec!(1.0),
             "Test".to_string(),
@@ -899,6 +903,7 @@ mod test {
 
         // Reduce position partially
         position.reduce_position_size(
+            StrategyMode::Backtest,
             dec!(17550.0),
             dec!(1.5),
             "Test".to_string(),
@@ -926,6 +931,7 @@ mod test {
 
         // Close entire position
         let event = position.reduce_position_size(
+            StrategyMode::Backtest,
             dec!(17525.0),
             dec!(1.0),
             "Test".to_string(),
@@ -972,6 +978,7 @@ mod test {
 
         // Reduce position
         position.reduce_position_size(
+            StrategyMode::Backtest,
             dec!(17650.0),
             dec!(1.0),
             "Test".to_string(),
@@ -1016,6 +1023,7 @@ mod test {
 
         // Close half position and verify booked PnL
         let event = position.reduce_position_size(
+            StrategyMode::Backtest,
             dec!(17550.0),
             dec!(1.0),
             "Test".to_string(),
@@ -1041,6 +1049,7 @@ mod test {
 
         // Try to reduce more than available
         position.reduce_position_size(
+            StrategyMode::Backtest,
             dec!(17525.0),
             dec!(2.0), // More than position size
             "Test".to_string(),
@@ -1107,6 +1116,7 @@ mod test {
 
         // Reduce position in parts
         position.reduce_position_size(
+            StrategyMode::Backtest,
             dec!(17550.0),
             dec!(1.5),
             "Test".to_string(),
@@ -1117,6 +1127,7 @@ mod test {
         ).await;
 
         position.reduce_position_size(
+            StrategyMode::Backtest,
             dec!(17575.0),
             dec!(1.5),
             "Test".to_string(),
@@ -1153,6 +1164,7 @@ mod test {
 
         // Reduce position in parts
         position.reduce_position_size(
+            StrategyMode::Backtest,
             dec!(17550.0),
             dec!(1.5),
             "Test".to_string(),
@@ -1163,6 +1175,7 @@ mod test {
         ).await;
 
         position.reduce_position_size(
+            StrategyMode::Backtest,
             dec!(17575.0),
             dec!(1.5),
             "Test".to_string(),
