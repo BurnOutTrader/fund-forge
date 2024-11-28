@@ -688,6 +688,7 @@ lazy_static! {
         m.insert("M2K", &CME_HOURS); // Micro Russell 2000
         m.insert("MYM", &CME_HOURS); // Micro Dow
 
+        m.insert("MCL", &CME_HOURS);
         // E-mini Equity Index Futures
         m.insert("NQ", &CME_HOURS);  // E-mini Nasdaq
         m.insert("ES", &CME_HOURS);  // E-mini S&P 500
@@ -731,6 +732,9 @@ lazy_static! {
         m.insert("M6B", &CME_HOURS); // Micro GBP/USD
 
         // Metals and Commodities
+        m.insert("MHG", &CME_HOURS);
+        m.insert("MGC", &CME_HOURS);
+         m.insert("SIL", &CME_HOURS);
         m.insert("GC", &CME_HOURS);   // Gold Futures
         m.insert("SI", &CME_HOURS);   // Silver Futures
         m.insert("HG", &CME_HOURS);   // Copper Futures

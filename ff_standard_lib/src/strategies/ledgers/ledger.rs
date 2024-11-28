@@ -727,7 +727,7 @@ impl Ledger {
                 } else {
                     dec!(1.0)
                 };
-                let event= existing_position.reduce_position_size(market_fill_price, quantity, order_id.clone(), self.currency, exchange_rate, time, tag.clone()).await;
+                let event= existing_position.reduce_position_size(self.mode, market_fill_price, quantity, order_id.clone(), self.currency, exchange_rate, time, tag.clone()).await;
                 match &event {
                     PositionUpdateEvent::PositionReduced { booked_pnl, .. } => {
                         self.positions.insert(symbol_code.clone(), existing_position);

@@ -11,6 +11,7 @@ use rust_decimal_macros::dec;
 use serde_derive::{Deserialize, Serialize};
 use crate::helpers::converters::format_duration;
 use crate::helpers::decimal_calculators::calculate_theoretical_pnl;
+use crate::product_maps::rithmic::maps::get_futures_commissions_info;
 use crate::standardized_types::accounts::{Account, AccountId, Currency};
 use crate::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use crate::standardized_types::broker_enum::Brokerage;
@@ -274,6 +275,7 @@ pub struct Trade {
     pub exit_time: String,
     pub profit: Price,
     pub result: TradeResult,
+    pub commissions: Decimal,
 }
 
 #[derive(Debug)]
@@ -449,7 +451,7 @@ impl Position {
     }
 
     /// Reduces position size a position event, this event will include a booked_pnl property
-    pub(crate) async fn reduce_position_size(&mut self, market_price: Price, quantity: Volume, order_id: OrderId, account_currency: Currency, exchange_rate: Decimal, time: DateTime<Utc>, tag: String) -> PositionUpdateEvent {
+    pub(crate) async fn reduce_position_size(&mut self, mode: StrategyMode, market_price: Price, quantity: Volume, order_id: OrderId, account_currency: Currency, exchange_rate: Decimal, time: DateTime<Utc>, tag: String) -> PositionUpdateEvent {
         if quantity > self.quantity_open {
             panic!("Something wrong with logic, ledger should know this not to be possible")
         }
@@ -472,7 +474,7 @@ impl Position {
             let exit_quantity = remaining_exit_quantity.min(entry.volume);
 
             // Calculate PnL for this portion
-            let portion_booked_pnl = calculate_theoretical_pnl(
+            let mut portion_booked_pnl = calculate_theoretical_pnl(
                 self.account.brokerage,
                 self.side,
                 entry.price,
@@ -483,11 +485,20 @@ impl Position {
                 account_currency
             );
 
+            let commissions = if let Ok(commission_info) = get_futures_commissions_info(&self.symbol_name) {
+                let commission = exit_quantity * commission_info.per_side * exchange_rate;
+                portion_booked_pnl -= commission * dec!(2.0); // Subtract commission from both sides
+                commission
+            } else {
+                dec!(0.0)
+            };
+
             let result = match portion_booked_pnl {
                 pnl if pnl > dec!(0.0) => TradeResult::Win,
                 pnl if pnl < dec!(0.0) => TradeResult::Loss,
                 _ => TradeResult::BreakEven,
             };
+
             // Record the trade
             self.completed_trades.push(Trade {
                 entry_price: entry.price,
@@ -499,7 +510,8 @@ impl Position {
                 exit_time: time.to_string(),
                 profit: portion_booked_pnl,
                 exit_order_id: order_id.clone(),
-                result
+                result,
+                commissions
             });
 
             // If we didn't use all of this entry, we need to put back the remainder
