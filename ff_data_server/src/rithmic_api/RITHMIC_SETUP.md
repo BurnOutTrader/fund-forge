@@ -2,7 +2,7 @@
 ### Rithmic Notes
 When backtesting with rithmic, all historical data is currently saved as DataVendor::Rithmic data.
 
-Rithmic Historical data is capped at around 20 Gb per week.
+Rithmic Historical data is capped at around 40 Gb per week.
 
 ### Rithmic Setup
 To use the rithmic api, you have to apply for a dev kit from rithmic and pass conformance, this is just a matter of creating a unique app name to pass into the RithmicClient;

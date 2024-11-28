@@ -163,8 +163,8 @@ impl Ledger {
 
     pub fn update(&mut self, cash_value: Decimal, cash_available: Decimal, cash_used: Decimal) {
         self.cash_value = cash_value;
-        self.cash_used = cash_used;
         self.cash_available = cash_available;
+        self.cash_used = cash_used;
     }
 
     pub fn ledger_updates(&mut self, mut receiver: Receiver<LedgerMessage>, mode: StrategyMode) {
