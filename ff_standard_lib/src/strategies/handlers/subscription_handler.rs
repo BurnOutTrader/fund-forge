@@ -556,6 +556,7 @@ pub struct SymbolSubscriptionHandler {
     primary_subscriptions: DashMap<PrimarySubscription, DataSubscription>,
     /// The secondary subscriptions are consolidators that are used to consolidate data from the primary subscription. the first key is the primary subscription for each consolidator
     secondary_subscriptions: DashMap<PrimarySubscription, AHashMap<DataSubscription, ConsolidatorEnum>>,
+    #[allow(unused)]
     vendor_primary_resolutions: Vec<PrimarySubscription>,
 }
 

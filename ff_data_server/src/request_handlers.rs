@@ -16,7 +16,6 @@ use tokio::sync::mpsc;
 use tokio::sync::mpsc::{Receiver, Sender};
 use tokio::time::timeout;
 use tokio_rustls::server::TlsStream;
-use crate::server_features::database::hybrid_storage::{DATA_STORAGE, MULTIBAR};
 use crate::server_side_brokerage::{account_info_response, accounts_response, commission_info_response, live_market_order, symbol_info_response, symbol_names_response, live_enter_long, live_exit_long, live_exit_short, live_enter_short, other_orders, cancel_order, flatten_all_for, update_order, cancel_orders_on_account, exchange_rate_response, front_month_info_response};
 use crate::server_side_datavendor::{base_data_types_response, decimal_accuracy_response, markets_response, resolutions_response, symbols_response, tick_size_response};
 use ff_standard_lib::standardized_types::enums::StrategyMode;
@@ -24,6 +23,8 @@ use ff_standard_lib::standardized_types::orders::{Order, OrderRequest, OrderType
 use ff_standard_lib::StreamName;
 use crate::{stream_listener, subscribe_server_shutdown};
 use crate::stream_tasks::deregister_streamer;
+use crate::update_functions::{pre_subscribe_updates, MULTIBAR};
+use crate::update_functions::DATA_STORAGE;
 
 lazy_static!(
     pub static ref RESPONSE_SENDERS: Arc<DashMap<StreamName, Sender<DataServerResponse>>> = Arc::new(DashMap::new());
@@ -71,7 +72,8 @@ pub async fn compressed_file_response(
     if to_time.date_naive() >= Utc::now().date_naive() {
 
         let tasks: Vec<_> = subscriptions.iter().map(|subscription| {
-            data_storage.pre_subscribe_updates(
+            pre_subscribe_updates(
+                DATA_STORAGE.get().unwrap().clone(),
                 subscription.symbol.clone(),
                 subscription.resolution,
                 subscription.base_data_type,

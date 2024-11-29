@@ -22,8 +22,8 @@ use crate::oanda_api::support_and_conversions::oanda_quotebar_from_candle;
 use crate::oanda_api::download::{generate_url};
 use crate::oanda_api::support_and_conversions::oanda_clean_instrument;
 use crate::oanda_api::support_and_conversions::{add_time_to_date, resolution_to_oanda_interval};
-use crate::server_features::database::hybrid_storage::DATA_STORAGE;
 use crate::stream_tasks::{subscribe_stream, unsubscribe_stream};
+use crate::update_functions::DATA_STORAGE;
 
 #[async_trait]
 impl VendorApiResponse for OandaClient {

@@ -22,7 +22,7 @@ use ff_standard_lib::standardized_types::subscriptions::{SymbolCode};
 use crate::rithmic_api::api_client::RithmicBrokerageClient;
 use crate::rithmic_api::plant_handlers::create_datetime;
 use crate::rithmic_api::plant_handlers::handler_loop::send_updates;
-use crate::server_features::database::hybrid_storage::MULTIBAR;
+use crate::update_functions::{MULTIBAR};
 
 lazy_static! {
     pub static ref PROGRESS_PNL: DashMap<(Brokerage, Account, SymbolCode), ProgressBar> = DashMap::new();

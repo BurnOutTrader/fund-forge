@@ -109,13 +109,13 @@ impl IndicatorHandler {
         None
     }
 
-    pub async fn history(&self, name: IndicatorName) -> Option<RollingWindow<IndicatorValues>> {
-        let subscription = match self.subscription_map.get(&name) {
+    pub fn history(&self, name: &IndicatorName) -> Option<RollingWindow<IndicatorValues>> {
+        let subscription = match self.subscription_map.get(name) {
             Some(sub) => sub.clone(),
             None => return None,
         };
         if let Some(map) = self.indicators.get(&subscription) {
-            if let Some(indicator) = map.get(&name) {
+            if let Some(indicator) = map.get(name) {
                 let history = indicator.history();
                 return match history.is_empty() {
                     true => None,

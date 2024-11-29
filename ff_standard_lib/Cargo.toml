@@ -47,3 +47,7 @@ memmap2 = "0.9.5"
 log = "0.4.22"
 float-cmp = "0.10.0"
 uuid = { version = "1.10.0", features = ["v4"] }
+futures-util = "0.3.30"
+indicatif = "*"
+rand = "0.8.5"
+tempfile = "3.13.0"

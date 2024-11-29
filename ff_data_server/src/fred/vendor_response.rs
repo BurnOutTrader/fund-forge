@@ -22,7 +22,7 @@ use ff_standard_lib::standardized_types::enums::{MarketType, StrategyMode};
 use ff_standard_lib::standardized_types::resolution::Resolution;
 use ff_standard_lib::standardized_types::subscriptions::{DataSubscription, Symbol, SymbolName};
 use ff_standard_lib::StreamName;
-use crate::server_features::database::hybrid_storage::{DATA_STORAGE};
+use crate::update_functions::DATA_STORAGE;
 use crate::server_features::server_side_datavendor::VendorApiResponse;
 
 static FRED_CLIENT: OnceCell<Arc<FredApiClient>> = OnceCell::const_new();

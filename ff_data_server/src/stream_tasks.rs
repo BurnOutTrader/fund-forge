@@ -186,13 +186,13 @@ pub async fn stream_handler(
                         match stream.write_all(&prefixed_msg).await {
                             Ok(_) => {
                                 // Add explicit flush after successful write
-                                if let Err(e) = stream.flush().await {
+                                if let Err(_e) = stream.flush().await {
                                     //eprintln!("Error flushing stream: {}", e);
                                     broadcast_shutdown(stream_name).await;
                                     break;
                                 }
                             }
-                            Err(e) => {
+                            Err(_e) => {
                                 //eprintln!("Error writing to stream: {}", e);
                                 broadcast_shutdown(stream_name).await;
                                 break;

@@ -892,11 +892,11 @@ impl FundForgeStrategy {
     }
 
     /// see the indicator_enum.rs for more details
-    pub async fn indicator_history(
+    pub fn indicator_history(
         &self,
-        name: IndicatorName,
+        name: &IndicatorName,
     ) -> Option<RollingWindow<IndicatorValues>> {
-        self.indicator_handler.history(name).await
+        self.indicator_handler.history(name)
     }
 
     /// returns the strategy time zone.

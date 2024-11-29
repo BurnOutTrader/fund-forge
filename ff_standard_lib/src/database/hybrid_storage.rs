@@ -1,7 +1,7 @@
 use std::cmp::min;
 use std::collections::{BTreeMap, HashMap};
 use std::fs;
-use ff_standard_lib::standardized_types::base_data::base_data_enum::BaseDataEnum;
+use crate::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use std::path::{Path, PathBuf};
 use std::fs::{create_dir_all, File, OpenOptions};
 use std::io::{self, Read, Write, Seek, SeekFrom};
@@ -13,37 +13,30 @@ use flate2::Compression;
 use flate2::read::GzDecoder;
 use flate2::write::GzEncoder;
 use futures_util::future::join_all;
-use indicatif::{MultiProgress};
-use lazy_static::lazy_static;
 use memmap2::{Mmap};
-use tokio::sync::{OnceCell, Semaphore};
+use tokio::sync::{Semaphore};
 use tokio::task;
 use tokio::task::JoinHandle;
 use tokio::time::{interval, timeout};
-use ff_standard_lib::messages::data_server_messaging::{FundForgeError};
-use ff_standard_lib::standardized_types::base_data::base_data_type::BaseDataType;
-use ff_standard_lib::standardized_types::base_data::traits::BaseData;
-use ff_standard_lib::standardized_types::resolution::Resolution;
-use ff_standard_lib::standardized_types::subscriptions::{DataSubscription, Symbol, SymbolName};
-use crate::{ServerLaunchOptions};
+use crate::messages::data_server_messaging::FundForgeError;
+use crate::server_launch_options::ServerLaunchOptions;
+use crate::standardized_types::base_data::base_data_type::BaseDataType;
+use crate::standardized_types::base_data::traits::BaseData;
+use crate::standardized_types::resolution::Resolution;
+use crate::standardized_types::subscriptions::{DataSubscription, Symbol, SymbolName};
 
-pub static DATA_STORAGE: OnceCell<Arc<HybridStorage>> = OnceCell::const_new();
-
-lazy_static!(
-    pub static ref MULTIBAR: MultiProgress = MultiProgress::new();
-);
 
 #[allow(unused)]
 pub struct HybridStorage {
     base_path: PathBuf,
-    mmap_cache: Arc<DashMap<String, Arc<Mmap>>>,
+    pub(crate) mmap_cache: Arc<DashMap<String, Arc<Mmap>>>,
     cache_last_accessed: Arc<DashMap<String, DateTime<Utc>>>,
     clear_cache_duration: Duration,
     file_locks: Arc<DashMap<String, Arc<Semaphore>>>,
-    pub(crate) download_tasks: Arc<DashMap<(SymbolName, BaseDataType, Resolution), JoinHandle<()>>>,
-    pub(crate) options: ServerLaunchOptions,
-    pub(crate) download_semaphore: Arc<Semaphore>,
-    pub(crate) update_seconds: u64,
+    pub download_tasks: Arc<DashMap<(SymbolName, BaseDataType, Resolution), JoinHandle<()>>>,
+    pub options: ServerLaunchOptions,
+    pub download_semaphore: Arc<Semaphore>,
+    pub update_seconds: u64,
 }
 
 impl HybridStorage {
@@ -65,7 +58,7 @@ impl HybridStorage {
     }
 
 
-    pub(crate) fn start_cache_management(self: Arc<Self>) {
+    pub fn start_cache_management(self: Arc<Self>) {
         let mmap_cache = Arc::clone(&self.mmap_cache);
         let cache_last_accessed = Arc::clone(&self.cache_last_accessed);
         let clear_cache_duration = self.clear_cache_duration;
@@ -649,7 +642,7 @@ impl HybridStorage {
 #[cfg(test)]
 mod test {
     use tempfile::TempDir;
-    use ff_standard_lib::standardized_types::base_data::candle::generate_5_day_candle_data;
+    use crate::standardized_types::base_data::candle::generate_5_day_candle_data;
     use super::*;
 
     fn setup_test_storage() -> (HybridStorage, TempDir) {
