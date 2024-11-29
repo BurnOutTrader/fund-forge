@@ -28,7 +28,7 @@ use crate::standardized_types::subscriptions::{DataSubscription, Symbol, SymbolN
 
 #[allow(unused)]
 pub struct HybridStorage {
-    base_path: PathBuf,
+    pub(crate) base_path: PathBuf,
     pub(crate) mmap_cache: Arc<DashMap<String, Arc<Mmap>>>,
     cache_last_accessed: Arc<DashMap<String, DateTime<Utc>>>,
     clear_cache_duration: Duration,

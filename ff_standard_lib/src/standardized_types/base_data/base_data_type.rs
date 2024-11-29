@@ -51,11 +51,11 @@ impl BaseDataType {
     // Convert from string to BaseDataType
     pub fn from_str(string_ref: &str) -> Result<Self, String> {
         match string_ref.to_lowercase().as_str() {
-            "Ticks" => Ok(BaseDataType::Ticks),
-            "Quotes" => Ok(BaseDataType::Quotes),
-            "Quotebars" => Ok(BaseDataType::QuoteBars),
-            "Candles" => Ok(BaseDataType::Candles),
-            "Fundamentals" => Ok(BaseDataType::Fundamentals),
+            "ticks" => Ok(BaseDataType::Ticks),
+            "quotes" => Ok(BaseDataType::Quotes),
+            "quotebars" => Ok(BaseDataType::QuoteBars),
+            "candles" => Ok(BaseDataType::Candles),
+            "fundamentals" => Ok(BaseDataType::Fundamentals),
             // "order books" => Ok(BaseDataType::OrderBooks),
             _ => Err(format!("Unknown BaseDataType: {}", string_ref)),
         }
