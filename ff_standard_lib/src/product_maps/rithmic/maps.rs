@@ -129,7 +129,7 @@ lazy_static! {
         }
 
         // COMEX contracts
-        for code in ["GC", "HG", "QI", "QQ", "SI", "MGC", "SIL"] {
+        for code in ["GC", "HG", "QI", "QQ", "SI", "MGC", "SIL", "MHG"] {
             map.insert(code, FuturesExchange::COMEX);
         }
 
@@ -214,7 +214,7 @@ lazy_static! {
         add_symbol!("HG", Currency::USD, 0.0125, 0.0005, 4);  // 25.0/2000
         add_symbol!("QI", Currency::USD, 0.03125, 0.0025, 4);  // 12.5/400
         add_symbol!("SI", Currency::USD, 0.125, 0.005, 3);  // 25.0/200
-
+        add_symbol!("MHG", Currency::USD, 1.25, 0.0005, 4);
         // NYMEX Futures
         add_symbol!("CL", Currency::USD, 10.0, 0.01, 2);  // 1000.0/100
         add_symbol!("HO", Currency::USD, 4.2, 0.0001, 4);  // 42000.0/10000
@@ -687,7 +687,7 @@ lazy_static! {
         m.insert("MES", &CME_HOURS); // Micro S&P 500
         m.insert("M2K", &CME_HOURS); // Micro Russell 2000
         m.insert("MYM", &CME_HOURS); // Micro Dow
-
+        m.insert("MHG", &CME_HOURS);
         m.insert("MCL", &CME_HOURS);
         // E-mini Equity Index Futures
         m.insert("NQ", &CME_HOURS);  // E-mini Nasdaq
