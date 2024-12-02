@@ -285,7 +285,7 @@ impl HeikinAshiConsolidator {
                 return ConsolidatedData::with_open(current_bar.clone());
             }
             const NANO: Duration = Duration::nanoseconds(1);
-            if base_data.time_closed_utc() >= current_bar.time_closed_utc() - NANO {
+            if base_data.time_closed_utc() > current_bar.time_closed_utc() - NANO {
                 let mut consolidated_bar = current_bar.clone();
                 consolidated_bar.set_is_closed(true);
                 let new_bar = self.new_heikin_ashi_candle(base_data);
