@@ -39,7 +39,7 @@ lazy_static::lazy_static! {
         map.insert("PL", ContractSpec { rollover_day: 25, is_quarterly: false }); // Platinum
         map.insert("MGC", ContractSpec { rollover_day: 26, is_quarterly: false }); // Micro Gold
         map.insert("SIL", ContractSpec { rollover_day: 25, is_quarterly: false }); // Micro Silver
-
+        map.insert("MHG", ContractSpec { rollover_day: 26, is_quarterly: false }); // Micro Gold
         // Equity Index
         map.insert("ES", ContractSpec { rollover_day: 9, is_quarterly: true }); // E-mini S&P 500
         map.insert("NQ", ContractSpec { rollover_day: 9, is_quarterly: true }); // E-mini NASDAQ-100
