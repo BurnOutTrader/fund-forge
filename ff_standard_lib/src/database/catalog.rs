@@ -35,7 +35,10 @@ impl HybridStorage {
         for symbol_entry in fs::read_dir(&rithmic_base)? {
             let symbol_entry = symbol_entry?;
             let symbol_name = symbol_entry.file_name().to_string_lossy().to_string();
-
+            eprintln!("Symbol name: {}", symbol_name);
+            if !symbol_name.starts_with(|c: char| c.is_alphabetic()) {
+                continue;
+            }
             // Get exchange from symbol name, skip if not recognized
             let exchange = match get_futures_exchange(&symbol_name) {
                 Ok(e) => e,
@@ -54,8 +57,15 @@ impl HybridStorage {
             // Walk through resolutions
             for resolution_entry in fs::read_dir(symbol_entry.path())? {
                 let resolution_entry = resolution_entry?;
+                let file_name = resolution_entry.file_name().to_string_lossy().to_string();
+                eprintln!("File name: {}", file_name);
+
+                if !file_name.starts_with(|c: char| c.is_alphabetic()) {
+                    continue;
+                }
+
                 let resolution = Resolution::from_str(
-                    resolution_entry.file_name().to_str().unwrap_or("")
+                    &file_name
                 ).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
 
                 // Walk through data types
@@ -202,6 +212,7 @@ mod tests {
             .join("historical")
             .join("Rithmic")
             .join("Futures");
+
         println!("\nChecking directory structure after save:");
         fn print_dir(path: &Path, prefix: &str) -> io::Result<()> {
             if path.is_dir() {
