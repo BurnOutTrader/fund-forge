@@ -211,7 +211,7 @@ lazy_static! {
 
         // COMEX Futures
         add_symbol!("GC", Currency::USD, 10.0, 0.1, 2);  // 100.0/10
-        add_symbol!("HG", Currency::USD, 0.0125, 0.0005, 4);  // 25.0/2000
+        add_symbol!("HG", Currency::USD, 12.50, 0.0005, 4);
         add_symbol!("QI", Currency::USD, 0.03125, 0.0025, 4);  // 12.5/400
         add_symbol!("SI", Currency::USD, 0.125, 0.005, 3);  // 25.0/200
         add_symbol!("MHG", Currency::USD, 1.25, 0.0005, 4);
