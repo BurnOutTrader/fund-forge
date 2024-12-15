@@ -189,15 +189,15 @@ lazy_static! {
         add_symbol!("ZW", Currency::USD, 12.5, 0.25, 2);  // 50.0/4
 
         // CME Futures
-        add_symbol!("6A", Currency::USD, 1.0, 0.0001, 4);  // 10.0/10
-        add_symbol!("6B", Currency::USD, 0.625, 0.0001, 4);  // 6.25/10
-        add_symbol!("6C", Currency::USD, 1.0, 0.0001, 4);  // 10.0/10
-        add_symbol!("6E", Currency::USD, 1.25, 0.0001, 4);  // 12.5/10
-        add_symbol!("6J", Currency::USD, 0.0125, 0.000001, 6);  // 12.5/1000
-        add_symbol!("6M", Currency::USD, 0.1, 0.00001, 5);  // 10.0/100
-        add_symbol!("6N", Currency::USD, 1.0, 0.0001, 4);  // 10.0/10
-        add_symbol!("6S", Currency::USD, 1.25, 0.0001, 4);  // 12.5/10
-        add_symbol!("E7", Currency::USD, 0.625, 0.0001, 4);  // 6.25/10
+        add_symbol!("6A", Currency::USD, 10.0, 0.0001, 4);  // 10.0/10
+        add_symbol!("6B", Currency::USD, 6.25, 0.0001, 4);  // 6.25/10
+        add_symbol!("6C", Currency::USD, 10.0, 0.0001, 4);  // 10.0/10
+        add_symbol!("6E", Currency::USD, 125, 0.0001, 4);  // 12.5/10
+        add_symbol!("6J", Currency::USD, 12.5, 0.000001, 6);  // 12.5/1000
+        add_symbol!("6M", Currency::USD, 10.0, 0.00001, 5);  // 10.0/100
+        add_symbol!("6N", Currency::USD, 10.0, 0.0001, 4);  // 10.0/10
+        add_symbol!("6S", Currency::USD, 10.25, 0.0001, 4);  // 12.5/10
+        add_symbol!("E7", Currency::USD, 6.25, 0.0001, 4);  // 6.25/10
         add_symbol!("EMD", Currency::USD, 2.5, 0.05, 2);  // 50.0/20
         add_symbol!("ES", Currency::USD, 12.5, 0.25, 2);  // 50.0/4
         add_symbol!("GE", Currency::USD, 0.0625, 0.0025, 4);  // 25.0/400
