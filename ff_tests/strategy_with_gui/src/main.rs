@@ -47,8 +47,8 @@ use tokio::task;
 
 // This strategy will accumulate and doesn't like to take profits, human management is mandatory, if it catches a trend, let it ride until trend is over or set max balance.
 
-const MAX_BALANCE: Decimal = dec!(512000);
-const MIN_BALANCE: Decimal = dec!(4);
+const MAX_BALANCE: Decimal = dec!(65000);
+const MIN_BALANCE: Decimal = dec!(48000);
 const RENKO_RANGE: Decimal = dec!(20);
 const SIZE: Decimal = dec!(1);
 const MAX_SIZE: Decimal = dec!(10);
