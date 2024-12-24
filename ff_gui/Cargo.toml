@@ -1,0 +1,18 @@
+[package]
+name = "ff_gui"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+tokio = { version = "*", features = ["full"] }
+rkyv = { version = "*", features = ["std", "alloc", "validation"] }
+chrono-tz = "0.10.0"
+chrono = "*"
+iced = { version = "*", features = ["canvas", "multi-window", "advanced", "debug", "lazy", "svg"] }
+iced_graphics = "*"
+strum = "*"
+strum_macros = "*"
+ff_standard_lib = { path = "../ff_standard_lib" }
+futures = "0.3.30"
+rust_decimal = "*"
+rust_decimal_macros ="*"

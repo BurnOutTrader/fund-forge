@@ -4,12 +4,14 @@ members = [
     "ff_standard_lib",
     "ff_data_server",
     "ff_data_server",
+    "ff_gui",
     "ff_tests/example_test_strategy",
     "ff_strategy_registry",
     "ff_tests/ledger_test",
     "ff_tests/rithmic_order_test",
     "ff_tests/renko_pyramid",
-    "ff_tests/oanda_data_test",
+    "ff_tests/oanda_data_test", "ff_gui", "ff_tests/strategy_with_gui",
+    "ff_tests/strategy_with_gui",
 ]
 
 

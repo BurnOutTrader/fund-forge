@@ -1,0 +1,71 @@
+
+The default max size is 10, with 10 adds unless specified otherwise.
+This strategy benefits from a larger max size, it is a pyramiding trend trader.
+
+Currencies should use a max balance, so that they take profits on a big run up and avoid trailing drawdown limits.
+The drawdowns seem a lot more contained in semi automated trading on 5 min, even if profits are less than 1 min.
+
+6J
+const RENKO_RANGE: Decimal = dec!(0.00005);
+const MAX_SIZE: Decimal = dec!(10);
+const MAX_RISK_PER_TRADE: Decimal = dec!(300);
+5 min candles
+
+6E
+Doesnt test well (but need to test in bull trend)
+
+6A
+const RENKO_RANGE: Decimal = dec!(0.0025);
+const MAX_SIZE: Decimal = dec!(10);
+const MAX_RISK_PER_TRADE: Decimal = dec!(300);
+
+6B (the best testing currency)
+const RENKO_RANGE: Decimal = dec!(0.0025);
+const MAX_SIZE: Decimal = dec!(10);
+const MAX_RISK_PER_TRADE: Decimal = dec!(300);
+
+
+MNQ
+const RENKO_RANGE: Decimal = dec!(20);
+const MAX_SIZE: Decimal = dec!(10);
+const MAX_RISK_PER_TRADE: Decimal = dec!(300);
+1 min candle setting achieves the highest profit but with significantly higher drawdown (50%)
+5 min setting offers slightly lower profit but with better risk management
+Account: Rithmic TopstepTrader - S1Nov228450257, Balance: 55284.50 USD, Win Rate: 36.84%, Average Risk Reward: 4.85, Profit Factor: 2.83, Quality Ratio: 1.04,
+Pain to Gain Ratio: 4.24, Max Drawdown: 1246.50, Total profit: 5284.50, Total Wins: 7, Total Losses: 12, Break Even: 0, Total Positions: 19,
+Open Positions: 0, Cash Used: 0.00, Cash Available: 55284.50, Commission Paid: 57.0000
+
+
+MES (Good stats but might want size of 5 and max size of 50)
+const RENKO_RANGE: Decimal = dec!(10);
+const MAX_SIZE: Decimal = dec!(50);
+const SIZE: Decimal = dec!(5);
+const MAX_RISK_PER_TRADE: Decimal = dec!(300);
+Account: Rithmic TopstepTrader - S1Nov228450257, Balance: 55788.50 USD, Win Rate: 39.29%, Average Risk Reward: 2.65,
+Profit Factor: 1.72, Quality Ratio: 0.67,  Pain to Gain Ratio: 1.36, Max Drawdown: 4264.50, Total profit: 5788.50, Total Wins: 11,
+Total Losses: 17, Break Even: 0, Total Positions: 28, Open Positions: 0, Cash Used: 600.00, Cash Available: 55188.50, Commission Paid: 234.0000
+
+
+MYM (Good stats but might want size of 3 and max size of 30)
+const RENKO_RANGE: Decimal = dec!(50);
+const SIZE: Decimal = dec!(3);
+const MAX_SIZE: Decimal = dec!(30);
+Account: Rithmic TopstepTrader - S1Nov228450257, Balance: 56882.00 USD, Win Rate: 34.15%, Average Risk Reward: 4.11,
+Profit Factor: 2.13, Quality Ratio: 0.73,  Pain to Gain Ratio: 2.95, Max Drawdown: 2331.00, Total profit: 6706.50,
+Total Wins: 14, Total Losses: 27, Break Even: 0, Total Positions: 41, Open Positions: 0, Cash Used: 450.00, Cash Available: 56432.00, Commission Paid: 252.0000
+
+MGC
+1min, 5min also works,
+const RENKO_RANGE: Decimal = dec!(5);
+const SIZE: Decimal = dec!(2);
+const MAX_SIZE: Decimal = dec!(20);
+Account: Rithmic TopstepTrader - S1Nov228450257, Balance: 55135.40 USD, Win Rate: 40.00%, Average Risk Reward: 3.50, Profit Factor: 2.33,
+Quality Ratio: 0.93,  Pain to Gain Ratio: 2.30, Max Drawdown: 2232.30, Total profit: 5135.40, Total Wins: 4, Total Losses: 6, Break Even: 0,
+Total Positions: 10, Open Positions: 0, Cash Used: 0.00, Cash Available: 55135.40, Commission Paid: 132.6000
+
+HG
+Not suitable
+
+CL
+
+
