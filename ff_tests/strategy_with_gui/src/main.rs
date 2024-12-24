@@ -56,7 +56,7 @@ const MAX_SIZE_MULTIPLIER: Decimal = dec!(4);
 const MAX_ENTRIES: i32 = 10;
 const MAX_RISK_PER_TRADE: Decimal = dec!(300);
 const HAS_NO_TRADE_HOURS: bool = false;
-const NO_TRADE_HOURS: u32 = 13;
+const NO_TRADE_HOURS: u32 = 13; //will not trade before this hour if HAS_NO_TRADE_HOURS == true
 const SAFTEY_LEVEL: Decimal = dec!(20000);
 
 #[tokio::main]
