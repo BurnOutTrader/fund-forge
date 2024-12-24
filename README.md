@@ -16,6 +16,7 @@ See below for all the free historical data you will ever need.
 - 26-11-24: Fixed bug preventing duplicate subscriptions that share the same primary.
 - 26-11-24: Fixed deadlock in backtesting. Deadlock was caused by not flushing TCP Streams. Backtesting and Live trading should now be more stable and backtesting should not deadlock (because of the engine).
 - 26-11-24: Fixed backtesting engine bug which would panic on trying to exit existing position with order larger than position size
+- 25-12-24: Removed changes from Fred api, will reimplement with better code later.
 - 25-12-24: Added basic gui tools and example strategy, next task is to implement basic charting canvas.
 
 ### Current State and Future Development
