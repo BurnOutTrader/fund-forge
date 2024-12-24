@@ -39,8 +39,6 @@ use ff_standard_lib::strategies::strategy_events::{StrategyControls, StrategyEve
 use iced::{Task, Theme};
 use crate::close_strength::CloseStrength;
 use tokio::task;
-// This strategy is designed to pyramid into strong trends using renko. It will not work trading mean reverting markets or trading in both directions.
-// It is a tool to help manage positions in fast trending markets. In the current state fund forge strategies should not be run without monitoring. It is possible strategies can lose sync with the actual broker account state.
 // This strategy uses an average measure of price action, combined with renko trend, its primary edge is that it adds to winners and does not add to losers.
 // It is designed to be run as a semi-automated strategy, managed by the trader.
 // You can increase and decrease or close the position, using the gui tool.
