@@ -97,7 +97,6 @@ async fn main() -> iced::Result {
             vec![
                 (None, subscription.clone(), None),
                 (Some(PrimarySubscription::new(Resolution::Ticks(1), BaseDataType::Ticks)), candle_subscription.clone(), None),
-                //(Some(PrimarySubscription::new(Resolution::Ticks(1), BaseDataType::Ticks)), candle_subscription_15m.clone(), None),
             ],
             false,
             100,
@@ -117,9 +116,6 @@ async fn main() -> iced::Result {
 
         let atr = AverageTrueRange::new(IndicatorName::from("ATR"), candle_subscription.clone(), 14, 50, Color::new(0, 0, 128), true).await;
         strategy.subscribe_indicator(atr, None).await;
-
-        //let momo = RelativeStrengthIndex::new(IndicatorName::from("RSI"), candle_subscription.clone(), 20, 20, Color::new(0, 128, 128), false).await;
-        //strategy.subscribe_indicator(momo, None).await;
 
         on_data_received(Arc::new(strategy), strategy_event_receiver, subscription, candle_subscription, symbol_name, account_clone).await;
     });
@@ -197,8 +193,6 @@ pub async fn on_data_received(
     let mut state = StrategyControls::Continue;
     // The engine will send a buffer of strategy events at the specified buffer interval, it will send an empty buffer if no events were buffered in the period.
     'strategy_loop: while let Some(strategy_event) = event_receiver.recv().await {
-        //println!("Strategy: Buffer Received Time: {}", strategy.time_local());
-        //println!("Strategy: Buffer Event Time: {}", strategy.time_zone().from_utc_datetime(&time.naive_utc()));
         match strategy_event {
             StrategyEvent::IndicatorEvent(event) => {
                 match event {
