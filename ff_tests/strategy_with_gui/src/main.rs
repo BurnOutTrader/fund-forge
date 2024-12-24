@@ -127,7 +127,7 @@ async fn main() -> iced::Result {
     };
 
     iced::application(
-        "Strategy Control Panel",
+        format!("Price Action Strategy: {}", account),
         StrategyControlPanel::update,
         StrategyControlPanel::view,
     )
