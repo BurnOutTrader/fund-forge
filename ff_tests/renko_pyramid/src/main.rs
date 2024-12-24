@@ -26,7 +26,7 @@ use ff_standard_lib::strategies::indicators::indicator_events::IndicatorEvents;
 #[tokio::main]
 async fn main() {
     let (strategy_event_sender, strategy_event_receiver) = mpsc::channel(100);
-    let account = Account::new(Brokerage::Rithmic(RithmicSystem::Apex), "XXX-123-abc".to_string());
+    let account = Account::new(Brokerage::Rithmic(RithmicSystem::Apex), "PA-APEX-3396-18".to_string());//PA-APEX-3396-17 S1Nov228450257
     let symbol_name = SymbolName::from("MNQ");
     let exchange = get_futures_exchange(&symbol_name).unwrap();
 
@@ -39,20 +39,20 @@ async fn main() {
     );
 
     let strategy = FundForgeStrategy::initialize(
-        StrategyMode::Backtest,
+        StrategyMode::Live,
         dec!(100000),
         Currency::USD,
-        NaiveDate::from_ymd_opt(2024, 11, 5).unwrap().and_hms_opt(0, 0, 0).unwrap(),
-        NaiveDate::from_ymd_opt(2024, 11, 26).unwrap().and_hms_opt(0, 0, 0).unwrap(),
+        NaiveDate::from_ymd_opt(2024, 12, 18).unwrap().and_hms_opt(0, 0, 0).unwrap(),
+        NaiveDate::from_ymd_opt(2024, 12, 19).unwrap().and_hms_opt(0, 0, 0).unwrap(),
         Australia::Sydney,
-        Duration::hours(1),
+        Duration::hours(72),
         vec![
             (None, subscription.clone(), None)
         ],
         false,
         100,
         strategy_event_sender,
-        core::time::Duration::from_millis(50),
+        core::time::Duration::from_millis(30),
         false,
         false,
         false,
@@ -74,15 +74,16 @@ async fn main() {
 // 6. It will cancel the take profit order if the position is closed.
 
 const RENKO_RANGE: Decimal = dec!(10);
-const MAX_SIZE: Decimal = dec!(20);
-const SIZE: Decimal = dec!(5);
+const MAX_SIZE: Decimal = dec!(6);
+const SIZE: Decimal = dec!(2);
 const INCREMENTAL_SCALP_PNL: Decimal = dec!(150);
 const LIMIT_ORDER_EXPIRE_IN_SECS: i64 = 60 * 5;
-const TRADING_LONG: bool = true;
-const TRADING_SHORT: bool = false;
-const MAX_BALANCE: Decimal = dec!(1000000);
+const TRADING_LONG: bool = false;
+const TRADING_SHORT: bool = true;
+const MAX_BALANCE: Decimal = dec!(51000);
 
-const MIN_BALANCE: Decimal = dec!(1000);
+const MIN_BALANCE: Decimal = dec!(49500);
+const SAFTEY_LEVEL: Decimal = dec!(21312.25);
 
 #[allow(clippy::const_err)]
 pub async fn on_data_received(
@@ -127,6 +128,19 @@ pub async fn on_data_received(
 
                                 if !warmup_complete {
                                     continue;
+                                }
+
+                                if (block_close.value < SAFTEY_LEVEL && TRADING_LONG) || (block_close.value > SAFTEY_LEVEL && TRADING_SHORT) {
+                                    if strategy.is_long(&account, &symbol_code) {
+                                        let open_quantity = strategy.position_size(&account, &symbol_code);
+                                        exit_order_id = Some(strategy.exit_long(&symbol_name, Some(symbol_code.clone()), &account, None, open_quantity, "Exit Long Target Reached".to_string()).await);
+                                    }
+                                    if strategy.is_short(&account, &symbol_code) {
+                                        let open_quantity = strategy.position_size(&account, &symbol_code);
+                                        exit_order_id = Some(strategy.exit_short(&symbol_name, Some(symbol_code.clone()), &account, None, open_quantity, "Exit Short Target Reached".to_string()).await);
+                                    }
+                                    println!("Saftey level breached, continue");
+                                    continue
                                 }
 
                                 if let Some(seconds_until_close) = hours.seconds_until_close(strategy.time_utc()) {

@@ -16,10 +16,6 @@ pub enum Resolution {
     Minutes(u64),
     Hours(u64),
     Day,
-    Week,
-    Month,
-    Quarter,
-    Year
 }
 
 impl Default for Resolution {
@@ -58,10 +54,6 @@ impl FromStr for Resolution {
             Some('M') => Ok(Resolution::Minutes(number)),
             Some('H') => Ok(Resolution::Hours(number)),
             Some('D') => Ok(Resolution::Day),
-            Some('W') => Ok(Resolution::Week),
-            Some('m') => Ok(Resolution::Month),
-            Some('Q') => Ok(Resolution::Quarter),
-            Some('Y') => Ok(Resolution::Year),
             Some(c) => Err(format!("Invalid resolution type '{}' in {}", c, s)),
             None => Err(format!("Empty resolution type in {}", s)),
         }
@@ -80,10 +72,6 @@ impl Resolution {
             Resolution::Minutes(val) => Duration::minutes(*val as i64),
             Resolution::Hours(val) => Duration::hours(*val as i64),
             Resolution::Day => Duration::days(1),
-            Resolution::Week => Duration::weeks(1),
-            Resolution::Month => Duration::days(30),
-            Resolution::Quarter => Duration::days(90),
-            Resolution::Year => Duration::days(365),
         }
     }
 
@@ -95,10 +83,6 @@ impl Resolution {
             Resolution::Minutes(val) => val.clone(),
             Resolution::Hours(val) => val.clone(),
             Resolution::Day => 1,
-            Resolution::Week => 1,
-            Resolution::Month => 1,
-            Resolution::Quarter => 1,
-            Resolution::Year => 1,
         }
     }
 
@@ -127,10 +111,6 @@ impl Resolution {
             Resolution::Minutes(val) => format!("{}-M", val),
             Resolution::Hours(val) => format!("{}-H", val),
             Resolution::Day => "D".to_string(),
-            Resolution::Week => "W".to_string(),
-            Resolution::Month => "m".to_string(),
-            Resolution::Quarter => "Q".to_string(),
-            Resolution::Year => "Y".to_string(),
         }
     }
 }
@@ -145,10 +125,6 @@ impl fmt::Display for Resolution {
             Resolution::Minutes(val) => write!(f, "{}-Minute", val),
             Resolution::Hours(val) => write!(f, "{}-Hour", val),
             Resolution::Day => write!(f, "Day"),
-            Resolution::Week => write!(f, "Week"),
-            Resolution::Month => write!(f, "Month"),
-            Resolution::Quarter => write!(f, "Quarter"),
-            Resolution::Year => write!(f, "Year"),
         }
     }
 }

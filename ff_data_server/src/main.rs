@@ -33,7 +33,6 @@ pub mod bitget_api;
 pub mod stream_tasks;
 pub mod oanda_api;
 pub mod server_features;
-pub mod fred;
 pub mod update_functions;
 use crate::update_functions::DATA_STORAGE;
 

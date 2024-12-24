@@ -59,25 +59,6 @@ impl ConsolidatorEnum {
                     _ => {}
                 }
             }
-            Resolution::Week => {
-                match subscription.base_data_type {
-                    BaseDataType::QuoteBars => {
-                        return ConsolidatorEnum::WeeklyQuoteBars(
-                            WeeklyQuoteConsolidator::new(subscription.clone(), decimal_accuracy, tick_size, hours.clone().unwrap(), hours.unwrap().week_start)
-                                .await
-                                .unwrap(),
-                        );
-                    }
-                    BaseDataType::Candles => {
-                        return ConsolidatorEnum::WeeklyCandles(
-                            WeeklyCandleConsolidator::new(subscription.clone(), decimal_accuracy, tick_size, hours.clone().unwrap(), hours.unwrap().week_start)
-                                .await
-                                .unwrap(),
-                        );
-                    }
-                    _ => {}
-                }
-            }
             _ => {}
         }
 

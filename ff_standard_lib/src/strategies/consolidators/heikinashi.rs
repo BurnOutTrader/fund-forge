@@ -4,7 +4,7 @@ use crate::standardized_types::base_data::base_data_type::BaseDataType;
 use crate::standardized_types::base_data::candle::Candle;
 use crate::standardized_types::base_data::traits::BaseData;
 use crate::standardized_types::subscriptions::{CandleType, DataSubscription};
-use chrono::{DateTime, Duration, Utc};
+use chrono::{DateTime, Utc};
 use rust_decimal::Decimal;
 use rust_decimal_macros::dec;
 use crate::helpers::converters;
@@ -284,7 +284,7 @@ impl HeikinAshiConsolidator {
                 // We've already processed data for this time or earlier, so we skip it
                 return ConsolidatedData::with_open(current_bar.clone());
             }
-            const NANO: Duration = Duration::nanoseconds(1);
+
             if base_data.time_utc() >= current_bar.time_closed_utc() {
                 let mut consolidated_bar = current_bar.clone();
                 consolidated_bar.set_is_closed(true);

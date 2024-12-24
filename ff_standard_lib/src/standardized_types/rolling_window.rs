@@ -50,4 +50,9 @@ impl<T: std::clone::Clone> RollingWindow<T> {
     pub fn history(&self) -> Vec<T> {
         self.history.clone()
     }
+
+    pub fn last_n(&self, n: usize) -> &[T] {
+        let n = n.min(self.history.len());
+        &self.history[..n]
+    }
 }

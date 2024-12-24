@@ -1,6 +1,6 @@
 <component name="ProjectRunConfigurationManager">
   <configuration default="false" name="Run renko_pyramid" type="CargoCommandRunConfiguration" factoryName="Cargo Command">
-    <option name="buildProfileId" value="dev" />
+    <option name="buildProfileId" value="release" />
     <option name="command" value="run --package renko_pyramid --bin renko_pyramid" />
     <option name="workingDirectory" value="file://$PROJECT_DIR$/ff_tests/renko_pyramid" />
     <envs />

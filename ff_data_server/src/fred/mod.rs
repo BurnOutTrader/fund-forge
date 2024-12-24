@@ -1,1 +1,0 @@
-pub mod vendor_response;

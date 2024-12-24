@@ -16,7 +16,6 @@ pub enum DataVendor {
     Rithmic,
     Bitget,
     Oanda,
-    Fred
 }
 
 impl fmt::Display for DataVendor {
@@ -26,7 +25,6 @@ impl fmt::Display for DataVendor {
             DataVendor::Rithmic => "Rithmic".to_string(),
             DataVendor::Bitget => "Bitget".to_string(),
             DataVendor::Oanda => "Oanda".to_string(),
-            DataVendor::Fred => "Fred".to_string()
         };
         write!(f, "{}", s)
     }
@@ -44,8 +42,6 @@ impl FromStr for DataVendor {
             Ok(DataVendor::Bitget)
         }  else if s == "Oanda" {
             Ok(DataVendor::Oanda)
-        } else if s == "Fred" {
-            Ok(DataVendor::Fred)
         }
         else {
             Err(FundForgeError::ClientSideErrorDebug(format!(

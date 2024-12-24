@@ -1,5 +1,4 @@
 use chrono::{DateTime, Utc};
-use rust_decimal_macros::dec;
 use tokio::sync::oneshot;
 use crate::messages::data_server_messaging::{DataServerRequest, DataServerResponse, FundForgeError};
 use crate::product_maps::oanda::maps::OANDA_SYMBOL_INFO;
@@ -135,10 +134,6 @@ impl DataVendor {
                     None => Err(FundForgeError::ClientSideErrorDebug("Error getting decimal accuracy Symbol not found in OANDA_SYMBOL_INFO".to_string()))
                 };
             }
-            DataVendor::Fred => {
-                //todo, we will need to do something more tricky here if we use data sets that are more variable
-                return Ok(2);
-            }
             _ => {}
         }
 
@@ -177,10 +172,6 @@ impl DataVendor {
                     Some(info) => Ok(info.tick_size),
                     None => Err(FundForgeError::ClientSideErrorDebug("Symbol not found in OANDA_SYMBOL_INFO".to_string()))
                 };
-            }
-            DataVendor::Fred => {
-                //todo, we will need to do something more tricky here if we use data sets that are more variable
-                return Ok(dec!(0.02));
             }
         }
 
