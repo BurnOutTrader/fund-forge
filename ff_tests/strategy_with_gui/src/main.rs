@@ -41,12 +41,9 @@ use crate::close_strength::CloseStrength;
 use tokio::task;
 // This strategy is designed to pyramid into strong trends using renko. It will not work trading mean reverting markets or trading in both directions.
 // It is a tool to help manage positions in fast trending markets. In the current state fund forge strategies should not be run without monitoring. It is possible strategies can lose sync with the actual broker account state.
-// 1. enter if 1 bars ago was reversal against the trend and current bar is with the trend (assuming we are trading with the trend). Both modes enter with limit order at prior bar open.
-// 2. It exits after 2 bearish renko bars. opposite for short.
-// 3. It adds on repeat signals up to 4 times, only if it is in profit.
-// 4. It takes profit after a certain amount of profit is made if it is at max size. It will do this with limit orders that expire in X seconds.
-// 5. The limit order expiry is on the exchange/rithmic side.
-// 6. It will cancel the take profit order if the position is closed.
+// This strategy uses an average measure of price action, combined with renko trend, its primary edge is that it adds to winners and does not add to losers.
+// It is designed to be run as a semi-automated strategy, managed by the trader.
+// You can increase and decrease or close the position, using the gui tool.
 
 // This strategy will accumulate and doesn't like to take profits, human management is mandatory, if it catches a trend, let it ride until trend is over or set max balance.
 
