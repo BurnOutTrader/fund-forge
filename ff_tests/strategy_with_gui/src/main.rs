@@ -52,12 +52,12 @@ const MIN_BALANCE: Decimal = dec!(4);
 const RENKO_RANGE: Decimal = dec!(20);
 const SIZE: Decimal = dec!(1);
 const MAX_SIZE: Decimal = dec!(10);
-const MAX_SIZE_MULTIPLIER: Decimal = dec!(4);
+const MAX_SIZE_MULTIPLIER: Decimal = dec!(4); //used for dynamic position sizing
 const MAX_ENTRIES: i32 = 10;
 const MAX_RISK_PER_TRADE: Decimal = dec!(300);
 const HAS_NO_TRADE_HOURS: bool = false;
 const NO_TRADE_HOURS: u32 = 13; //will not trade before this hour if HAS_NO_TRADE_HOURS == true
-const SAFTEY_LEVEL: Decimal = dec!(20000);
+const SAFTEY_LEVEL: Decimal = dec!(20000); // the strategy will not trade if price is below this level
 
 #[tokio::main]
 async fn main() -> iced::Result {
