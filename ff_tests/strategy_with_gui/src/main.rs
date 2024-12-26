@@ -127,7 +127,7 @@ async fn main() -> iced::Result {
     };
 
     iced::application(
-        "Strategy Control Panel",
+        "Price Action",
         StrategyControlPanel::update,
         StrategyControlPanel::view,
     )
@@ -181,6 +181,7 @@ pub async fn on_data_received(
     let mut hard_stop: Option<OrderId> = None;
     let mut last_short_result = Result::BreakEven;
     let mut last_long_result = Result::BreakEven;
+
     let hours = get_futures_trading_hours(&symbol_name).unwrap();
     let exchange = match subscription.market_type {
         MarketType::Futures(exchange) => exchange,
@@ -191,6 +192,7 @@ pub async fn on_data_received(
     let mut trend = Trend::None;
     let mut entries = 0;
     let mut state = StrategyControls::Continue;
+
     // The engine will send a buffer of strategy events at the specified buffer interval, it will send an empty buffer if no events were buffered in the period.
     'strategy_loop: while let Some(strategy_event) = event_receiver.recv().await {
         match strategy_event {
@@ -346,10 +348,12 @@ pub async fn on_data_received(
                                     {
                                         // Calculate dynamic position size
                                         let position_size = metrics.calculate_position_size(atr);
-                                        let remaining_size = MAX_SIZE - position_size;
+                                        let remaining_size = MAX_SIZE - strategy.position_size(&account, &symbol_code);
                                         let size = min(remaining_size, position_size);
-                                        entry_order_id = Some(strategy.enter_long(&candle.symbol.name, Some(symbol_code.clone()), &account, None, size, "Enter Long".to_string()).await);
-                                        entries += 1;
+                                        if size > dec!(0) {
+                                            entry_order_id = Some(strategy.enter_long(&candle.symbol.name, Some(symbol_code.clone()), &account, None, size, "Enter Long".to_string()).await);
+                                            entries += 1;
+                                        }
                                     }
 
                                     // Exit logic
