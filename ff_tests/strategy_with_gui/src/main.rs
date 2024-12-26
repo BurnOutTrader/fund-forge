@@ -61,7 +61,7 @@ const SAFTEY_LEVEL: Decimal = dec!(2640); // the strategy will not trade if pric
 async fn main() -> iced::Result {
     let (strategy_event_sender, strategy_event_receiver) = mpsc::channel(100);
     let strategy_event_sender_clone= strategy_event_sender.clone();
-    let account = Account::new(Brokerage::Rithmic(RithmicSystem::Apex), "PA-APEX-3396-18".to_string()); //S1Nov228450257 PA-APEX-3396-18
+    let account = Account::new(Brokerage::Rithmic(RithmicSystem::Apex), "PA-APEX-3396-17".to_string()); //S1Nov228450257 PA-APEX-3396-18
     let account_clone = account.clone();
 
     task::spawn(async move {
@@ -346,10 +346,9 @@ pub async fn on_data_received(
                                         && average_bull_strength > average_bear_strength
                                         && strength >= dec!(60)
                                     {
-                                        if size > dec!(0) {
-                                            entry_order_id = Some(strategy.enter_long(&candle.symbol.name, Some(symbol_code.clone()), &account, None, SIZE, "Enter Long".to_string()).await);
-                                            entries += 1;
-                                        }
+                                        entry_order_id = Some(strategy.enter_long(&candle.symbol.name, Some(symbol_code.clone()), &account, None, SIZE, "Enter Long".to_string()).await);
+                                        entries += 1;
+
                                     }
 
                                     // Exit logic
