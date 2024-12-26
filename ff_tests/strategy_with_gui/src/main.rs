@@ -55,7 +55,7 @@ const MAX_ENTRIES: i32 = 10;
 const MAX_RISK_PER_TRADE: Decimal = dec!(300);
 const HAS_NO_TRADE_HOURS: bool = false;
 const NO_TRADE_HOURS: u32 = 13; //will not trade before this hour if HAS_NO_TRADE_HOURS == true
-const SAFTEY_LEVEL: Decimal = dec!(20000); // the strategy will not trade if price is below this level
+const SAFTEY_LEVEL: Decimal = dec!(2640); // the strategy will not trade if price is below this level
 
 #[tokio::main]
 async fn main() -> iced::Result {
@@ -87,7 +87,7 @@ async fn main() -> iced::Result {
 
         //let correlation = DataSubscription::new("MES".to_string(), DataVendor::Rithmic, Resolution::Minutes(1), BaseDataType::Candles, MarketType::Futures(exchange));
         let strategy = FundForgeStrategy::initialize(
-            StrategyMode::Backtest,
+            StrategyMode::Live,
             dec!(50000),
             Currency::USD,
             NaiveDate::from_ymd_opt(2024, 12, 10).unwrap().and_hms_opt(0, 0, 0).unwrap(),
@@ -131,11 +131,11 @@ async fn main() -> iced::Result {
         StrategyControlPanel::update,
         StrategyControlPanel::view,
     )
-        .theme(StrategyControlPanel::theme)
-        .window(window_settings(&account))
-        .run_with(move || {
-            (control, Task::none())
-        })
+    .theme(StrategyControlPanel::theme)
+    .window(window_settings(&account))
+    .run_with(move || {
+        (control, Task::none())
+    })
 }
 
 
@@ -182,7 +182,7 @@ pub async fn on_data_received(
     let mut last_short_result = Result::BreakEven;
     let mut last_long_result = Result::BreakEven;
 
-    let hours = get_futures_trading_hours(&symbol_name).unwrap();
+    let trading_hours = get_futures_trading_hours(&symbol_name).unwrap();
     let exchange = match subscription.market_type {
         MarketType::Futures(exchange) => exchange,
         _ => panic!("Invalid Market Type")
@@ -275,7 +275,7 @@ pub async fn on_data_received(
                             }
 
                             // Exit before the close of the market
-                            if let Some(seconds_until_close) = hours.seconds_until_close(strategy.time_utc()) {
+                            if let Some(seconds_until_close) = trading_hours.seconds_until_close(strategy.time_utc()) {
                                 if seconds_until_close < 500 {
                                     if strategy.is_long(&account, &symbol_code) && exit_order_id.is_none() {
                                         let open_quantity = strategy.position_size(&account, &symbol_code);
@@ -346,12 +346,8 @@ pub async fn on_data_received(
                                         && average_bull_strength > average_bear_strength
                                         && strength >= dec!(60)
                                     {
-                                        // Calculate dynamic position size
-                                        let position_size = metrics.calculate_position_size(atr);
-                                        let remaining_size = MAX_SIZE - strategy.position_size(&account, &symbol_code);
-                                        let size = min(remaining_size, position_size);
                                         if size > dec!(0) {
-                                            entry_order_id = Some(strategy.enter_long(&candle.symbol.name, Some(symbol_code.clone()), &account, None, size, "Enter Long".to_string()).await);
+                                            entry_order_id = Some(strategy.enter_long(&candle.symbol.name, Some(symbol_code.clone()), &account, None, SIZE, "Enter Long".to_string()).await);
                                             entries += 1;
                                         }
                                     }
