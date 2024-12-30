@@ -1,10 +1,11 @@
+use std::thread;
 use std::time::Duration;
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use dashmap::DashMap;
 use rust_decimal::Decimal;
 use rust_decimal::prelude::{FromPrimitive, ToPrimitive};
-use tokio::time::timeout;
+use tokio::time::{sleep, timeout};
 use ff_standard_lib::messages::data_server_messaging::{DataServerResponse, FundForgeError};
 use ff_standard_lib::product_maps::rithmic::maps::{find_base_symbol, get_available_rithmic_symbol_names, get_exchange_by_symbol_name, get_futures_commissions_info, get_futures_symbol_info};
 use crate::server_features::server_side_brokerage::BrokerApiResponse;
@@ -371,21 +372,30 @@ impl BrokerApiResponse for RithmicBrokerageClient {
 
     async fn cancel_order(&self, account: Account, order_id: OrderId) {
         const PLANT: SysInfraType = SysInfraType::OrderPlant;
+        let mut attempts = 0;
         //Cancel Order Request 316
-        if let Some(account_map) = self.id_to_basket_id_map.get(&account.account_id) {
-            if let Some(order) = account_map.get(&order_id) {
-                let req = RequestCancelOrder {
-                    template_id: 316,
-                    user_msg: vec!["Cancel Order".to_string()],
-                    window_name: None,
-                    fcm_id: self.fcm_id.clone(),
-                    ib_id: self.ib_id.clone(),
-                    account_id: Some(account.account_id),
-                    basket_id: Some(order.value().to_string()),
-                    manual_or_auto: Some(2),
-                };
-                //Cancel Order Request 316
-                self.send_message(&PLANT, req).await;
+        loop {
+            if let Some(account_map) = self.id_to_basket_id_map.get(&account.account_id) {
+                if let Some(order) = account_map.get(&order_id) {
+                    let req = RequestCancelOrder {
+                        template_id: 316,
+                        user_msg: vec!["Cancel Order".to_string()],
+                        window_name: None,
+                        fcm_id: self.fcm_id.clone(),
+                        ib_id: self.ib_id.clone(),
+                        account_id: Some(account.account_id.clone()),
+                        basket_id: Some(order.value().to_string()),
+                        manual_or_auto: Some(2),
+                    };
+                    //Cancel Order Request 316
+                    self.send_message(&PLANT, req).await;
+                    break;
+                }
+            }
+            attempts += 1;
+            sleep(Duration::from_millis(50)).await;
+            if attempts > 5 {
+                break;
             }
         }
     }
