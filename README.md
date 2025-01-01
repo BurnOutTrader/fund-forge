@@ -37,12 +37,11 @@ DataBento: Not yet implemented.
 ### Initial Setup
 1. Install [rust](https://www.rust-lang.org/tools/install).
 2. Install OpenSSL, `brew install openssl`.
-3. You need to set up a [Rithmic account](ff_data_server/src/rithmic_api/RITHMIC_SETUP.md) or [Oanda account](ff_data_server/src/oanda_api/OANDA_SETUP.md). [Free Historical Data](#historical-data), currently to run a backtest, you need one of these api's active on the server.
-4. Put the test data into the correct directory. [instructions below](#file-and-folder-structure)
-5. Navigate to [ff_data_server](./ff_data_server) directory and `cargo build` then `cargo run` (don't run the server in your IDE, it will have issues (more issues than normal :) )
+3. You need to set up a [Rithmic account](ff_data_server/src/rithmic_api/RITHMIC_SETUP.md) or [Oanda account](ff_data_server/src/oanda_api/OANDA_SETUP.md).
+4. Navigate to [ff_data_server](./ff_data_server) directory and `cargo build` then `cargo run`
     - to run the server with rithmic apis connected use `cargo run -- --rithmic "0"`.
     - to run with only test api use `cargo run -- --rithmic "1"`.
-6. Navigate to [example_test_strategy](ff_tests/example_test_strategy) directory and `cargo build` then`cargo run`
+5. Navigate to [tests](ff_tests) directory and `cargo build` then`cargo run` on a specific test strategy.
 
 *When running a server the working directory must be the ff_data_server directory, or the server will not find its resources' folder.* [see](ff_tests/example_test_strategy/README.md)
 
