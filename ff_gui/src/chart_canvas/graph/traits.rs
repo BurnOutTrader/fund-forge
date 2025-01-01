@@ -27,6 +27,7 @@ impl TimeSeriesGraphElements for Candle {
     fn draw_object(&self, frame: &mut Frame, view: &ChartState, bounds: &Rectangle, logarithmic: bool, time_zone: &Tz) {
         let local_time = self.time_stamp_local(time_zone);
         if local_time < view.x_start || local_time> view.x_end {
+            println!("Time out of bounds");
             return ;
         }
 

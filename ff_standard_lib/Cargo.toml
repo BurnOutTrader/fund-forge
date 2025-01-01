@@ -16,8 +16,6 @@ flate2 = "1.0.35"
 chrono = "0.4.38"
 serde = { version = "*", features = ["derive"] }
 rkyv = { version =  "0.7.6", features = ["std", "alloc", "validation"] }
-bytes = "*"
-zip = "*"
 serde_json = "*"
 tokio =  { version = "*", features = ["full"] }
 once_cell = "*"
@@ -25,18 +23,14 @@ lazy_static = "*"
 structopt = "*"
 strum_macros = "0.26.4"
 strum ="*"
-reqwest = { version = "*", features = ["stream"] }
-urlencoding = "*"
 toml = "*"
 chrono-tz = { version = "0.10.0", features = ["default", "std"] }
 serde_derive = "*"
-env_logger = "*"
 futures = "*"
 rustls = "0.23.5"
 tokio-rustls = "*"
 rust_decimal = { version = "*", features = ["rkyv", "rkyv-safe", "maths"] }
 rustls-pemfile = "*"
-async-std = "*"
 async-trait = "0.1.80"
 heck = "*"
 ahash = "*"
@@ -44,10 +38,8 @@ dashmap = "6.1.0"
 csv ="*"
 rust_decimal_macros ="*"
 memmap2 = "0.9.5"
-log = "0.4.22"
 float-cmp = "0.10.0"
 uuid = { version = "1.10.0", features = ["v4"] }
 futures-util = "0.3.30"
-indicatif = "*"
 rand = "0.8.5"
 tempfile = "3.13.0"

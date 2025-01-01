@@ -6,7 +6,6 @@ use iced::mouse::{Cursor, Interaction};
 use iced::widget::canvas;
 use iced::widget::canvas::{Event, Frame, Geometry};
 use chrono_tz::Tz;
-use ff_standard_lib::messages::registry_messages::guis::RegistryGuiResponse;
 use iced::advanced::Widget;
 use iced::advanced::subscription::Recipe;
 use rust_decimal::Decimal;
@@ -18,10 +17,11 @@ use crate::chart_canvas::graph::enums::y_scale::YScale;
 use crate::chart_canvas::graph::models::crosshair::CrossHair;
 use crate::chart_canvas::graph::models::data::SeriesData;
 use crate::chart_canvas::graph::state::ChartState;
-use crate::chart_canvas::graph::view;
-use crate::clicks::click_location;
 use ff_standard_lib::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use ff_standard_lib::standardized_types::base_data::traits::BaseData;
+use crate::chart_canvas::clicks::click_location;
+use crate::chart_canvas::graph::interactions::scale;
+use crate::control_panel::panel::Message;
 
 ///  A graph is the canvases object responsible for bringing the other elements that make up a graph, it is responsible for drawing, update and event state.
 /// The state property manages the sections of the graph, scale areas etc and converts position.x and positiion.y into values according to the graph data set.
@@ -201,21 +201,21 @@ impl ChartCanvas {
 }
 
 
-impl canvas::Program<RegistryGuiResponse> for ChartCanvas {
+impl canvas::Program<Message> for ChartCanvas {
     type State = ChartState;
 
-    fn update(&self, state: &mut Self::State, event: Event, bounds: Rectangle, cursor: Cursor) -> (Status, Option<RegistryGuiResponse>) {
+    fn update(&self, state: &mut Self::State, event: Event, bounds: Rectangle, cursor: Cursor) -> (Status, Option<Message>) {
         if bounds.width == 0.0 || bounds.height == 0.0 {
             return (Status::Ignored, None);
         }
 
-        if !state.is_initialized {
+        if !state.is_initialized && !self.data.is_empty() {
             let x_start = self.data.keys().next().cloned().unwrap_or_else(|| 0);
             let x_end = self.data.keys().last().cloned().unwrap_or_else(|| 0);
             let y_low = get_lowest_low(&self.data);
             let y_high = get_highest_high(&self.data);
             let increment_factor = self.x_scale.increment_factor();
-            state.initialize(self.y_scale.scale_width(), self.x_scale.scale_height(),  x_start, x_end, y_low.to_f64().unwrap(), y_high.to_f64().unwrap(), increment_factor);
+            state.initialize(self.y_scale.scale_width(), self.x_scale.scale_height(), x_start, x_end, y_low.to_f64().unwrap(), y_high.to_f64().unwrap(), increment_factor);
             state.is_initialized = true;
         }
 
@@ -251,12 +251,12 @@ impl canvas::Program<RegistryGuiResponse> for ChartCanvas {
                            if state.drawing_area.contains(position) || state.x_scale_area.contains(position) {
                                state.y_locked = false;
                                state.x_locked = false;
-                               view::zoom_or_scroll_date_range(state, delta);
+                               scale::zoom_or_scroll_date_range(state, delta);
                                self.autoscale_y(state, &self.return_range(state.x_start, state.x_end));
                                 state.x_locked = true;
                             } else if state.y_scale_area.contains(position) {
                                 state.y_locked = false;
-                               view::zoom_price_range(state, delta);
+                               scale::zoom_price_range(state, delta);
                                 state.y_locked = true;
                             }
                         }
@@ -284,8 +284,9 @@ impl canvas::Program<RegistryGuiResponse> for ChartCanvas {
 
 
         if !self.data.is_empty() {
-            let range_data = self.return_range(state.x_start, state.x_end);
-            self.autoscale_y(&mut state.clone(), &range_data);
+            //let range_data = self.return_range(state.x_start, state.x_end);
+            //self.autoscale_y(&mut state.clone(), &range_data);
+            //self.autoscale_x(&mut state.clone());
             if !self.data.is_empty() {
                 let range_data = self.return_range(state.x_start, state.x_end);
                 self.autoscale_y(&mut state.clone(), &range_data);
@@ -309,7 +310,7 @@ impl canvas::Program<RegistryGuiResponse> for ChartCanvas {
         cursor: Cursor,
     ) -> Interaction {
         match cursor {
-            /*Cursor::Available(point) => {
+            Cursor::Available(point) => {
                 if !bounds.contains(cursor.position().unwrap()) {
                     return Interaction::default();
                 }
@@ -322,7 +323,7 @@ impl canvas::Program<RegistryGuiResponse> for ChartCanvas {
                 } else {
                     Interaction::Idle
                 }
-            }*/
+            }
             _ => Interaction::default(),
         }
     }

@@ -26,7 +26,7 @@ use ff_standard_lib::strategies::indicators::indicator_events::IndicatorEvents;
 #[tokio::main]
 async fn main() {
     let (strategy_event_sender, strategy_event_receiver) = mpsc::channel(100);
-    let account = Account::new(Brokerage::Rithmic(RithmicSystem::Apex), "PA-APEX-3396-18".to_string());//PA-APEX-3396-17 S1Nov228450257
+    let account = Account::new(Brokerage::Rithmic(RithmicSystem::Apex), "PA-APEX-3396-17".to_string());//PA-APEX-3396-17 S1Nov228450257
     let symbol_name = SymbolName::from("MNQ");
     let exchange = get_futures_exchange(&symbol_name).unwrap();
 
@@ -39,7 +39,7 @@ async fn main() {
     );
 
     let strategy = FundForgeStrategy::initialize(
-        StrategyMode::Live,
+        StrategyMode::Backtest,
         dec!(100000),
         Currency::USD,
         NaiveDate::from_ymd_opt(2024, 12, 18).unwrap().and_hms_opt(0, 0, 0).unwrap(),
@@ -73,17 +73,17 @@ async fn main() {
 // 5. The limit order expiry is on the exchange/rithmic side.
 // 6. It will cancel the take profit order if the position is closed.
 
-const RENKO_RANGE: Decimal = dec!(10);
-const MAX_SIZE: Decimal = dec!(6);
-const SIZE: Decimal = dec!(2);
+const RENKO_RANGE: Decimal = dec!(5);
+const MAX_SIZE: Decimal = dec!(10);
+const SIZE: Decimal = dec!(5);
 const INCREMENTAL_SCALP_PNL: Decimal = dec!(150);
 const LIMIT_ORDER_EXPIRE_IN_SECS: i64 = 60 * 5;
 const TRADING_LONG: bool = false;
 const TRADING_SHORT: bool = true;
-const MAX_BALANCE: Decimal = dec!(51000);
+const MAX_BALANCE: Decimal = dec!(53000);
 
-const MIN_BALANCE: Decimal = dec!(49500);
-const SAFTEY_LEVEL: Decimal = dec!(21312.25);
+const MIN_BALANCE: Decimal = dec!(48000);
+const SAFTEY_LEVEL: Decimal = dec!(21655.5);
 
 #[allow(clippy::const_err)]
 pub async fn on_data_received(

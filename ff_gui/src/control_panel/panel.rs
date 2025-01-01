@@ -1,10 +1,15 @@
 use iced::{window, Alignment, Element, Length, Size, Theme};
+use iced::advanced::widget::Text;
 use ff_standard_lib::standardized_types::accounts::Account;
 use ff_standard_lib::strategies::strategy_events::{StrategyControls, StrategyEvent};
-use iced::widget::{button, container, row, svg, text};
+use iced::widget::{button, container, row, svg, text, Column, Radio, Row, Slider};
+use rust_decimal::Decimal;
+use rust_decimal::prelude::{FromPrimitive, ToPrimitive};
+use rust_decimal_macros::dec;
 use tokio::sync::mpsc;
+use ff_standard_lib::standardized_types::enums::Bias;
 
-pub fn window_settings(account: &Account) -> window::Settings {
+pub fn window_settings() -> window::Settings {
     window::Settings {
         size: Size::new(400.0, 250.0),
         position: Default::default(),
@@ -29,20 +34,26 @@ pub enum Message {
     StartPressed,
     ReducePositionSize,
     IncreasePositionSize,
-    Flatten
+    Flatten,
+    RiskReward(f64),
+    Bias(Bias),
 }
 
 pub struct StrategyControlPanel {
     pub current_state: StrategyControls,
     pub strategy_sender: mpsc::Sender<StrategyEvent>,
     pub theme: Theme,
+    pub risk_reward: f64,
+    pub bias: Bias,
 }
 
-fn new_strategy_control(strategy_sender: mpsc::Sender<StrategyEvent>, theme: Theme) -> StrategyControlPanel {
+pub fn new_strategy_control(strategy_sender: mpsc::Sender<StrategyEvent>, theme: Theme, risk_reward: Decimal, bias: Bias) -> StrategyControlPanel {
     StrategyControlPanel {
         strategy_sender,
         current_state: StrategyControls::Continue,
         theme,
+        risk_reward: risk_reward.to_f64().unwrap(),
+        bias
     }
 }
 
@@ -77,6 +88,22 @@ impl StrategyControlPanel {
             },
             Message::Flatten => {
                 let _ = self.strategy_sender.try_send(StrategyEvent::StrategyControls(StrategyControls::Custom("Flatten".to_string())));
+            }
+            Message::RiskReward(risk_reward) => {
+                self.risk_reward = risk_reward;
+                let _ = self.strategy_sender.try_send(StrategyEvent::StrategyControls(StrategyControls::Custom(format!("Risk Reward:{}", risk_reward))));
+            }
+            Message::Bias(bias) => {
+                self.bias = bias;
+                match bias {
+                    Bias::Bullish => {
+                        let _ = self.strategy_sender.try_send(StrategyEvent::StrategyControls(StrategyControls::Custom("Trade Long".to_string())));
+                    }
+                    Bias::Bearish => {
+                        let _ = self.strategy_sender.try_send(StrategyEvent::StrategyControls(StrategyControls::Custom("Trade Short".to_string())));
+                    }
+                    Bias::Neutral => {}
+                }
             }
         }
     }
@@ -162,13 +189,58 @@ impl StrategyControlPanel {
             _ => "".to_string()
         };
 
+        let risk_reward_slider = Column::new()
+            .push(Text::new("Risk/Reward Ratio").size(16))
+            .push(
+                Slider::new(
+                    1.0..=10.0,
+                    self.risk_reward,
+                    Message::RiskReward,
+                )
+                    .step(0.1)
+                    .width(Length::Fixed(200.0))
+            )
+            .push(Text::new(format!("{:.1}", self.risk_reward)).size(14))
+            .spacing(10)
+            .align_x(Alignment::Center);
+
+        // Bias radio buttons
+        let bias_controls = Column::new()
+            .push(Text::new("Trading Bias").size(16))
+            .push(
+                Row::new()
+                    .push(Radio::new(
+                        "Bullish",
+                        Bias::Bullish,
+                        Some(self.bias.clone()),
+                        Message::Bias,
+                    ))
+                    .push(Radio::new(
+                        "Neutral",
+                        Bias::Neutral,
+                        Some(self.bias.clone()),
+                        Message::Bias,
+                    ))
+                    .push(Radio::new(
+                        "Bearish",
+                        Bias::Bearish,
+                        Some(self.bias.clone()),
+                        Message::Bias,
+                    ))
+                    .spacing(20)
+            )
+            .spacing(10)
+            .align_x(Alignment::Center);
+
         let status = text(message)
             .size(20);
 
         let content = iced::widget::column![
-        control_buttons,
-        status,
-    ]
+            control_buttons,
+            risk_reward_slider,
+            bias_controls,
+            status,
+        ]
             .spacing(20)
             .align_x(Alignment::Center);
 

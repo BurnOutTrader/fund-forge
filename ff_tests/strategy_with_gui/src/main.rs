@@ -1,14 +1,10 @@
 mod close_strength;
-
 use std::cmp::{max, min};
 use std::sync::Arc;
-use std::thread::sleep;
 use chrono::{Duration, NaiveDate, Timelike};
-use chrono_tz::{Australia, US};
-use chrono_tz::America::Chicago;
-use chrono_tz::Tz::Australia__Brisbane;
+use chrono_tz::Tz::{Australia__Brisbane};
 use colored::Colorize;
-use ff_gui::control_panel::panel::{window_settings, StrategyControlPanel};
+use ff_gui::control_panel::panel::{new_strategy_control, window_settings, StrategyControlPanel};
 use rust_decimal::Decimal;
 use rust_decimal_macros::dec;
 use tokio::sync::mpsc;
@@ -21,24 +17,21 @@ use ff_standard_lib::standardized_types::base_data::base_data_type::BaseDataType
 use ff_standard_lib::standardized_types::base_data::traits::BaseData;
 use ff_standard_lib::standardized_types::broker_enum::Brokerage;
 use ff_standard_lib::standardized_types::datavendor_enum::DataVendor;
-use ff_standard_lib::standardized_types::enums::{MarketType, OrderSide, PositionSide, PrimarySubscription, StrategyMode};
+use ff_standard_lib::standardized_types::enums::{Bias, FuturesExchange, MarketType, OrderSide, PositionSide, PrimarySubscription, StrategyMode};
 use ff_standard_lib::standardized_types::orders::{OrderId, OrderUpdateEvent, TimeInForce};
 use ff_standard_lib::standardized_types::position::PositionUpdateEvent;
 use ff_standard_lib::standardized_types::resolution::Resolution;
 use ff_standard_lib::standardized_types::subscriptions::{DataSubscription, SymbolName};
-use ff_standard_lib::standardized_types::symbol_info::SymbolInfo;
 use ff_standard_lib::strategies::fund_forge_strategy::FundForgeStrategy;
 use ff_standard_lib::strategies::indicators::built_in::average_true_range::AverageTrueRange;
-use ff_standard_lib::strategies::indicators::built_in::exponential_moving_average::ExponentialMovingAverage;
 use ff_standard_lib::strategies::indicators::built_in::renko::Renko;
-use ff_standard_lib::strategies::indicators::built_in::rmi::RelativeMomentumIndex;
-use ff_standard_lib::strategies::indicators::built_in::rsi::RelativeStrengthIndex;
 use ff_standard_lib::strategies::indicators::indicator_events::IndicatorEvents;
 use ff_standard_lib::strategies::indicators::indicators_trait::IndicatorName;
 use ff_standard_lib::strategies::strategy_events::{StrategyControls, StrategyEvent};
 use iced::{Task, Theme};
 use crate::close_strength::CloseStrength;
 use tokio::task;
+use ff_standard_lib::helpers::converters::naive_date_time_to_tz;
 // This strategy uses an average measure of price action, combined with renko trend, its primary edge is that it adds to winners and does not add to losers.
 // It is designed to be run as a semi-automated strategy, managed by the trader.
 // You can increase and decrease or close the position, using the gui tool.
@@ -48,14 +41,14 @@ use tokio::task;
 const MAX_BALANCE: Decimal = dec!(65000);
 const MIN_BALANCE: Decimal = dec!(48000);
 const RENKO_RANGE: Decimal = dec!(20);
-const SIZE: Decimal = dec!(1);
-const MAX_SIZE: Decimal = dec!(10);
+const SIZE: Decimal = dec!(3);
+const MAX_SIZE: Decimal = dec!(30);
 const MAX_SIZE_MULTIPLIER: Decimal = dec!(4); //used for dynamic position sizing
 const MAX_ENTRIES: i32 = 10;
 const MAX_RISK_PER_TRADE: Decimal = dec!(300);
 const HAS_NO_TRADE_HOURS: bool = false;
 const NO_TRADE_HOURS: u32 = 13; //will not trade before this hour if HAS_NO_TRADE_HOURS == true
-const SAFTEY_LEVEL: Decimal = dec!(2640); // the strategy will not trade if price is below this level
+const SAFTEY_LEVEL: Decimal = dec!(21605); // the strategy will not trade if price is below this level
 
 #[tokio::main]
 async fn main() -> iced::Result {
@@ -63,9 +56,9 @@ async fn main() -> iced::Result {
     let strategy_event_sender_clone= strategy_event_sender.clone();
     let account = Account::new(Brokerage::Rithmic(RithmicSystem::Apex), "PA-APEX-3396-17".to_string()); //S1Nov228450257 PA-APEX-3396-18
     let account_clone = account.clone();
-
+    let start_time = NaiveDate::from_ymd_opt(2024, 12, 26).unwrap().and_hms_opt(0, 0, 0).unwrap();
+    let start_time_clone = start_time.clone();
     task::spawn(async move {
-
         let symbol_name = SymbolName::from("MNQ");
         let exchange = get_futures_exchange(&symbol_name).unwrap();
 
@@ -80,20 +73,20 @@ async fn main() -> iced::Result {
         let candle_subscription = DataSubscription::new(
             symbol_name.clone(),
             DataVendor::Rithmic,
-            Resolution::Minutes(5),
+            Resolution::Minutes(1),
             BaseDataType::Candles,
             MarketType::Futures(exchange),
         );
 
         //let correlation = DataSubscription::new("MES".to_string(), DataVendor::Rithmic, Resolution::Minutes(1), BaseDataType::Candles, MarketType::Futures(exchange));
         let strategy = FundForgeStrategy::initialize(
-            StrategyMode::Live,
+            StrategyMode::Backtest,
             dec!(50000),
             Currency::USD,
-            NaiveDate::from_ymd_opt(2024, 12, 10).unwrap().and_hms_opt(0, 0, 0).unwrap(),
-            NaiveDate::from_ymd_opt(2024, 12, 25).unwrap().and_hms_opt(0, 0, 0).unwrap(),
+            start_time,
+            NaiveDate::from_ymd_opt(2024, 12, 27).unwrap().and_hms_opt(0, 0, 0).unwrap(),
             Australia__Brisbane,
-            Duration::hours(24),
+            Duration::hours(100),
             vec![
                 (None, subscription.clone(), None),
                 (Some(PrimarySubscription::new(Resolution::Ticks(1), BaseDataType::Ticks)), candle_subscription.clone(), None),
@@ -120,11 +113,18 @@ async fn main() -> iced::Result {
         on_data_received(Arc::new(strategy), strategy_event_receiver, subscription, candle_subscription, symbol_name, account_clone).await;
     });
 
-    let mut control = StrategyControlPanel {
-        strategy_sender: strategy_event_sender_clone,
-        current_state: StrategyControls::Continue,
-        theme: Theme::default()
-    };
+    let symbol_name = SymbolName::from("MNQ");
+    let sub = DataSubscription::new(
+        symbol_name.clone(),
+        DataVendor::Rithmic,
+        Resolution::Minutes(1),
+        BaseDataType::Candles,
+        MarketType::Futures(FuturesExchange::CME),
+    );
+
+
+    let start_time = naive_date_time_to_tz(start_time_clone, Australia__Brisbane).to_utc() - Duration::hours(48);
+    let mut control = new_strategy_control(strategy_event_sender_clone, Theme::default(), dec!(10), Bias::Bullish);
 
     iced::application(
         "Price Action",
@@ -132,7 +132,7 @@ async fn main() -> iced::Result {
         StrategyControlPanel::view,
     )
     .theme(StrategyControlPanel::theme)
-    .window(window_settings(&account))
+    .window(window_settings())
     .run_with(move || {
         (control, Task::none())
     })
@@ -156,7 +156,6 @@ pub async fn on_data_received(
     account: Account,
 ) {
     let symbol_info = get_futures_symbol_info(&symbol_name).unwrap();
-    let mut metrics = TradingMetrics::new(SIZE, MAX_SIZE, SIZE, dec!(2), MAX_RISK_PER_TRADE, symbol_info.clone());
     let tp_value = MAX_RISK_PER_TRADE * dec!(2) * SIZE; //* dec!(4);
     let add_value = SIZE * (MAX_RISK_PER_TRADE / dec!(3));
     let absolute_sl_value = MAX_RISK_PER_TRADE * MAX_SIZE;
@@ -423,7 +422,6 @@ pub async fn on_data_received(
                     PositionUpdateEvent::PositionClosed { ref side, ref booked_pnl, .. } => {
                         entries = 0;
                         let is_win = *booked_pnl > dec!(0);
-                        metrics.update_streaks(is_win);
                         strategy.print_trade_statistics(&account);
                         strategy.print_ledger(event.account());
                         exit_order_id = None;
@@ -591,73 +589,4 @@ enum Result {
     Win,
     Loss,
     BreakEven
-}
-
-#[derive(Debug, Clone)]
-struct TradingMetrics {
-    win_streak: i32,
-    loss_streak: i32,
-    base_size: Decimal,
-    max_size: Decimal,
-    min_size: Decimal,
-    atr_sizing_factor: Decimal,
-    max_risk_per_trade: Decimal,
-    symbol_info: SymbolInfo
-}
-
-impl TradingMetrics {
-    fn new(base_size: Decimal, max_size: Decimal, min_size: Decimal, atr_sizing_factor: Decimal, max_risk_per_trade: Decimal, symbol_info: SymbolInfo) -> Self {
-        Self {
-            win_streak: 0,
-            loss_streak: 0,
-            base_size,
-            max_size,
-            min_size,
-            atr_sizing_factor, // Adjust this factor based on testing
-            max_risk_per_trade,
-            symbol_info
-        }
-    }
-
-    fn update_streaks(&mut self, is_win: bool) {
-        if is_win {
-            self.win_streak += 1;
-            self.loss_streak = 0;
-        } else {
-            self.loss_streak += 1;
-            self.win_streak = 0;
-        }
-    }
-
-    fn calculate_position_size(&self, atr: Decimal) -> Decimal {
-        // Convert ATR to ticks using symbol's tick size
-        let atr_ticks = atr / self.symbol_info.tick_size;
-        //println!("ATR ticks: {}", atr_ticks);
-
-        // Calculate dollar value of ATR
-        let atr_value = atr_ticks * self.symbol_info.value_per_tick;
-        //println!("ATR value: ${}", atr_value);
-
-        // Calculate base position size based on risk per trade and ATR
-        let atr_based_size = (self.max_risk_per_trade / (atr_value * self.atr_sizing_factor)).round();
-        //println!("ATR based size: {}", atr_based_size);
-
-        // Win/loss streak adjustment
-        let streak_adjustment = if self.loss_streak > 0 {
-            dec!(1) / (Decimal::from(self.loss_streak) + dec!(1.0))
-        } else {
-            dec!(1) + (Decimal::from(self.win_streak) * dec!(0.2))
-        };
-        //println!("Streak adjustment: {}", streak_adjustment);
-
-        // Calculate final size and round to nearest whole number
-        let size = (atr_based_size * streak_adjustment).round();
-       // println!("Final size before clamp: {}", size);
-
-        // Clamp between min and max sizes (both should be whole numbers)
-        let final_size = size.clamp(self.min_size, self.max_size);
-       // println!("Final size after clamp: {}", final_size);
-
-        final_size
-    }
 }

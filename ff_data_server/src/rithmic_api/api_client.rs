@@ -364,8 +364,8 @@ impl RithmicBrokerageClient {
         heartbeat_times: Arc<DashMap<SysInfraType, DateTime<Utc>>>
     ) {
         let heart_beat_interval = match self.client.heartbeat_interval_seconds.get(&plant) {
-            Some(interval) => Duration::from_secs(interval.value().clone() - 1),
-            None => Duration::from_secs(59)
+            Some(interval) => Duration::from_secs(interval.value().clone() - 3),
+            None => Duration::from_secs(57)
         };
 
         let mut interval = interval(heart_beat_interval);

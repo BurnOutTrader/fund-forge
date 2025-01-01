@@ -11,7 +11,7 @@ members = [
     "ff_tests/rithmic_order_test",
     "ff_tests/renko_pyramid",
     "ff_tests/oanda_data_test", "ff_gui", "ff_tests/strategy_with_gui",
-    "ff_tests/strategy_with_gui",
+    "ff_tests/strategy_with_gui", "ff_tests/chart_canvas_development",
 ]
 
 

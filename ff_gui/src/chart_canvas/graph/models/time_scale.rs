@@ -52,7 +52,7 @@ impl Default for TimeScale {
     fn default() -> Self {
         TimeScale {
             settings: GraphElementSettings::light_mode_settings(),
-            resolution: Resolution::Minutes(15),
+            resolution: Resolution::Minutes(1),
         }
     }
 }
@@ -98,7 +98,6 @@ impl TimeScale {
         let mut last_time = start_time - resolution_seconds;
 
         let end_time = view.x_end.clone();
-
 
         while start_time <= end_time {
             if grids.contains_key(&start_time) {
@@ -231,24 +230,29 @@ struct TimeAndImportance {
 /// Ranks the time with an importance enum and groups them by putting into a `TimeAndImportance` struct.
 fn rank_format_time(time: i64, previous_time: i64, resolution: &Resolution) -> TimeAndImportance {
     let original_time = time.clone();
-    let time = Utc.timestamp_opt(time, 0).unwrap();
-    let previous_time = Utc.timestamp_opt(previous_time, 0).unwrap();
+
+    // Convert nanosecond timestamps to seconds
+    let seconds_time = time;
+    let seconds_previous = previous_time;
+
+    let time = Utc.timestamp_opt(seconds_time, 0).unwrap();
+    let previous_time = Utc.timestamp_opt(seconds_previous, 0).unwrap();
 
     let tuple_time_importance: (DateScaleImportance, &str) =
         if time.year() != previous_time.year() {
-            (DateScaleImportance::Years, "%Y") // High importance, New year
+            (DateScaleImportance::Years, "%Y")
         } else if time.month() != previous_time.month() {
-            (DateScaleImportance::Months, "%b") // New month
+            (DateScaleImportance::Months, "%b")
         } else if time.day() != previous_time.day() {
-            (DateScaleImportance::Days, "%e") // New day
+            (DateScaleImportance::Days, "%e")
         } else {
             match resolution {
-                Resolution::Instant => (DateScaleImportance::TimeOfDay, "%H:%M:%S.f"), // Lowest importance intraday prices
-                Resolution::Ticks(_) => (DateScaleImportance::TimeOfDay, "%H:%M:%S.f"), // Lowest importance intraday prices
+                Resolution::Instant => (DateScaleImportance::TimeOfDay, "%H:%M:%S.f"),
+                Resolution::Ticks(_) => (DateScaleImportance::TimeOfDay, "%H:%M:%S.f"),
                 Resolution::Seconds(_) => (DateScaleImportance::TimeOfDay, "%H:%M:%S"),
                 Resolution::Minutes(_) => (DateScaleImportance::TimeOfDay, "%H:%M"),
-                Resolution::Hours(_) =>  (DateScaleImportance::TimeOfDay, "%H:%M") ,
-                Resolution::Day => (DateScaleImportance::TimeOfDay, "%D") ,
+                Resolution::Hours(_) =>  (DateScaleImportance::TimeOfDay, "%H:%M"),
+                Resolution::Day => (DateScaleImportance::TimeOfDay, "%D"),
             }
         };
 
