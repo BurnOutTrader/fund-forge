@@ -13,22 +13,20 @@ fund-forge is built to allow simple abstractions for common strategy functionali
 See below for all the free historical data you will ever need.
 
 ### Announcements
-- 26-11-24: Fixed bug preventing duplicate subscriptions that share the same primary.
-- 26-11-24: Fixed deadlock in backtesting. Deadlock was caused by not flushing TCP Streams. Backtesting and Live trading should now be more stable and backtesting should not deadlock (because of the engine).
-- 26-11-24: Fixed backtesting engine bug which would panic on trying to exit existing position with order larger than position size
-- 25-12-24: Removed changes from Fred api, will reimplement with better code later.
-- 25-12-24: Added basic gui tools and example strategy, next task is to implement basic charting canvas.
+- 02-01-24: Refactoring to start developing a GUI, once a rough Gui is developed the engine will be overhauled into a final form, many functions will be rewritten, many architectural changes will be implemented, basically we will have a version 2.0.
 
 ### Current State and Future Development
-The platform is currently in a semi-working state, think of it as a proof of concept, there is a lot of untested functionality, both in backtesting and live trading.
+The platform is currently in a semi-working state, think of it as a proof of concept, there is untested functionality, both in backtesting and live trading.
 
-The core logic is done, but it will be improved and made more readable and resilient.
+I have slammed together every idea or feature to get something working it was the only way to understand what types of problems I would run into, the next step is to start overhauling the engine and making major improvements across the board.
+A bit of a roadmap into what I am thinking.
+- Develop a front end using rust iced (starting from knowing nothing about front end), this will include full charting and discretionary + algorithmic trading capability. This period will include a lot of experimental code, the current code base includes a lot of unnecessary or unmaintainable code, once the Gui is developed I intend to start overhauling the engine and making major improvements across the board.
+- Run strategies remotely as individual applications, connected and controlled via a standard trading interface/GUI.
+- Gui as an optional feature, where we can use a common prebuilt UI or build custom user interfaces per individual strategy.
+- Convert broker and data vendor traits to use dynamics once the GUI is completed.
+- Create a new base data type, for non-intraday data, DailyCandles, WeeklyCandles, or just remove resolution as a property of base data and redesign the engine to reflect this change: both options have drawbacks and positives.
 
-The first objective was to get everything 'sort of working' so that I could get some practical experience with the engine and brokerage api's and try to establish a consistent pattern.
-Now that Oanda and Rithmic are in a sort of working state, I will finish the Bitget api, once the bitget api is complete I will be focused on consolidating the code base into a consistent design pattern, to make maintenance and future api implementations easier.
-This step will be done slowly by testing strategies under live and historical conditions, improving functions to handle errors and refactoring as I go to create a simple, easy to understand standard for future integrations.
-
-Oanda: Live is Incomplete.
+Oanda: Live is Incomplete, It works, but I havent really done any testing, I am considering not supporting since I trade futures.
 
 Rithmic: Working in Live using un-synchronized account mode, but should be monitored or have some sort of trader risk rules set on rithmic side.
 
