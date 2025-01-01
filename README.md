@@ -468,7 +468,6 @@ I am not a professional software developer and many security concerns have not y
 - Daily, Weekly or Monthly resolution subscriptions will have custom consolidators based upon symbol market hours, this is because data vendors have an inconsistent definition of daily bars.
   I will build custom consolidators for these types of resolutions in the future.
 - I have an Oanda Api client I will reimplement into fund-forge soon.
-- Only TEST variant API is working, which is just a hard coded simulated api.
 - Docker builds have not been tested recently and probably will not work without some minor code adjustments to the docker files.
 
 ## Current Objectives
