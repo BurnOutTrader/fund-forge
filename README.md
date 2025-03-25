@@ -1,5 +1,5 @@
 # Fund Forge
-Community [discord](https://discord.gg/MNXH2jEExV)
+I am no longer working on this project. I have chosen to use QuantConnect since they have radically improved support for local development and research using cloud data.
 
 **Fund Forge** is an algorithmic trading engine written in Rust.
 
